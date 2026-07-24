@@ -186,6 +186,10 @@ class CreateRepoRequest(BaseModel):
     )
 
 
+class RenameRepoRequest(BaseModel):
+    """Request body for renaming a repository."""
+    name: str = Field(..., description="New name for the repository.")
+    description: str = Field("", description="Updated description (optional).")
 # --------------------------------------------------------------------------- #
 # GitHub helper
 # --------------------------------------------------------------------------- #
@@ -301,6 +305,31 @@ async def create_repo(req: CreateRepoRequest) -> dict[str, Any]:
         "private": repo["private"],
         "html_url": repo["html_url"],
         "default_branch": repo["default_branch"],
+    }
+
+
+@app.patch("/repos/{owner}/{repo}", tags=["repos"], summary="Rename a repository")
+async def rename_repo(
+    owner: str = Path(..., description="Repository owner."),
+    repo: str = Path(..., description="Current repository name."),
+    req: RenameRepoRequest = ...,
+) -> dict[str, Any]:
+    """Rename an existing repository and optionally update its description."""
+    payload: dict[str, Any] = {"name": req.name}
+    if req.description:
+        payload["description"] = req.description
+    response = await github_request(
+        "PATCH",
+        f"/repos/{owner}/{repo}",
+        json=payload,
+    )
+    data = response.json()
+    return {
+        "old_name": repo,
+        "new_name": data["name"],
+        "full_name": data["full_name"],
+        "html_url": data["html_url"],
+        "description": data.get("description", ""),
     }
 
 
