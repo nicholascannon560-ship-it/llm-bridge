@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+pydantic==2.10.4
+# railway_extension.py imports `requests` (main.py itself uses httpx). Do not
+# remove this line: without it every deploy dies at boot with
+# ModuleNotFoundError, and because Railway keeps the last GOOD container
+# serving, the bridge looks healthy while all new builds silently fail.
+requests>=2.31.0
+pyyaml>=6.0
