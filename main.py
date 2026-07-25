@@ -40,7 +40,7 @@ app = FastAPI(
         "repos, list repos and read file contents using a single "
         "GITHUB_TOKEN."
     ),
-    version="1.4.0",
+    version="1.4.1",
 )
 
 # Include Railway extension router
@@ -136,38 +136,6 @@ async def rotate_key() -> RotateKeyResponse:
     )
 
 
-# --------------------------------------------------------------------------- #
-# Request / response models
-# --------------------------------------------------------------------------- #
-class CommitRequest(BaseModel):
-    owner: str = Field(..., description="Repository owner (user or org).")
-    repo: str = Field(..., description="Repository name.")
-    path: str = Field(..., description="Path to the file inside the repo.")
-    content: str = Field(..., description="Raw (unencoded) file content.")
-    message: str = Field(..., description="Commit message.")
-    branch: Optional[str] = Field(
-        None, description="Branch to commit to. Defaults to the repo default."
-    )
-
-
-class CreateRepoRequest(BaseModel):
-    name: str = Field(..., description="Name of the repository to create.")
-    description: str = Field("", description="Repository description.")
-    private: bool = Field(True, description="Whether the repo is private.")
-    auto_init: bool = Field(
-        True, description="Initialize with an empty README so it has a branch."
-    )
-    organization: Optional[str] = Field(
-        None,
-        description="Create the repo inside this org instead of the user account.",
-    )
-
-
-class RenameRepoRequest(BaseModel):
-    name: str = Field(..., description="New name for the repository.")
-    description: str = Field("", description="Updated description (optional).")
-
-
 def _github_headers() -> dict[str, str]:
     if not GITHUB_TOKEN:
         raise HTTPException(
@@ -204,6 +172,40 @@ async def github_request(
     return response
 
 
+def _diagnose_github_token() -> dict[str, Any]:
+    """Test the GITHUB_TOKEN the process is actually using. Never returns the token."""
+    if not GITHUB_TOKEN:
+        return {"ok": False, "error": "GITHUB_TOKEN env var is empty or missing"}
+
+    token_preview = f"{GITHUB_TOKEN[:4]}...{GITHUB_TOKEN[-4:]}" if len(GITHUB_TOKEN) > 8 else "(too short)"
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(
+                f"{GITHUB_API}/user",
+                headers={
+                    "Authorization": f"Bearer {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                "ok": True,
+                "login": data.get("login"),
+                "token_preview": token_preview,
+                "scopes": resp.headers.get("x-oauth-scopes", ""),
+            }
+        return {
+            "ok": False,
+            "status_code": resp.status_code,
+            "error": resp.text[:300],
+            "token_preview": token_preview,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e), "token_preview": token_preview}
+
+
 @app.get("/health", tags=["meta"], summary="Liveness / readiness check")
 async def health() -> dict[str, Any]:
     """Return service status. Also processes any pending GitHub command-channel files."""
@@ -218,6 +220,7 @@ async def health() -> dict[str, Any]:
         "service": "kimi-github-bridge",
         "version": app.version,
         "github_token_configured": bool(GITHUB_TOKEN),
+        "github_token_diag": _diagnose_github_token(),
         "auth_enabled": _auth_enabled(),
         "commands": cmd_summary,
     }
@@ -227,6 +230,39 @@ async def health() -> dict[str, Any]:
         info["key_ttl_hours"] = BRIDGE_KEY_TTL_SECONDS / 3600
         info["key_expired"] = age > BRIDGE_KEY_TTL_SECONDS
     return info
+
+
+# --------------------------------------------------------------------------- #
+# The rest of the endpoints are unchanged
+# --------------------------------------------------------------------------- #
+
+class CommitRequest(BaseModel):
+    owner: str = Field(..., description="Repository owner (user or org).")
+    repo: str = Field(..., description="Repository name.")
+    path: str = Field(..., description="Path to the file inside the repo.")
+    content: str = Field(..., description="Raw (unencoded) file content.")
+    message: str = Field(..., description="Commit message.")
+    branch: Optional[str] = Field(
+        None, description="Branch to commit to. Defaults to the repo default."
+    )
+
+
+class CreateRepoRequest(BaseModel):
+    name: str = Field(..., description="Name of the repository to create.")
+    description: str = Field("", description="Repository description.")
+    private: bool = Field(True, description="Whether the repo is private.")
+    auto_init: bool = Field(
+        True, description="Initialize with an empty README so it has a branch."
+    )
+    organization: Optional[str] = Field(
+        None,
+        description="Create the repo inside this org instead of the user account.",
+    )
+
+
+class RenameRepoRequest(BaseModel):
+    name: str = Field(..., description="New name for the repository.")
+    description: str = Field("", description="Updated description (optional).")
 
 
 @app.get("/repos", tags=["repos"], summary="List repositories")
