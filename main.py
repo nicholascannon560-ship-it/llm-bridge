@@ -27,6 +27,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from railway_extension import router as railway_router, set_service_variable
 from llm_routes import llm_router
+from command_channel import process_pending_commands
 
 GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -39,7 +40,7 @@ app = FastAPI(
         "repos, list repos and read file contents using a single "
         "GITHUB_TOKEN."
     ),
-    version="1.3.0",
+    version="1.4.0",
 )
 
 # Include Railway extension router
@@ -55,23 +56,6 @@ app.include_router(skills_router)
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
-#
-# Model: a single shared secret (BRIDGE_API_KEY) is required in the
-# X-Bridge-Key header on every request except /health. The key can be
-# rotated in place via POST /rotate_key, which generates a new random key,
-# persists it to this service's own Railway env var (so it survives a
-# restart/redeploy), and updates the in-memory copy immediately so the new
-# key works right away without waiting on a redeploy.
-#
-# A TTL is layered on top as a backstop for forgetting to rotate: once the
-# key is older than BRIDGE_KEY_TTL_HOURS, only /rotate_key still accepts it
-# (a short grace window to self-heal); past TTL + grace, nothing accepts it
-# and the only way back in is to set BRIDGE_API_KEY by hand in the Railway
-# dashboard and redeploy. That dashboard path is the deliberate kill switch.
-#
-# If BRIDGE_API_KEY isn't set at all, auth is left OFF (bootstrap state) so
-# existing/first deploys aren't locked out by a key nobody has yet. /health
-# reports auth_enabled so this is never silent.
 # --------------------------------------------------------------------------- #
 BRIDGE_KEY_TTL_SECONDS = float(os.getenv("BRIDGE_KEY_TTL_HOURS", "24")) * 3600
 BRIDGE_KEY_GRACE_SECONDS = float(os.getenv("BRIDGE_KEY_GRACE_HOURS", "2")) * 3600
@@ -133,13 +117,6 @@ class RotateKeyResponse(BaseModel):
 
 @app.post("/rotate_key", tags=["meta"], summary="Rotate the bridge API key")
 async def rotate_key() -> RotateKeyResponse:
-    """
-    Generate a new random bridge key, persist it to Railway (BRIDGE_API_KEY
-    on this service), and switch the running process over to it immediately.
-
-    Requires the CURRENT key in X-Bridge-Key (enforced by the auth
-    middleware — this handler only runs once that's already validated).
-    """
     if not _auth_enabled():
         raise HTTPException(
             status_code=400,
@@ -187,12 +164,10 @@ class CreateRepoRequest(BaseModel):
 
 
 class RenameRepoRequest(BaseModel):
-    """Request body for renaming a repository."""
     name: str = Field(..., description="New name for the repository.")
     description: str = Field("", description="Updated description (optional).")
-# --------------------------------------------------------------------------- #
-# GitHub helper
-# --------------------------------------------------------------------------- #
+
+
 def _github_headers() -> dict[str, str]:
     if not GITHUB_TOKEN:
         raise HTTPException(
@@ -209,14 +184,13 @@ def _github_headers() -> dict[str, str]:
 async def github_request(
     method: str, path: str, *, json: Any = None, params: Any = None
 ) -> httpx.Response:
-    """Perform a request against the GitHub REST API and normalize errors."""
     url = path if path.startswith("http") else f"{GITHUB_API}{path}"
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         try:
             response = await client.request(
                 method, url, headers=_github_headers(), json=json, params=params
             )
-        except httpx.RequestError as exc:  # network-level failure
+        except httpx.RequestError as exc:
             raise HTTPException(
                 status_code=502, detail=f"Error contacting GitHub: {exc}"
             ) from exc
@@ -230,18 +204,22 @@ async def github_request(
     return response
 
 
-# --------------------------------------------------------------------------- #
-# Endpoints
-# --------------------------------------------------------------------------- #
 @app.get("/health", tags=["meta"], summary="Liveness / readiness check")
 async def health() -> dict[str, Any]:
-    """Return service status and whether a GitHub token / bridge key is configured."""
+    """Return service status. Also processes any pending GitHub command-channel files."""
+    cmd_summary = {}
+    try:
+        cmd_summary = process_pending_commands()
+    except Exception as e:
+        cmd_summary = {"error": str(e)}
+
     info: dict[str, Any] = {
         "status": "ok",
         "service": "kimi-github-bridge",
         "version": app.version,
         "github_token_configured": bool(GITHUB_TOKEN),
         "auth_enabled": _auth_enabled(),
+        "commands": cmd_summary,
     }
     if _auth_enabled():
         age = time.time() - KEY_STATE.issued_at
@@ -253,22 +231,14 @@ async def health() -> dict[str, Any]:
 
 @app.get("/repos", tags=["repos"], summary="List repositories")
 async def list_repos(
-    visibility: str = Query(
-        "all", description="Filter by visibility: all, public, or private."
-    ),
+    visibility: str = Query("all", description="Filter by visibility: all, public, or private."),
     per_page: int = Query(30, ge=1, le=100, description="Results per page."),
     page: int = Query(1, ge=1, description="Page number."),
 ) -> list[dict[str, Any]]:
-    """List repositories accessible to the authenticated token."""
     response = await github_request(
         "GET",
         "/user/repos",
-        params={
-            "visibility": visibility,
-            "per_page": per_page,
-            "page": page,
-            "sort": "updated",
-        },
+        params={"visibility": visibility, "per_page": per_page, "page": page, "sort": "updated"},
     )
     repos = response.json()
     return [
@@ -286,7 +256,6 @@ async def list_repos(
 
 @app.post("/repos", tags=["repos"], summary="Create a repository", status_code=201)
 async def create_repo(req: CreateRepoRequest) -> dict[str, Any]:
-    """Create a new repository for the authenticated user or an organization."""
     path = f"/orgs/{req.organization}/repos" if req.organization else "/user/repos"
     response = await github_request(
         "POST",
@@ -314,15 +283,10 @@ async def rename_repo(
     repo: str = Path(..., description="Current repository name."),
     req: RenameRepoRequest = ...,
 ) -> dict[str, Any]:
-    """Rename an existing repository and optionally update its description."""
     payload: dict[str, Any] = {"name": req.name}
     if req.description:
         payload["description"] = req.description
-    response = await github_request(
-        "PATCH",
-        f"/repos/{owner}/{repo}",
-        json=payload,
-    )
+    response = await github_request("PATCH", f"/repos/{owner}/{repo}", json=payload)
     data = response.json()
     return {
         "old_name": repo,
@@ -335,15 +299,8 @@ async def rename_repo(
 
 @app.post("/commit", tags=["files"], summary="Create or update a file")
 async def commit_file(req: CommitRequest) -> dict[str, Any]:
-    """
-    Commit a file to a repository.
-
-    If the file already exists on the target branch its ``sha`` is fetched
-    first so GitHub performs an update instead of rejecting the write.
-    """
     contents_path = f"/repos/{req.owner}/{req.repo}/contents/{req.path}"
 
-    # Look up an existing file's sha (needed to update rather than create).
     existing_sha: Optional[str] = None
     params = {"ref": req.branch} if req.branch else None
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
@@ -391,11 +348,8 @@ async def read_contents(
     owner: str = Path(..., description="Repository owner."),
     repo: str = Path(..., description="Repository name."),
     path: str = Path(..., description="Path to the file inside the repo."),
-    ref: Optional[str] = Query(
-        None, description="Branch, tag or commit sha to read from."
-    ),
+    ref: Optional[str] = Query(None, description="Branch, tag or commit sha to read from."),
 ) -> dict[str, Any]:
-    """Read and decode the contents of a file in a repository."""
     params = {"ref": ref} if ref else None
     response = await github_request(
         "GET", f"/repos/{owner}/{repo}/contents/{path}", params=params
@@ -403,7 +357,6 @@ async def read_contents(
     data = response.json()
 
     if isinstance(data, list):
-        # Path points at a directory rather than a single file.
         return {
             "type": "directory",
             "path": path,
@@ -418,7 +371,7 @@ async def read_contents(
         try:
             decoded = base64.b64decode(data["content"]).decode("utf-8")
         except UnicodeDecodeError:
-            decoded = None  # binary file — leave raw content to the caller
+            decoded = None
 
     return {
         "type": "file",
@@ -431,9 +384,6 @@ async def read_contents(
     }
 
 
-# --------------------------------------------------------------------------- #
-# Multi-file tree commit (single commit for many files via Git Database API)
-# --------------------------------------------------------------------------- #
 class TreeFile(BaseModel):
     path: str = Field(..., description="Path of the file inside the repo.")
     content: str = Field(..., description="Raw (unencoded) UTF-8 file content.")
@@ -451,17 +401,12 @@ class CommitTreeRequest(BaseModel):
 
 @app.post("/commit_tree")
 async def commit_tree(req: CommitTreeRequest) -> dict[str, Any]:
-    """
-    Commit many files as ONE commit using the Git Database API
-    (refs -> base tree -> new tree -> commit -> update ref).
-    """
     if not req.files:
         raise HTTPException(status_code=422, detail="files must be non-empty")
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
         headers = _github_headers()
 
-        # 1. resolve the branch name
         branch = req.branch
         if not branch:
             repo_resp = await client.get(
@@ -471,7 +416,6 @@ async def commit_tree(req: CommitTreeRequest) -> dict[str, Any]:
                 raise HTTPException(status_code=repo_resp.status_code, detail=repo_resp.json())
             branch = repo_resp.json().get("default_branch", "main")
 
-        # 2. current head of the branch
         ref_resp = await client.get(
             f"{GITHUB_API}/repos/{req.owner}/{req.repo}/git/ref/heads/{branch}",
             headers=headers,
@@ -483,7 +427,6 @@ async def commit_tree(req: CommitTreeRequest) -> dict[str, Any]:
             )
         base_commit_sha = ref_resp.json()["object"]["sha"]
 
-        # 3. base tree of that commit
         commit_resp = await client.get(
             f"{GITHUB_API}/repos/{req.owner}/{req.repo}/git/commits/{base_commit_sha}",
             headers=headers,
@@ -492,7 +435,6 @@ async def commit_tree(req: CommitTreeRequest) -> dict[str, Any]:
             raise HTTPException(status_code=commit_resp.status_code, detail=commit_resp.json())
         base_tree_sha = commit_resp.json()["tree"]["sha"]
 
-        # 4. new tree (inline content -> GitHub creates the blobs)
         tree_items = [
             {"path": f.path, "mode": "100644", "type": "blob", "content": f.content}
             for f in req.files
@@ -506,7 +448,6 @@ async def commit_tree(req: CommitTreeRequest) -> dict[str, Any]:
             raise HTTPException(status_code=tree_resp.status_code, detail=tree_resp.text[:500])
         new_tree_sha = tree_resp.json()["sha"]
 
-        # 5. commit
         new_commit_resp = await client.post(
             f"{GITHUB_API}/repos/{req.owner}/{req.repo}/git/commits",
             headers=headers,
@@ -520,7 +461,6 @@ async def commit_tree(req: CommitTreeRequest) -> dict[str, Any]:
             raise HTTPException(status_code=new_commit_resp.status_code, detail=new_commit_resp.text[:500])
         new_commit_sha = new_commit_resp.json()["sha"]
 
-        # 6. move the branch ref
         update_resp = await client.patch(
             f"{GITHUB_API}/repos/{req.owner}/{req.repo}/git/refs/heads/{branch}",
             headers=headers,
