@@ -1,0 +1,9 @@
+{
+  "id": "railway-status-1",
+  "status": "error",
+  "action": "railway_graphql",
+  "result": null,
+  "error": "unknown action: railway_graphql",
+  "processed_at": "2026-07-25T15:27:08.622748+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 264, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 228, in _execute\n    raise ValueError(f\"unknown action: {action}\")\nValueError: unknown action: railway_graphql\n"
+}
