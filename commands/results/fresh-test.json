@@ -1,12 +1,6 @@
 {
   "id": "fresh-test",
-  "status": "ok",
-  "action": "list_projects",
-  "result": {
-    "projects": {
-      "edges": []
-    }
-  },
-  "error": null,
-  "processed_at": "2026-07-25T03:44:21.289461+00:00"
+  "status": "error",
+  "error": "write commands/results/fresh-test.json failed: 409 {\"message\":\"commands/results/fresh-test.json does not match 8df340e0c35e7bba336f094350988339c3c09053\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "processed_at": "2026-07-25T03:44:22.411364+00:00"
 }
