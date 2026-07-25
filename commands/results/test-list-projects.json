@@ -1,6 +1,12 @@
 {
   "id": "test-list-projects",
-  "status": "error",
-  "error": "write commands/results/test-list-projects.json failed: 409 {\"message\":\"is at f45938ae58dce48ca742f7dbe1a4e3cdc8d73f65 but expected 1488ce4b71cb3410375fe7a4dae8381c3b5c49f7\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
-  "processed_at": "2026-07-25T02:43:59.861492+00:00"
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-25T02:44:01.191778+00:00"
 }
