@@ -1,12 +1,6 @@
 {
   "id": "list-projects-2",
-  "status": "ok",
-  "action": "list_projects",
-  "result": {
-    "projects": {
-      "edges": []
-    }
-  },
-  "error": null,
-  "processed_at": "2026-07-25T02:59:27.326379+00:00"
+  "status": "error",
+  "error": "Client.delete() got an unexpected keyword argument 'json'",
+  "processed_at": "2026-07-25T02:59:29.037154+00:00"
 }
