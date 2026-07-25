@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "user",
+      "content": "OUTPUT ONLY these labeled sections. Start with VERDICT:. No chain-of-thought preamble.\n\nVERDICT:\nREASONING:\nNEXT_STEPS:\nCALL_BACK_IF:\nRISKS:\n\nContext: Kalshi daily HIGH/LOW weather markets across ~19 US cities. Multi-model NWP ensemble (NBM, ECMWF, GFS/ARPEGE/UKMO/ICON etc). Live system already has:\n- model_skill Stage1 leaderboard (walk-forward bias-corrected Brier/CRPS; NBM best overall ~0.170)\n- residual_std.json per (city, mtype, model, lead_bucket) — recorder-native (bias-corrected basis) wins over harvester raw fallback\n- emos_coeffs.json on ensemble mean (a+b*x, var=c); engine applies EMOS on bias-corrected ensemble mean\n- kind-vote / kind-grouped blend historically used (user models by kind then average)\n- Stage3 skill-weighted blend NOT built yet\n- Daily cal broken (NO overconfident); hourly calibrated but no edge after fees\n- Autopilot + gates; 0 ARMED cells\n\nQuestions:\n1) Best way to choose which models (or kind groups) to use per city — equal blend, kind-vote, skill-weighted, or city-specific subsets?\n2) How to discover the best combo per city rigorously (data, metrics, leakage rules)?\n3) Is residual_std being used correctly given EMOS already has spread c? Should we learn/adapt residual_std further, inflate, or simplify?\n4) Ordered implementation plan that does not arm trades until proven.\n\nBe concrete and ordered. Prefer methods that reuse existing model_skill walk-forward machinery."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 1100
+}
