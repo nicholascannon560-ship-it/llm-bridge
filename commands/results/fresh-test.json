@@ -1,12 +1,6 @@
 {
   "id": "fresh-test",
-  "status": "ok",
-  "action": "list_projects",
-  "result": {
-    "projects": {
-      "edges": []
-    }
-  },
-  "error": null,
-  "processed_at": "2026-07-25T03:45:57.089495+00:00"
+  "status": "error",
+  "error": "Client.delete() got an unexpected keyword argument 'json'",
+  "processed_at": "2026-07-25T03:45:58.122821+00:00"
 }
