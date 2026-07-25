@@ -7,7 +7,8 @@ using its own Railway + GitHub tokens, writes the result to
 commands/results/<id>.json, and deletes the pending file.
 
 This lets an agent that cannot call the bridge HTTP API still control
-Railway (env vars, logs, redeploys, arbitrary GraphQL, project metadata, etc.).
+Railway (env vars, logs, redeploys, arbitrary GraphQL, project metadata, etc.)
+and also call Kimi3 / other LLMs via the llm_chat action.
 """
 
 from __future__ import annotations
@@ -37,6 +38,9 @@ OWNER = os.getenv("GITHUB_OWNER", "nicholascannon560-ship-it")
 REPO = os.getenv("GITHUB_REPO", "llm-bridge")
 PENDING_PATH = "commands/pending"
 RESULTS_PATH = "commands/results"
+
+MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
+MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions"
 
 
 def _github_headers() -> dict[str, str]:
@@ -99,11 +103,7 @@ def _write_file(path: str, content: str, message: str) -> None:
 
 
 def _delete_file(path: str, sha: str, message: str) -> None:
-    """Delete a file via the GitHub Contents API.
-
-    httpx.Client.delete() does not accept json=, so we send the body
-    via content= and set Content-Type manually.
-    """
+    """Delete a file via the GitHub Contents API."""
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     payload = {"message": message, "sha": sha}
     headers = _github_headers()
@@ -116,8 +116,63 @@ def _delete_file(path: str, sha: str, message: str) -> None:
             content=json.dumps(payload),
         )
     if resp.status_code not in (200, 204):
-        # non-fatal — result is already written
         print(f"warning: delete {path} failed: {resp.status_code} {resp.text[:200]}")
+
+
+def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
+    """Call Moonshot / Kimi3 (or other provider) and return the response."""
+    provider = cmd.get("provider", "moonshot")
+    model = cmd.get("model", "kimi-k3")
+    messages = cmd.get("messages")
+    if not messages:
+        raise ValueError("llm_chat requires 'messages'")
+
+    temperature = float(cmd.get("temperature", 1.0))
+    max_tokens = int(cmd.get("max_tokens", 4096))
+
+    if provider != "moonshot":
+        raise ValueError(f"llm_chat currently only supports provider=moonshot, got {provider}")
+
+    if not MOONSHOT_API_KEY:
+        raise RuntimeError("MOONSHOT_API_KEY not set on the service")
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    # kimi-k3 only accepts temperature=1.0
+    if temperature == 1.0:
+        payload["temperature"] = 1.0
+
+    with httpx.Client(timeout=90.0) as client:
+        resp = client.post(
+            MOONSHOT_URL,
+            headers={
+                "Authorization": f"Bearer {MOONSHOT_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Moonshot API error {resp.status_code}: {resp.text[:500]}")
+        data = resp.json()
+
+    choice = data.get("choices", [{}])[0]
+    msg = choice.get("message", {})
+    content = msg.get("content") or msg.get("reasoning_content") or ""
+    usage = data.get("usage", {})
+
+    return {
+        "provider": "moonshot",
+        "model": model,
+        "content": content,
+        "usage": {
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+        },
+        "finish_reason": choice.get("finish_reason"),
+    }
 
 
 def _execute(cmd: dict[str, Any]) -> Any:
@@ -125,6 +180,9 @@ def _execute(cmd: dict[str, Any]) -> Any:
     action = cmd.get("action")
     if not action:
         raise ValueError("missing 'action'")
+
+    if action == "llm_chat":
+        return _llm_chat(cmd)
 
     if action == "railway_gql":
         query = cmd.get("query")
