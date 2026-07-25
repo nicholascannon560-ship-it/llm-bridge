@@ -1,0 +1,4 @@
+{
+  "action": "railway_graphql",
+  "query": "query { projects { edges { node { id name services { edges { node { id name } } } } } } }"
+}
