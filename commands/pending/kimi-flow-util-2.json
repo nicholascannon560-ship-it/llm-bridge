@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "user",
+      "content": "OUTPUT ONLY labeled sections. First line VERDICT:. No thinking.\n\nVERDICT:\nREASONING:\nNEXT_STEPS:\nCALL_BACK_IF:\nRISKS:\n\nPrior conclusion (accept): market_layers labels (1m/5m mid drift beyond spread+fee) have base rates 0.3–1.8% so models can never arm (usable_base_rate false). Flow should be an EXECUTION/GATE layer not alpha. Best path: join 94k acted_would_have_traded shadow signals to settlement P&L of the fair-value trade (win/lose at 0/100), train shrink-only gate on that higher base-rate label; measure markout/CLV; keep {0,0.5,1.0} shrink-only.\n\nFinish concretely:\n1) Ordered NEXT_STEPS (code-level, reuse ml_flow_signals + settlement lookup + existing HistGB path)\n2) Which features/horizons/markets first\n3) How book candles + OU book join without skew\n4) What NOT to do (don't lower MIN_USABLE_BASE_RATE to force arm)\n\nShort."
+    }
+  ],
+  "temperature": 0.5,
+  "max_tokens": 900
+}
