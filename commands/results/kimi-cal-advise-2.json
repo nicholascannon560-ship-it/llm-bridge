@@ -1,0 +1,17 @@
+{
+  "id": "kimi-cal-advise-2",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "VERDICT: Do not arm anything. The single highest-leverage move is offline daily recalibration (EMOS) on the existing forecast-vs-obs archive \u2014 no new data, no settlements needed \u2014 then gate all daily trades on post-calibration edge after fees. Hourly is confirmed dead (cal good, edge negative after fees); treat it as monitor-only, zero capital.\n\nREASONING: The 31%-win-vs-64%-pred gap on daily NO means the \"paper edge\" is a calibration artifact: the model over-predicts high-bucket probability (under-calls highs/extremes), so NO fills look cheap but lose. Calibration error lives in the tail exactly where the trades are, so no sizing or selection trick can rescue it. Because you archive prevruns + truth, this is fixable offline today. Hourly has honest calibration (0.02) but structurally negative edge after fees \u2014 that's a fee/price problem, not a model problem, and EMOS won't create alpha there.\n\n",
+    "usage": {
+      "prompt_tokens": 277,
+      "completion_tokens": 900
+    },
+    "finish_reason": "length"
+  },
+  "error": null,
+  "processed_at": "2026-07-25T04:45:36.673123+00:00"
+}
