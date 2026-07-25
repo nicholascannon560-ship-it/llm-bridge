@@ -1,0 +1,12 @@
+{
+  "id": "list-railway-1",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-25T04:33:59.085916+00:00"
+}
