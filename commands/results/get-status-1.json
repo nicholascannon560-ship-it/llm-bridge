@@ -1,6 +1,23 @@
 {
   "id": "get-status-1",
-  "status": "error",
-  "error": "write commands/results/get-status-1.json failed: 409 {\"message\":\"is at febd6d0afeceab87fb76bd3d3269a661197e9e10 but expected b265e02d0638569dcd70d4454245c1468e1da574\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
-  "processed_at": "2026-07-25T03:44:24.180120+00:00"
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a030d2c5-639a-475f-932f-2f6cb94a2948",
+              "status": "FAILED",
+              "createdAt": "2026-07-24T12:26:30.246Z",
+              "updatedAt": "2026-07-24T12:26:34.964Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-25T03:44:31.280142+00:00"
 }
