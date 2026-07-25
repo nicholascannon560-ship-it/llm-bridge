@@ -6,9 +6,10 @@ The running service picks them up (on every /health check), executes them
 using its own Railway + GitHub tokens, writes the result to
 commands/results/<id>.json, and deletes the pending file.
 
-This lets an agent that cannot call the bridge HTTP API still control
-Railway (env vars, logs, redeploys, arbitrary GraphQL, project metadata, etc.)
-and also call Kimi3 / other LLMs via the llm_chat action.
+IMPORTANT: /health is also the Railway liveness probe. Processing many or
+slow commands (llm_chat can take 60s+) inside /health causes 503s when the
+probe times out. We therefore process at most ONE pending command per
+health tick, and cap Moonshot wait time.
 """
 
 from __future__ import annotations
@@ -41,6 +42,9 @@ RESULTS_PATH = "commands/results"
 
 MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
 MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions"
+# Keep under typical platform health-check budgets (often 30–60s).
+LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "55"))
+MAX_CMDS_PER_HEALTH = int(os.getenv("MAX_CMDS_PER_HEALTH", "1"))
 
 
 def _github_headers() -> dict[str, str]:
@@ -54,7 +58,6 @@ def _github_headers() -> dict[str, str]:
 
 
 def _list_pending() -> list[dict[str, Any]]:
-    """Return list of pending command file metadata."""
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{PENDING_PATH}"
     with httpx.Client(timeout=20) as client:
         resp = client.get(url, headers=_github_headers())
@@ -69,7 +72,6 @@ def _list_pending() -> list[dict[str, Any]]:
 
 
 def _read_file(path: str) -> tuple[str, str]:
-    """Return (content, sha) for a file."""
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     with httpx.Client(timeout=20) as client:
         resp = client.get(url, headers=_github_headers())
@@ -81,7 +83,6 @@ def _read_file(path: str) -> tuple[str, str]:
 
 
 def _write_file(path: str, content: str, message: str) -> None:
-    """Create or update a file."""
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     sha = None
     with httpx.Client(timeout=20) as client:
@@ -103,7 +104,6 @@ def _write_file(path: str, content: str, message: str) -> None:
 
 
 def _delete_file(path: str, sha: str, message: str) -> None:
-    """Delete a file via the GitHub Contents API."""
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     payload = {"message": message, "sha": sha}
     headers = _github_headers()
@@ -120,7 +120,6 @@ def _delete_file(path: str, sha: str, message: str) -> None:
 
 
 def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
-    """Call Moonshot / Kimi3 (or other provider) and return the response."""
     provider = cmd.get("provider", "moonshot")
     model = cmd.get("model", "kimi-k3")
     messages = cmd.get("messages")
@@ -128,7 +127,7 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("llm_chat requires 'messages'")
 
     temperature = float(cmd.get("temperature", 1.0))
-    max_tokens = int(cmd.get("max_tokens", 4096))
+    max_tokens = int(cmd.get("max_tokens", 900))
 
     if provider != "moonshot":
         raise ValueError(f"llm_chat currently only supports provider=moonshot, got {provider}")
@@ -136,16 +135,15 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
     if not MOONSHOT_API_KEY:
         raise RuntimeError("MOONSHOT_API_KEY not set on the service")
 
-    payload = {
+    # kimi-k3 only accepts temperature=1.0; ignore other values
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
+        "temperature": 1.0,
     }
-    # kimi-k3 only accepts temperature=1.0
-    if temperature == 1.0:
-        payload["temperature"] = 1.0
 
-    with httpx.Client(timeout=90.0) as client:
+    with httpx.Client(timeout=LLM_TIMEOUT_SEC) as client:
         resp = client.post(
             MOONSHOT_URL,
             headers={
@@ -172,11 +170,11 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
             "completion_tokens": usage.get("completion_tokens", 0),
         },
         "finish_reason": choice.get("finish_reason"),
+        "requested_temperature": temperature,
     }
 
 
 def _execute(cmd: dict[str, Any]) -> Any:
-    """Dispatch a single command and return the result payload."""
     action = cmd.get("action")
     if not action:
         raise ValueError("missing 'action'")
@@ -231,19 +229,24 @@ def _execute(cmd: dict[str, Any]) -> Any:
 def process_pending_commands() -> dict[str, Any]:
     """
     Main entry point. Called from /health.
-    Returns a short summary of what was processed.
+    Processes at most MAX_CMDS_PER_HEALTH files so a probe never stacks
+    multiple 55s Moonshot calls and trips Railway 503.
     """
-    summary = {"processed": 0, "errors": 0, "ids": []}
+    summary: dict[str, Any] = {"processed": 0, "errors": 0, "ids": [], "skipped": 0}
 
     try:
         pending = _list_pending()
     except Exception as e:
         return {"error": f"list failed: {e}", **summary}
 
+    # Stable order: oldest first if GitHub returns by name; else as listed
+    pending = [i for i in pending if i.get("name") != ".gitkeep"]
+    if len(pending) > MAX_CMDS_PER_HEALTH:
+        summary["skipped"] = len(pending) - MAX_CMDS_PER_HEALTH
+        pending = pending[:MAX_CMDS_PER_HEALTH]
+
     for item in pending:
         name = item["name"]
-        if name == ".gitkeep":
-            continue
         cmd_id = name.replace(".json", "")
         path = f"{PENDING_PATH}/{name}"
 
@@ -268,15 +271,12 @@ def process_pending_commands() -> dict[str, Any]:
                 result_payload["traceback"] = traceback.format_exc()[-1500:]
                 summary["errors"] += 1
 
-            # write result
             result_path = f"{RESULTS_PATH}/{cmd_id}.json"
             _write_file(
                 result_path,
                 json.dumps(result_payload, indent=2, default=str),
                 f"cmd result: {cmd_id}",
             )
-
-            # delete pending
             _delete_file(path, sha, f"cmd processed: {cmd_id}")
 
             summary["processed"] += 1
