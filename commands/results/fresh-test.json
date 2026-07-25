@@ -1,0 +1,12 @@
+{
+  "id": "fresh-test",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-25T03:44:01.005341+00:00"
+}
