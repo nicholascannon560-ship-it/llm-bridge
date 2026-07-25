@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "temperature": 0.3,
+  "max_tokens": 900,
+  "messages": [
+    {
+      "role": "user",
+      "content": "OUTPUT ONLY these labels in order. First character must be P of PLAN. No thinking, no preamble.\n\nPLAN: (numbered steps, imperative, offline maker excavation from Kalshi data)\nRISKS: (one line each)\nCHECKPOINTS: (after which steps report)\nIF_FAIL: (fallback per risk)\nDECISION_RULES: (rules to apply without re-ask)\n\nContext: 36M snaps, 704k trades, 94k acted shadow, 80k settled buy_NO. Flow separates: micro_dev/aggression_w2m ~5-6c settlement. fill_sim Stage0 exists. FV mostly unarmed. Goal: excavate passive entry (post bid not cross) on already-licensed trades; link FV+flow gates; pessimistic fills only; no live until ARMED.\n\nStart now with PLAN:"
+    }
+  ]
+}
