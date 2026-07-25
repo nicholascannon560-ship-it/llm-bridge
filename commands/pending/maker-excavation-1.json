@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "temperature": 1.0,
+  "max_tokens": 1200,
+  "messages": [
+    {
+      "role": "user",
+      "content": "You are a senior quant engineer planning. Produce ONLY labeled sections: PLAN, RISKS, CHECKPOINTS, IF_FAIL, DECISION_RULES. No prose outside.\n\nObjective: Best way to excavate a maker/passive-execution strategy from existing Kalshi weather market data and link it to FV + flow gates.\n\nState: Data live: 36M book snaps, 704k trades, 144k flow signals, 94k acted shadow, 80k settled. FV cells mostly unarmed (daily NO miscal). Flow rule gate just wired: micro_dev/aggression_w2m separate settlement PnL by 5-6c for buy_NO. fill_sim.py Stage0 offline only. DESIGN_maker: Stage1=passive entry on already-licensed trades; Stage2=2sided quote later. Engines only bet NO; taker pays 2-6c spread+fee.\n\nConstraints: Shrink-only flow; no live maker until LEARNING→ARMED on pessimistic fills; reuse cell gate; no lower N_MIN; offline first.\n\nAlready tried: rare-event 1m/5m flow models never arm; settlement join proves feature value.\n\nRespond only in the specified format."
+    }
+  ]
+}
