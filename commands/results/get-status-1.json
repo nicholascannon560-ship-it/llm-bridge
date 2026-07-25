@@ -1,6 +1,23 @@
 {
   "id": "get-status-1",
-  "status": "error",
-  "error": "Client.delete() got an unexpected keyword argument 'json'",
-  "processed_at": "2026-07-25T03:45:59.953323+00:00"
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a030d2c5-639a-475f-932f-2f6cb94a2948",
+              "status": "FAILED",
+              "createdAt": "2026-07-24T12:26:30.246Z",
+              "updatedAt": "2026-07-24T12:26:34.964Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-25T03:46:06.298189+00:00"
 }
