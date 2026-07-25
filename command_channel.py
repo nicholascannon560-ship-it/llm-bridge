@@ -15,7 +15,6 @@ from __future__ import annotations
 import base64
 import json
 import os
-import time
 import traceback
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -80,7 +79,6 @@ def _read_file(path: str) -> tuple[str, str]:
 def _write_file(path: str, content: str, message: str) -> None:
     """Create or update a file."""
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
-    # try to get existing sha
     sha = None
     with httpx.Client(timeout=20) as client:
         lookup = client.get(url, headers=_github_headers())
@@ -101,13 +99,25 @@ def _write_file(path: str, content: str, message: str) -> None:
 
 
 def _delete_file(path: str, sha: str, message: str) -> None:
+    """Delete a file via the GitHub Contents API.
+
+    httpx.Client.delete() does not accept json=, so we send the body
+    via content= and set Content-Type manually.
+    """
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     payload = {"message": message, "sha": sha}
+    headers = _github_headers()
+    headers["Content-Type"] = "application/json"
     with httpx.Client(timeout=20) as client:
-        resp = client.delete(url, headers=_github_headers(), json=payload)
+        resp = client.request(
+            "DELETE",
+            url,
+            headers=headers,
+            content=json.dumps(payload),
+        )
     if resp.status_code not in (200, 204):
         # non-fatal — result is already written
-        print(f"warning: delete {path} failed: {resp.status_code}")
+        print(f"warning: delete {path} failed: {resp.status_code} {resp.text[:200]}")
 
 
 def _execute(cmd: dict[str, Any]) -> Any:
@@ -216,7 +226,6 @@ def process_pending_commands() -> dict[str, Any]:
 
         except Exception as e:
             summary["errors"] += 1
-            # best-effort error result so the agent can see what happened
             try:
                 err_payload = {
                     "id": cmd_id,
