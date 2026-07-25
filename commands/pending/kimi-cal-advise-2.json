@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "user",
+      "content": "OUTPUT ONLY these labeled sections. Start with VERDICT:. No chain-of-thought, no preamble.\n\nVERDICT:\nREASONING:\nNEXT_STEPS:\nCALL_BACK_IF:\nRISKS:\n\nContext: Kalshi weather bot. 0 ARMED cells. Hourly: cal_err~0.02 (good), edge -4..-24c after fees (no alpha). Daily: win 31% vs pred 64% on NO — model under-calls highs/extremes; paper +edge on NO is fake. Worst cal: Denver/Chicago/Boston HIGH-mid. Best: SF/Miami. Model skill Stage1 live (NBM best); Stage3 weights not built. EMOS/residual_std/adaptive tree exist in design. Forecast-vs-obs archive exists (prevruns+truth) so daily cal can be fixed without trade settlements.\n\nAdvise highest-leverage improvement path. Be concrete and ordered."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 900
+}
