@@ -11,7 +11,7 @@ Integration: import this module in the bridge's main.py and call
 from fastapi import APIRouter, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 
 import llm_gateway
 from llm_gateway import ChatRequest, ChatMessage, get_router
@@ -24,12 +24,23 @@ llm_router = APIRouter(prefix="/llm", tags=["llm"])
 class ChatRequestModel(BaseModel):
     provider: str = Field("auto", description="anthropic, moonshot, openai, local, or auto")
     model: Optional[str] = Field(None, description="Specific model name, or default for provider")
-    messages: List[dict] = Field(..., description="Chat messages: [{role, content}, ...]")
+    messages: List[dict] = Field(..., description="Chat messages: [{role, content, tool_calls?, tool_call_id?}, ...]")
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(4096, ge=1, le=128000)
     stream: bool = Field(False)
     complexity: Optional[str] = Field(None, description="low, medium, high — for auto-routing")
     budget_cents: Optional[float] = Field(None, description="Max cost willing to pay")
+    tools: Optional[List[dict]] = Field(
+        None, description="OpenAI-compatible tool schemas. Enables agent loops."
+    )
+    tool_choice: Optional[Any] = Field(
+        None, description='"auto" | "none" | "required" | {"type":"function",...}'
+    )
+    reasoning_effort: Optional[str] = Field(
+        None,
+        description='kimi-k3 only: "low" | "high" | "max". Moonshot defaults to '
+                    '"max" — set "low" for mechanical steps to cut cost/latency.',
+    )
 
 
 class ChatResponseModel(BaseModel):
@@ -40,6 +51,8 @@ class ChatResponseModel(BaseModel):
     cost_cents: float
     latency_ms: float
     timestamp: str
+    tool_calls: Optional[List[dict]] = None
+    finish_reason: Optional[str] = None
 
 
 class ProviderInfo(BaseModel):
@@ -89,7 +102,18 @@ async def chat(req: ChatRequestModel, x_bridge_key: str = Header(None, alias="X-
     if not router.available_providers():
         raise HTTPException(503, "No LLM providers configured. Set API keys in Railway env.")
 
-    messages = [ChatMessage(role=m["role"], content=m["content"]) for m in req.messages]
+    # m.get("content") — a tool-calling assistant turn has no content, and
+    # m["content"] would KeyError and kill the loop mid-flight.
+    messages = [
+        ChatMessage(
+            role=m["role"],
+            content=m.get("content"),
+            tool_calls=m.get("tool_calls"),
+            tool_call_id=m.get("tool_call_id"),
+            name=m.get("name"),
+        )
+        for m in req.messages
+    ]
 
     chat_req = ChatRequest(
         provider=req.provider,
@@ -100,6 +124,9 @@ async def chat(req: ChatRequestModel, x_bridge_key: str = Header(None, alias="X-
         stream=False,
         complexity=req.complexity,
         budget_cents=req.budget_cents,
+        tools=req.tools,
+        tool_choice=req.tool_choice,
+        reasoning_effort=req.reasoning_effort,
     )
 
     try:
@@ -112,6 +139,8 @@ async def chat(req: ChatRequestModel, x_bridge_key: str = Header(None, alias="X-
             cost_cents=resp.cost_cents,
             latency_ms=resp.latency_ms,
             timestamp=resp.timestamp,
+            tool_calls=resp.tool_calls,
+            finish_reason=resp.finish_reason,
         )
     except Exception as e:
         raise HTTPException(502, f"LLM provider error: {e}")
@@ -165,7 +194,7 @@ async def estimate_cost(req: ChatRequestModel):
     ))
 
     # Rough token estimate: ~4 chars per token
-    total_chars = sum(len(m["content"]) for m in req.messages)
+    total_chars = sum(len(m.get("content") or "") for m in req.messages)
     estimated_prompt_tokens = total_chars // 4
     estimated_completion_tokens = req.max_tokens
 
