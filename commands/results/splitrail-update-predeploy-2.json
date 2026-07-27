@@ -1,0 +1,9 @@
+{
+  "id": "splitrail-update-predeploy-2",
+  "status": "error",
+  "action": "railway_gql",
+  "result": null,
+  "error": "400: {\"errors\":[{\"message\":\"Unknown argument \\\"preDeployCommand\\\" on field \\\"Mutation.serviceInstanceUpdate\\\".\",\"locations\":[{\"line\":1,\"column\":164}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"2848733964986358827\"},{\"message\":\"Field \\\"serviceInstanceUpdate\\\" argument \\\"input\\\" of type \\\"ServiceInstanceUpdateInput!\\\" is required, but it was not provided.\",\"locations\":[{\"line\":1,\"column\":88}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"2848733964986358827\"}]}\n",
+  "processed_at": "2026-07-27T19:16:05.091144+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 267, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 189, in _execute\n    return railway_query(query, cmd.get(\"variables\"))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/railway_extension.py\", line 27, in railway_query\n    raise HTTPException(status_code=resp.status_code, detail=resp.text)\nfastapi.exceptions.HTTPException: 400: {\"errors\":[{\"message\":\"Unknown argument \\\"preDeployCommand\\\" on field \\\"Mutation.serviceInstanceUpdate\\\".\",\"locations\":[{\"line\":1,\"column\":164}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"2848733964986358827\"},{\"message\":\"Field \\\"serviceInstanceUpdate\\\" argument \\\"input\\\" of type \\\"ServiceInstanceUpdateInput!\\\" is required, but it was not provided.\",\"locations\":[{\"line\":1,\"column\":88}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"2848733964986358827\"}]}\n\n"
+}
