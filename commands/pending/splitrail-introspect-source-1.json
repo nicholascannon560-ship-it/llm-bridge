@@ -1,0 +1,4 @@
+{
+  "action": "railway_gql",
+  "query": "{ __type(name: \"ServiceSourceInput\") { name inputFields { name type { name kind ofType { name kind ofType { name kind } } } } } }"
+}
