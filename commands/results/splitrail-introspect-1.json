@@ -1,0 +1,204 @@
+{
+  "id": "splitrail-introspect-1",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "__type": {
+      "name": "ServiceInstanceUpdateInput",
+      "inputFields": [
+        {
+          "name": "buildCommand",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "builder",
+          "type": {
+            "name": "Builder",
+            "kind": "ENUM",
+            "ofType": null
+          }
+        },
+        {
+          "name": "cronSchedule",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "dockerfilePath",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "drainingSeconds",
+          "type": {
+            "name": "Int",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "healthcheckPath",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "healthcheckTimeout",
+          "type": {
+            "name": "Int",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "ipv6EgressEnabled",
+          "type": {
+            "name": "Boolean",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "multiRegionConfig",
+          "type": {
+            "name": "JSON",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "nixpacksPlan",
+          "type": {
+            "name": "JSON",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "numReplicas",
+          "type": {
+            "name": "Int",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "overlapSeconds",
+          "type": {
+            "name": "Int",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "preDeployCommand",
+          "type": {
+            "name": null,
+            "kind": "LIST",
+            "ofType": {
+              "name": null,
+              "kind": "NON_NULL"
+            }
+          }
+        },
+        {
+          "name": "railwayConfigFile",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "region",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "registryCredentials",
+          "type": {
+            "name": "RegistryCredentialsInput",
+            "kind": "INPUT_OBJECT",
+            "ofType": null
+          }
+        },
+        {
+          "name": "restartPolicyMaxRetries",
+          "type": {
+            "name": "Int",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "restartPolicyType",
+          "type": {
+            "name": "RestartPolicyType",
+            "kind": "ENUM",
+            "ofType": null
+          }
+        },
+        {
+          "name": "rootDirectory",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "sleepApplication",
+          "type": {
+            "name": "Boolean",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "source",
+          "type": {
+            "name": "ServiceSourceInput",
+            "kind": "INPUT_OBJECT",
+            "ofType": null
+          }
+        },
+        {
+          "name": "startCommand",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "watchPatterns",
+          "type": {
+            "name": null,
+            "kind": "LIST",
+            "ofType": {
+              "name": null,
+              "kind": "NON_NULL"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T19:18:27.820222+00:00"
+}
