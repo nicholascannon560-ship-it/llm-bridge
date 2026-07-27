@@ -1,0 +1,12 @@
+{
+  "id": "ping-1",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T21:01:35.839201+00:00"
+}
