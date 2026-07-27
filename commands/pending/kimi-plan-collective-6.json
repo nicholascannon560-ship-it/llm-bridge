@@ -1,0 +1,17 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "temperature": 1.0,
+  "max_tokens": 1500,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections. Start with PLAN: and end with DECISION_RULES:"
+    },
+    {
+      "role": "user",
+      "content": "Objective: Produce a solid execution plan to redesign SplitRail from client-centric Org to Collective/Funder/Project before real-money testing.\nState: SplitRail is a contractor payroll app. Money model already pivoted to direct charges on contractor Express accounts (funds never touch platform balance; platform takes 0.8% app fee). Done today: tombstones deleted, baseline Prisma migration, Railway pre-deploy switched to migrate deploy, Connect webhook created + secret updated + redeployed. Live still on old main branch; new work on direct-charges branch; empty production DB.\nDesired change: Collective = durable crew of contractors (persists across jobs). Funder = the payer. Project = Collective + Funder for one job. Two entry points: Start a Collective (crew-first) and Sign up as Funder (client-first). Bidirectional invites. For the owner's crew use-case, contractors invite the client.\nConstraints: Money model (direct charges, gross-up, fees, payment paths, payout delays) must stay identical. Minimal schema churn. No payment regression. Empty DB so data migration not needed.\nAlready tried: Prior Kimi plans truncated; bridge health fixed so long calls work.\nRespond only in the specified format."
+    }
+  ]
+}
