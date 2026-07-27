@@ -14,10 +14,12 @@ returned in a response.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import secrets
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 import httpx
@@ -33,6 +35,49 @@ GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REQUEST_TIMEOUT = float(os.getenv("GITHUB_TIMEOUT_SECONDS", "30"))
 
+# How often the background command worker polls pending files (seconds).
+COMMAND_POLL_INTERVAL_SEC = float(os.getenv("COMMAND_POLL_INTERVAL_SEC", "10"))
+
+# Last command-channel summary (updated by the background worker).
+_LAST_CMD_SUMMARY: dict[str, Any] = {
+    "processed": 0,
+    "errors": 0,
+    "ids": [],
+    "skipped": 0,
+    "last_tick_at": None,
+}
+
+
+async def _command_worker() -> None:
+    """Background loop: process pending GitHub commands without blocking /health."""
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            summary = await loop.run_in_executor(None, process_pending_commands)
+            if isinstance(summary, dict):
+                summary = dict(summary)
+                summary["last_tick_at"] = time.time()
+                _LAST_CMD_SUMMARY.clear()
+                _LAST_CMD_SUMMARY.update(summary)
+        except Exception as e:
+            _LAST_CMD_SUMMARY["error"] = str(e)
+            _LAST_CMD_SUMMARY["last_tick_at"] = time.time()
+        await asyncio.sleep(COMMAND_POLL_INTERVAL_SEC)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_command_worker())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="kimi-github-bridge",
     description=(
@@ -40,7 +85,8 @@ app = FastAPI(
         "repos, list repos and read file contents using a single "
         "GITHUB_TOKEN."
     ),
-    version="1.4.1",
+    version="1.4.2",
+    lifespan=lifespan,
 )
 
 # Include Railway extension router
@@ -208,13 +254,7 @@ def _diagnose_github_token() -> dict[str, Any]:
 
 @app.get("/health", tags=["meta"], summary="Liveness / readiness check")
 async def health() -> dict[str, Any]:
-    """Return service status. Also processes any pending GitHub command-channel files."""
-    cmd_summary = {}
-    try:
-        cmd_summary = process_pending_commands()
-    except Exception as e:
-        cmd_summary = {"error": str(e)}
-
+    """Return service status. Command processing runs in a background worker (not here)."""
     info: dict[str, Any] = {
         "status": "ok",
         "service": "kimi-github-bridge",
@@ -222,7 +262,7 @@ async def health() -> dict[str, Any]:
         "github_token_configured": bool(GITHUB_TOKEN),
         "github_token_diag": _diagnose_github_token(),
         "auth_enabled": _auth_enabled(),
-        "commands": cmd_summary,
+        "commands": dict(_LAST_CMD_SUMMARY),
     }
     if _auth_enabled():
         age = time.time() - KEY_STATE.issued_at
