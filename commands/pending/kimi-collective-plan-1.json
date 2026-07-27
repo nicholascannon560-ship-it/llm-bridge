@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "temperature": 0.3,
+  "max_tokens": 900,
+  "messages": [
+    {
+      "role": "user",
+      "content": "You are a senior engineer planning execution. Produce ONLY the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose.\n\nObjective: Redesign SplitRail from client-centric Org model to Collective/Funder/Project so crews can persist and invite clients.\nState: Current: Org=client, invites contractors. Desired: Collective=durable crew of contractors; Funder=payer; Project=Collective+Funder for a job. Two entry points: Start Collective (crew-first) or Sign up as Funder (client-first). Direct charges, fees, payment paths stay. Live still on old main; work on direct-charges branch. Empty DB, baseline migration exists.\nConstraints: Minimal schema churn, keep money model intact, prefer reusable Collective across projects, both invite directions.\nAlready tried: none.\n\nRespond only in the specified format."
+    }
+  ]
+}
