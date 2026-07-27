@@ -1,0 +1,13 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "temperature": 0.3,
+  "max_tokens": 1100,
+  "messages": [
+    {
+      "role": "user",
+      "content": "You are a senior engineer planning execution. Respond ONLY with these exact labeled sections and nothing else:\n\nPLAN:\nRISKS:\nCHECKPOINTS:\nIF_FAIL:\nDECISION_RULES:\n\nObjective: Redesign SplitRail Org model into Collective (durable crew) + Funder (payer) + Project (Collective+Funder job). Two entry points: Start Collective or Sign up as Funder. Money model (direct charges, fees, paths) must stay identical. Empty DB, work on direct-charges branch.\nState: Current schema has Org as client; contractors invited by Org. Need reusable Collective across projects and bidirectional invites.\nConstraints: Minimal schema churn, no payment regression, both invite directions.\n\nStart immediately with PLAN:"
+    }
+  ]
+}
