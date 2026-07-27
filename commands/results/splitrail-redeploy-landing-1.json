@@ -1,0 +1,10 @@
+{
+  "id": "splitrail-redeploy-landing-1",
+  "status": "ok",
+  "action": "redeploy",
+  "result": {
+    "serviceInstanceDeploy": true
+  },
+  "error": null,
+  "processed_at": "2026-07-27T22:11:57.237104+00:00"
+}
