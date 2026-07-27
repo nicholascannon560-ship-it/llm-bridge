@@ -1,6 +1,0 @@
-{
-  "action": "set_env",
-  "service_id": "509d2aef-f1a5-4854-9a57-e44cf9c079a0",
-  "name": "LLM_TIMEOUT_SEC",
-  "value": "90"
-}
