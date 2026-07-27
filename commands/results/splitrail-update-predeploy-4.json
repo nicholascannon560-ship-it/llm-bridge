@@ -1,0 +1,10 @@
+{
+  "id": "splitrail-update-predeploy-4",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "serviceInstanceUpdate": true
+  },
+  "error": null,
+  "processed_at": "2026-07-27T19:19:14.823325+00:00"
+}
