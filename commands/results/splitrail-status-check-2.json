@@ -1,0 +1,23 @@
+{
+  "id": "splitrail-status-check-2",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "0bf1f4d8-d6ed-4e44-9b00-a4c02ce1164b",
+              "status": "SUCCESS",
+              "createdAt": "2026-07-27T19:38:27.802Z",
+              "updatedAt": "2026-07-27T19:40:09.484Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T19:54:05.585479+00:00"
+}
