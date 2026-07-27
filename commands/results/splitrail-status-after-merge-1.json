@@ -1,0 +1,23 @@
+{
+  "id": "splitrail-status-after-merge-1",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "5f93b0f2-dd8d-4859-8c21-3f499b02f603",
+              "status": "SUCCESS",
+              "createdAt": "2026-07-27T22:06:02.077Z",
+              "updatedAt": "2026-07-27T22:07:37.016Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T22:07:47.506776+00:00"
+}
