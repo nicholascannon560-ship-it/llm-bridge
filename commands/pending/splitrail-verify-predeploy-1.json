@@ -1,0 +1,5 @@
+{
+  "action": "railway_gql",
+  "query": "query($id: String!) { service(id: $id) { serviceInstances { edges { node { preDeployCommand } } } } }",
+  "variables": {"id": "97a007f1-dd56-4ce0-8b8b-23bf26f5b59f"}
+}
