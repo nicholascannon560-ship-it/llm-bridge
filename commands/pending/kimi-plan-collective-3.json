@@ -1,0 +1,17 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "temperature": 1.0,
+  "max_tokens": 1500,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Redesign SplitRail from client-centric Org model to Collective (durable crew of contractors) + Funder (payer) + Project (Collective+Funder for one job).\nState: Current schema: Org = client, contractors invited by Org, money via direct charges on contractor Express accounts. Desired: Collective persists across jobs; Funder pays; Project joins them. Two entry points: Start Collective (crew-first) and Sign up as Funder (client-first). Bidirectional invites. Empty production DB, baseline migration exists, work on direct-charges branch. Live still on old main.\nConstraints: Money model (direct charges, gross-up, 0.8% fee, payment paths, payout delays) must stay identical. Minimal schema churn. No payment regression.\nAlready tried: Two prior Kimi calls truncated on format.\nRespond only in the specified format. No preamble, no explanation, no prose."
+    }
+  ]
+}
