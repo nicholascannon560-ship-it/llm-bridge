@@ -1,0 +1,27 @@
+{
+  "id": "splitrail-services-1",
+  "status": "ok",
+  "action": "list_services",
+  "result": {
+    "project": {
+      "services": {
+        "edges": [
+          {
+            "node": {
+              "id": "97a007f1-dd56-4ce0-8b8b-23bf26f5b59f",
+              "name": "web"
+            }
+          },
+          {
+            "node": {
+              "id": "adeb15cc-dcce-4593-a1d5-3fe44544c6d3",
+              "name": "postgres"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T18:59:49.531960+00:00"
+}
