@@ -1,0 +1,22 @@
+{
+  "id": "splitrail-verify-predeploy-1",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "service": {
+      "serviceInstances": {
+        "edges": [
+          {
+            "node": {
+              "preDeployCommand": [
+                "npx prisma migrate deploy"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T19:19:32.215683+00:00"
+}
