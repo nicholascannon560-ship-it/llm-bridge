@@ -1,0 +1,30 @@
+{
+  "id": "splitrail-introspect-source-1",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "__type": {
+      "name": "ServiceSourceInput",
+      "inputFields": [
+        {
+          "name": "image",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        },
+        {
+          "name": "repo",
+          "type": {
+            "name": "String",
+            "kind": "SCALAR",
+            "ofType": null
+          }
+        }
+      ]
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T22:05:17.157570+00:00"
+}
