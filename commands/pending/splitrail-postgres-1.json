@@ -1,0 +1,5 @@
+{
+  "action": "railway_gql",
+  "query": "query($id: String!) { service(id: $id) { id name volumeMounts { edges { node { id mountPath volume { id name } } } } serviceInstances { edges { node { id } } } } }",
+  "variables": {"id": "adeb15cc-dcce-4593-a1d5-3fe44544c6d3"}
+}
