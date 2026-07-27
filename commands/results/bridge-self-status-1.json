@@ -1,0 +1,23 @@
+{
+  "id": "bridge-self-status-1",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a030d2c5-639a-475f-932f-2f6cb94a2948",
+              "status": "FAILED",
+              "createdAt": "2026-07-24T12:26:30.246Z",
+              "updatedAt": "2026-07-24T12:26:34.964Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-27T21:00:34.895167+00:00"
+}
