@@ -1,0 +1,18 @@
+{
+  "id": "kimi-repo-map-advise-1",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "VERDICT\nProceed with two-tier system: per-repo `MAP.md` (single loadable file, \u2264600 tokens) + central `INDEX.md` (~150 tokens/repo). Imitate Stacker via fixed section order so agents learn the parse pattern. Build manually first; script only the directory-tree section. Ship one repo (most cross-connected, likely llm-bridge) as pilot before rolling out to all five.\n\nREASONING\n- Single file per repo satisfies the load-one-file constraint; a central index handles cross-repo routing so agents never open the wrong repo.\n- Hard token budget forces signal density; maps that bloat get skipped by agents, defeating the purpose.\n- Fixed section order = predictable parsing; agents cheaply jump to \"Start here\" or \"Gotchas\" without scanning.\n- \"Do-not-read\" list saves more tokens than any positive description; explicit exclusions (data/, generated/, dist/) stop exploratory reads.\n- Staleness is the main failure mode. Mitigate with `last_verified` date + regeneration only on structural triggers (new top-level dir, new entry point, changed run command) \u2014 not per commit. Per-commit maintenance will be abandoned within weeks.\n- Naming: many agents auto-ingest `AGENTS.md` / `CLAUDE.md`. Keep `MAP.md` as source of truth; make AGENTS.md/CLAUDE.md a 3-line pointer to it. Avoids duplication drift.\n- Manual authorship beats auto-generation for the high-signal parts (purpose, gotchas, current state); auto-generate only the tree, which is mechanical.\n- \"Current state\" section is the highest-value, cheapest-to-maintain field: 2-3 lines updated at end of each work session by the agent itself, as a standing rule.\n\nNEXT_STEPS\n1. Create `MAP.template.md` with this fixed section order: (1) Purpose+Status+last_verified (2) Start here: exact setup/run/test commands (3) Directory map: `tree -L 2 -I 'node_modules|dist|.git|__pycache__'`, one-line annotation per dir (4) Key files: entry points + core modules w/ symbols (5) Architecture: 3-5 bullet data flow (6) Relationships: repos it talks to + interface (port/API/file) (7) Gotchas: known traps (8) Current state: in-progress, broken, where work lives (9) Conventions: style/test/commit (10) Do-not-read: excluded paths.\n2. Create central `~/INDEX.md` (or in a dotfiles/notes repo): table of all 5 repos \u2014 path, one-line purpose, status, depends-on/used-by.\n3. Write pilot `MAP.md` for llm-bridge (most relationships; validates section 6 hardest).\n4. Add",
+    "usage": {
+      "prompt_tokens": 302,
+      "completion_tokens": 1500
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0
+  },
+  "error": null,
+  "processed_at": "2026-07-28T13:55:43.542110+00:00"
+}
