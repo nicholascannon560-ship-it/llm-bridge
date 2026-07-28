@@ -1,0 +1,17 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Upgrade KalshiML learning so the system can discover and license real model-based edge instead of only weak settle_hour patterns.\n\nState: Adaptive tree only split on settle_hour (2 thin ~5c armed sub-slices). Zero splits survived on cross_model_std, model_run_age, ou_z, cloud/wind. Flow layer fully SHADOW (no influence). Hourly p_yes is residual blend of KLGA obs + bias-corrected HRRR only. Paper P&L still ~-31c/contract after 430 bets. Safety gates (Wilson+FDR+sample) must stay strict.\n\nConstraints: Staged reversible changes only. Keep existing gates. Repo is nicholascannon560-ship-it/KalshiML.\n\nAlready tried: Tree on settle_hour, residual blend, logging model-quality axes without using them for p_yes or gating.\n\nRespond only in the specified format. No preamble, no explanation, no prose."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 1800
+}
