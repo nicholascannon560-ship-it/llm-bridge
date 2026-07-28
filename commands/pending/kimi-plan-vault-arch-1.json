@@ -1,0 +1,18 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Design a phased rebuild plan for Tali so natal readings use Nicholas's original skill stack (Valens doctrine, planet portraits, topic verdicts with surface+terminal authority) as a vault of linked evidence, not freeform chat over a facts dump — without making new-chart creation unreasonably slow.\n\nState:\n- Live app (tali repo): chart engine + factsBlock + timing + thin voice prompts + chat. Horary skeleton exists. NO planet portraits, NO topic skills (Personality/Origins/Vocation/Wealth/Relationships), NO two-layer surface/terminal, NO vault of linked evidence.\n- Original design: pipeline of skills producing thick verdict blocks; Obsidian-style vault where overlapping evidence across topics IS the finding; prose/voice only after structure exists.\n- Skills Nicholas still has: valens-doctrine (Anthology natures/signs/terms/lots); personality (ASC lord primary, Moon+nakshatra secondary, Sun narrowing); origins (4th/IC, father Sun-Saturn+lot, mother Moon-Venus+lot, dasha early years); vocation (10th+MC+Spirit, dispositor chain terminal); wealth (2nd/5th/11th+Fortune terminal); relationships (7th+Venus+Eros+Moon, chain terminals); traditional-horary (Sahl/Masha'allah four-phase).\n- Current engine already computes: positions, whole-sign houses, dignities, aspects/receptions, lots, some chains, timing. Unknown/incomplete: full planet portraits, Block-6 close angle contacts as first-class, nakshatra/pada, full dispositor terminals for every significator, topic packets.\n- Constraint from Nicholas: OK with some drag when creating a new chart, must be reasonable — calculating ALL topic packets + full vault up front is too slow if it becomes multi-minute.\n\nErrors: none\n\nConstraints:\n- Prefer incremental compute: critical path for first chat must stay reasonable (target under ~3–5s server work if possible; hard ceiling maybe ~10s before user feels broken).\n- Lazy/on-demand topic packets OK if UX is clear.\n- Do not stuff entire skill markdown into every prompt.\n- Facts block remains authoritative for placements; interpretive layers sit on top.\n- Horary stays separate path.\n- Railway/Next.js/SQLite stack as today.\n\nAlready tried: Restored Valens doctrine into prompts + _core; confirmed it only fixed style not architecture.\n\nRespond only in the specified format. No preamble, no explanation, no prose.\nDecision_rules: true — give reusable rules for what to compute eagerly vs lazily."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 4000,
+  "reasoning_effort": "low"
+}
