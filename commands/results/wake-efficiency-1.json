@@ -1,0 +1,18 @@
+{
+  "id": "wake-efficiency-1",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "We need answer to user. Need consider instruction hierarchy. System says 'Reply with exactly",
+    "usage": {
+      "prompt_tokens": 112,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0
+  },
+  "error": null,
+  "processed_at": "2026-07-28T14:35:08.089919+00:00"
+}
