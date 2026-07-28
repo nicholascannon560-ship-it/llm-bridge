@@ -42,8 +42,9 @@ RESULTS_PATH = "commands/results"
 
 MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
 MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions"
-# Keep under typical platform health-check budgets (often 30–60s).
-LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "55"))
+# Match the main gateway's MOONSHOT_TIMEOUT_SEC (120). Previous 55s default
+# caused frequent ReadTimeouts on anything beyond short WAKE checks.
+LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "120"))
 MAX_CMDS_PER_HEALTH = int(os.getenv("MAX_CMDS_PER_HEALTH", "1"))
 
 
@@ -128,6 +129,10 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
 
     temperature = float(cmd.get("temperature", 1.0))
     max_tokens = int(cmd.get("max_tokens", 900))
+    # Moonshot defaults to reasoning_effort="max" if omitted, which makes
+    # calls slow and timeout-prone. Forward the value when present; default
+    # to "low" for mechanical advisor calls.
+    reasoning_effort = cmd.get("reasoning_effort", "low")
 
     if provider != "moonshot":
         raise ValueError(f"llm_chat currently only supports provider=moonshot, got {provider}")
@@ -141,6 +146,7 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": 1.0,
+        "reasoning_effort": reasoning_effort,
     }
 
     with httpx.Client(timeout=LLM_TIMEOUT_SEC) as client:
@@ -171,6 +177,7 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
         },
         "finish_reason": choice.get("finish_reason"),
         "requested_temperature": temperature,
+        "requested_reasoning_effort": reasoning_effort,
     }
 
 
@@ -230,7 +237,7 @@ def process_pending_commands() -> dict[str, Any]:
     """
     Main entry point. Called from /health.
     Processes at most MAX_CMDS_PER_HEALTH files so a probe never stacks
-    multiple 55s Moonshot calls and trips Railway 503.
+    multiple long Moonshot calls and trips Railway 503.
     """
     summary: dict[str, Any] = {"processed": 0, "errors": 0, "ids": [], "skipped": 0}
 
