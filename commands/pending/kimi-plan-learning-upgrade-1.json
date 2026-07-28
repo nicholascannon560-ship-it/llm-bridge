@@ -1,0 +1,17 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Fully upgrade the KalshiML learning system so it can actually discover and license real model-based edge instead of only weak time-of-day patterns.\n\nState: Current system has (1) adaptive tree that has only produced settle_hour splits — zero surviving splits on cross_model_std, model_run_age, ou_z, cloud/wind/dewpoint; (2) flow/model layer completely in SHADOW with no armed models and zero influence on size; (3) hourly p_yes is a simple residual blend of live KLGA obs + bias-corrected HRRR, not conditioned on model quality features; (4) overall paper P&L still deeply negative (~-31c/contract after 430 settled bets); (5) only 2 thin (~5c) tree sub-slices armed. Learning is extremely conservative and currently lacks real predictive structure from the weather models.\n\nConstraints: Must keep the existing Wilson + FDR + sample-size safety gates (do not loosen them). Prefer staged, reversible changes. Code lives in nicholascannon560-ship-it/KalshiML. Production is paper-only right now.\n\nAlready tried: Adaptive tree on settle_hour (worked weakly), residual blend of obs+HRRR, logging of model-quality axes without using them for gating or probability.\n\nRespond only in the specified format. No preamble, no explanation, no prose."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 2000
+}
