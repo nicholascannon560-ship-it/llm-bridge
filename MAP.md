@@ -3,7 +3,7 @@
 **purpose:** Universal FastAPI bridge that gives agents controlled access to GitHub, Railway, multi-provider LLMs (Anthropic + Moonshot/Kimi), and a skills engine.  
 **status:** active  
 **last_verified:** 2026-07-28  
-**token budget:** ~1400
+**token budget:** ~1500
 
 ## Entry Points
 - **Main app:** `main.py` (FastAPI app assembly)
@@ -70,9 +70,15 @@
 1. Read this MAP.md first (or just the relevant Task Slice).
 2. For most changes: edit the relevant `.py` file, then commit via the bridge itself or GitHub tools.
 3. To talk to Kimi: drop a command JSON into `commands/pending/` (see existing examples in `commands/results/`).
-4. After any meaningful change, bump `last_verified` in this file and note it in the change-log.
+4. After any meaningful change, **append a one-line delta** to Pending Map Updates below (do not rewrite the whole map unless structural).
 5. **Do not touch** secrets or rotate keys unless explicitly asked.
 
 ## Deep Docs (L2 — load only if needed)
 - Full endpoint list + architecture diagram → `README.md`
 - Individual skill definitions → `skills/`
+- Diff-update protocol → `change-log/MAP_UPDATE.md`
+
+## Pending Map Updates
+<!-- Agents: append one-line deltas here. Format: - YYYY-MM-DD | short description | files: path1, path2 -->
+- 2026-07-28 | Forwarded reasoning_effort + raised LLM timeout to 120s | files: command_channel.py
+- 2026-07-28 | Added task slices section | files: MAP.md
