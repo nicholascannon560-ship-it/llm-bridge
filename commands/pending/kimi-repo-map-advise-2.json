@@ -1,0 +1,17 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a tactical advisor at a checkpoint. Respond ONLY in VERDICT/REASONING/NEXT_STEPS/CALL_BACK_IF format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Design a thorough token-efficient repo mapping system so agents can confidently edit code without full-repo reads.\n\nState: Multi-repo setup (llm-bridge, KalshiML, tali, contractor-payroll, resolume-bridge). Need high-signal maps covering purpose, entry points, directory structure, current state, relationships, and agent start instructions. User wants something thorough and mentioned imitating Stacker.\n\nConstraints: Single-file loadable by agents. Maintainable. Practical.\n\nAlready tried: AGENTS.md idea + central index.\n\nRespond only in the specified format."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 1800
+}
