@@ -5,7 +5,7 @@
   "result": {
     "provider": "moonshot",
     "model": "kimi-k3",
-    "content": "The user is asking for a wake check and wants exactly WAKE_OK only. I",
+    "content": "Must not include extra. Ensure no punctuation. Final only.",
     "usage": {
       "prompt_tokens": 113,
       "completion_tokens": 20
@@ -15,5 +15,5 @@
     "requested_reasoning_effort": "low"
   },
   "error": null,
-  "processed_at": "2026-07-28T20:21:25.681949+00:00"
+  "processed_at": "2026-07-28T20:21:27.736410+00:00"
 }
