@@ -1,18 +1,6 @@
 {
   "id": "wake-efficiency-1",
-  "status": "ok",
-  "action": "llm_chat",
-  "result": {
-    "provider": "moonshot",
-    "model": "kimi-k3",
-    "content": "We need answer to user. Need consider instruction hierarchy. System says 'Reply with exactly",
-    "usage": {
-      "prompt_tokens": 112,
-      "completion_tokens": 20
-    },
-    "finish_reason": "length",
-    "requested_temperature": 1.0
-  },
-  "error": null,
-  "processed_at": "2026-07-28T14:35:08.089919+00:00"
+  "status": "error",
+  "error": "write commands/results/wake-efficiency-1.json failed: 409 {\"message\":\"is at dfd1c0e35dbac9cdc29cbee338e0ab9973a705d8 but expected b1042d405ba9d8f5963178c08208794f333db0ab\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "processed_at": "2026-07-28T14:35:12.170249+00:00"
 }
