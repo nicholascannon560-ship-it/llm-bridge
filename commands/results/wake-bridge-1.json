@@ -1,0 +1,18 @@
+{
+  "id": "wake-bridge-1",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "The user is asking me to reply with exactly \"WAKE_OK\" only. The",
+    "usage": {
+      "prompt_tokens": 118,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0
+  },
+  "error": null,
+  "processed_at": "2026-07-28T14:05:15.816472+00:00"
+}
