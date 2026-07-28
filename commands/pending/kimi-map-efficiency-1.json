@@ -1,0 +1,17 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a tactical advisor at a checkpoint. Respond ONLY in VERDICT/REASONING/NEXT_STEPS/CALL_BACK_IF format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Review what we have built so far for the 3-layer agent map system and recommend the highest-leverage next improvements to increase agent efficiency (token savings + faster confident edits).\n\nState: We implemented Kimi's earlier recommendation:\n- L0 INDEX.md in change-log repo (routing + adjacency)\n- L1 MAP.md in every active repo (llm-bridge, KalshiML, tali, contractor-payroll, resolume-bridge) following the fixed schema (purpose, status, last_verified, entry points, annotated tree, key files, state, relationships, agent_start, deep_docs)\n- Updated change-log/SKILL.md and local Grok skills to force map-first behavior\n- Added hard rule to always wake the llm-bridge before Kimi calls\n- Raised max_tokens to 4000 so Kimi answers are complete\n\nConstraints: Keep maps maintainable. Prefer high-signal low-bloat. Token cost is not a concern for Kimi answers themselves, but agent orientation cost still matters.\n\nAlready tried: Flat AGENTS.md idea, then moved to progressive disclosure (L0/L1/L2).\n\nRespond only in the specified format."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 4000
+}
