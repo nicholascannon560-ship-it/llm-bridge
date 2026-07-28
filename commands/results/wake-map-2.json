@@ -1,0 +1,19 @@
+{
+  "id": "wake-map-2",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "Need output exact WAKE_OK only. Ensure no extra.",
+    "usage": {
+      "prompt_tokens": 113,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-28T15:52:50.983167+00:00"
+}
