@@ -1,0 +1,19 @@
+{
+  "id": "wake-20260728-1343",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "The user is asking to reply WAKE_OK only. Final should be exactly WAKE",
+    "usage": {
+      "prompt_tokens": 113,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-28T17:45:14.040027+00:00"
+}
