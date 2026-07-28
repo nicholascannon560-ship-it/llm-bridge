@@ -1,0 +1,18 @@
+{
+  "id": "status-check-1",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "The user is asking for a status",
+    "usage": {
+      "prompt_tokens": 112,
+      "completion_tokens": 10
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0
+  },
+  "error": null,
+  "processed_at": "2026-07-28T14:46:56.674764+00:00"
+}
