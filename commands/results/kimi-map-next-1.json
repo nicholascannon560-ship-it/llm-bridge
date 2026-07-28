@@ -1,0 +1,19 @@
+{
+  "id": "kimi-map-next-1",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "VERDICT: Adopt L2 on-demand micro-maps, a map-staleness gate, and token-budget tiering; defer full auto-regeneration tooling.\n\nREASONING:\n- Biggest remaining leak: MAP.md is read whole even when only one subtree is relevant. 5 repos \u00d7 fixed-schema L1 is fine for routing but wasteful for deep edits. A per-subsystem L2 (KEYFILE.md beside dense directories, or section-anchored MAP.md reads) cuts per-task tokens the most.\n- Staleness is the main correctness risk: last_verified exists but nothing enforces it. Cheap git-mtime/diff check at session start (\"files changed after last_verified \u2192 flag map sections suspect\") buys confidence without maintenance burden.\n- Skills already force map-first; next leverage is making edits map-updating: require any commit that touches a key file to either update its MAP.md line or append to change-log L0 with a one-line delta. Keeps maps self-healing at near-zero cost.\n- Token cost of Kimi irrelevant means you can afford richer Kimi output: have it return a structured \"map_delta\" block per task instead of prose\u2014machine-mergeable into L1, compounding maintainability.\n- 4000 max_tokens may truncate long edit plans on multi-repo tasks; add a tiered budget (4000 default, 8000 when task spans >1 repo per L0 adjacency).\n- Auto-regenerating maps from code (AST/tree walk) is high effort and drifts from human-curated annotations; not worth it yet given only 5 repos.\n\nNEXT_STEPS:\n1. Add staleness check script: compare last_verified vs git log --since per key file; print suspect sections at session wake.\n2. Add map_delta output schema to Kimi skill (file, section, old_line, new_line); merge via small script into MAP.md + change-log.\n3. Create L2 KEYFILE.md convention for the 1\u20132 densest directories per repo; load only when entry point lands there.\n4. Add token tier rule to skills: multi-repo task \u2192 max_tokens=8000.\n5. Amend edit workflow: no commit touching key files without a map line update or L0 delta entry.\n\nCALL_BACK_IF: staleness check flags >30% of sections on consecutive wakes (indicates update workflow failing), L2 files proliferate beyond ~3 per repo (merge back into L1), or a new repo is added (reassess auto-generation tooling).",
+    "usage": {
+      "prompt_tokens": 294,
+      "completion_tokens": 541
+    },
+    "finish_reason": "stop",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-28T15:53:34.991386+00:00"
+}
