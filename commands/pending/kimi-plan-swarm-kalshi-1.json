@@ -1,0 +1,18 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Produce a concrete staged plan to incorporate a 6-agent alpha-research swarm (Idea Generator reading weather/NWP papers + bias diagnostics; Feature Engineer; Backtester; Validator with statistical rigor + maker-checker; Regime Auditor; Factor/Residual Decomposer) into the existing KalshiML system for NYC hourly temperature prediction markets.\n\nState: KalshiML already has:\n- hourly_engine + features (HRRR/Synoptic joins, ou_features)\n- learning.py state machine (LEARNING→PROBATION→ARMED) with cal_err + edge gates, independence (n_eff/events/days), family borrow, drift demotion\n- adaptive_tree for multi-axis (formation time, model recency, spread, hour) — DESIGN docs exist, stamping partial\n- model_skill learning DESIGN (verification, changepoint, promotion)\n- maker execution learning DESIGN (fill_sim, passive entry)\n- daily_engine + 8 large parts for calibration/ensemble/EMOS/residual_std\n- evidence logs, cell_states, trajectory history, strong safety (DRY_RUN default)\n- Design principle: prove on settled OOS before any weight/behavior change (\u201cinhale only after proven\u201d)\n\nThe swarm from @RohOnChain post uses specialized parallel agents + persistent state + Programs (Slate or equivalent loops) + continuous overnight runs. Do NOT replace the existing gate; the swarm should generate and pre-validate candidate signals/features/hypotheses that then feed the existing evidence → recompute → promotion path.\n\nConstraints: Keep all existing promotion bars and independence guards. Prefer additive, flag-gated changes. Prefer reusing adaptive_tree / model_skill / evidence machinery over new frameworks if possible. Live capital small but treat execution paths carefully. Prefer Claude Code / existing loops or simple Python orchestrator over introducing Slate unless clear win. Weather data has short history vs equities; regimes are synoptic/seasonal.\n\nAlready tried: none for this swarm idea.\n\nRespond only in the specified format. No preamble, no explanation, no prose."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 4000,
+  "reasoning_effort": "low"
+}
