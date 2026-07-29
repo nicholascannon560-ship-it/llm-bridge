@@ -15,13 +15,13 @@
 
 ## Task Slices (load only the relevant one)
 
-| Slice | When to use | Key files |
-|-------|-------------|-----------|
-| **command-channel** | Sending/receiving Kimi or agent commands via GitHub | `command_channel.py`, `commands/pending/`, `commands/results/` |
-| **llm-gateway** | Provider routing, timeouts, reasoning_effort, cost table | `llm_gateway.py`, `llm_routes.py` |
-| **railway** | Deploy, status, logs, env vars | `railway_extension.py` |
-| **skills** | Skill definitions and /skills endpoints | `skills/`, `skills_routes.py` |
-| **app-wiring** | Routes, middleware, health, startup | `main.py`, `Procfile`, `railway.json` |
+| Slice | When to use | Key files | Verified |
+|-------|-------------|-----------|-------|
+| **command-channel** | Sending/receiving Kimi or agent commands via GitHub | `command_channel.py`, `commands/pending/`, `commands/results/` | verified: — |
+| **llm-gateway** | Provider routing, timeouts, reasoning_effort, cost table | `llm_gateway.py`, `llm_routes.py` | verified: — |
+| **railway** | Deploy, status, logs, env vars | `railway_extension.py` | verified: — |
+| **skills** | Skill definitions and /skills endpoints | `skills/`, `skills_routes.py` | verified: — |
+| **app-wiring** | Routes, middleware, health, startup | `main.py`, `Procfile`, `railway.json` | verified: 2026-07-28 |
 
 **Rule:** Match the task to a slice and open only those files first. Load the full tree only for cross-cutting work.
 
@@ -72,6 +72,7 @@
 3. To talk to Kimi: drop a command JSON into `commands/pending/` (see existing examples in `commands/results/`).
 4. After any meaningful change, **append a one-line delta** to Pending Map Updates below (do not rewrite the whole map unless structural).
 5. **Do not touch** secrets or rotate keys unless explicitly asked.
+6. Log the change to `change-log` issue **#2** (POST /issues/.../change-log/2/comments), using the Agent/What/When/Where/Verified/State/Next template.
 
 ## Deep Docs (L2 — load only if needed)
 - Full endpoint list + architecture diagram → `README.md`
@@ -79,7 +80,9 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
-<!-- Agents: append one-line deltas here. Format: - YYYY-MM-DD | short description | files: path1, path2 -->
+<!-- Agents: append one-line deltas here, MAX 120 CHARS.
+     Format: - YYYY-MM-DD | short description | files: path1, path2
+     Longer detail belongs in the change-log issue, not here. -->
 - 2026-07-28 | Forwarded reasoning_effort + raised LLM timeout to 120s | files: command_channel.py
 - 2026-07-28 | Added task slices section | files: MAP.md
 - 2026-07-28 | Added /issues endpoints (list, create, list+add comments) so agents can close the change-log loop | files: main.py
