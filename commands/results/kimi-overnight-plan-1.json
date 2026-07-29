@@ -1,0 +1,19 @@
+{
+  "id": "kimi-overnight-plan-1",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "PLAN:\n1. Pull Railway logs for the last 7 days from hourly_engine.py and quantify fills, quotes, skips, and promotion decisions by cell and node\n2. Rank blockers in learning.py against promotion bars to identify which of n, n_eff, distinct_events, days, cal_err, or mean_edge_c is binding most often\n3. Inspect adaptive_tree.py split selection and child routing to verify no live path bypasses the tree after the 14 settle_hour splits\n4. Recompute calibration in model_skill.py by bucket, hour, and regime to find where edge estimates are most inflated or discarded\n5. Analyze maker_policy.py and exit_policy.py for adverse selection, stale quote handling, and exits that erase maker edge\n6. Produce a short MAP.md slice list with ranked changes ordered by expected profit gain per unit risk\nRISKS:\n1. Promotion gates may be so strict that no cells graduate\n2. Tree leaves may route around intended learning logic and create silent bypass\n3. Calibration may look acceptable globally while failing in tradable hours\n4. Maker fills may be mostly adverse and contaminate edge estimates\n5. Logs may be incomplete or inconsistent across restarts on Railway\nCHECKPOINTS:\n1. After step 1\n2. After step 3\n3. After step 5\nIF_FAIL:\n1. If promotion is impossible, recommend staged shadow thresholds, broader event grouping, and pooled evidence across adjacent hours\n2. If tree bypass is found, recommend explicit routing assertions, decision-path logging, and leaf-level counters\n3. If calibration fails only in key hours, recommend regime-specific bins and reliability plots by settle_hour before any parameter change\n4. If maker fills are adverse, recommend quote placement filters tied to forecast freshness, spread, and recent toxicity\n5. If logs are weak, recommend structured event logging with stable keys before any model or policy tuning\nDECISION_RULES:\n1. Prioritize changes that raise qualified samples per week without lowering promotion standards\n2. Prefer pooled or hierarchical evidence over isolated cells when sample size is the binding constraint\n3. Treat any tree path without explicit accounting as a defect until proven otherwise\n4. Rank improvements by incremental edge after costs, not by forecast accuracy alone\n5. Add observability before optimization whenever the current system cannot explain why trades were skipped or promoted\n6. Keep all recommendations log-only and compatible with DRY_RUN=1 and PLACE_REAL_ORDERS=0",
+    "usage": {
+      "prompt_tokens": 439,
+      "completion_tokens": 519
+    },
+    "finish_reason": "stop",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-29T04:05:19.712626+00:00"
+}
