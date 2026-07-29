@@ -1,0 +1,19 @@
+{
+  "id": "kimi-overnight-execution-3",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "VERDICT: Add log-only instrumentation (adverse-selection marks, taker counterfactual, exit edge-destruction ratio) before changing any maker/exit logic; state is too thin (1 ARMED + 6 PROBATION) to justify parameter changes.\n\nREASONING: With only 7 active nodes, any threshold tightening risks zeroing trade flow; the prior plan's three questions are all answerable with diagnostics. Maker fills may look profitable gross while suffering post-fill adverse selection vs mid, and early exits may be clipping winners \u2014 both measurable from existing fill/order logs without touching order placement. DRY_RUN=1 keeps all of this zero-risk.\n\nNEXT_STEPS:\n1. maker_policy.py: in the fill handler (on_fill / process_fill), log `adverse_sel_bps = (mid_at_fill+\u0394 - fill_price) * side_sign` at horizons \u0394=1s,5s,30s using the existing market-data cache; emit to a new `maker_adverse` log line.\n2. execution path (supervisor.py fill accounting): per maker fill, log `counterfactual_taker_pnl = edge_at_signal - taker_fee - spread_half` alongside realized maker PnL in the trade record.\n3. exit_policy.py: in the exit decision function (evaluate_exit / should_exit), log `theoretical_edge_remaining` at exit time and at +30s/+120s; compute `edge_destroyed_ratio = 1 - realized_pnl / theoretical_edge_at_entry` per trade.\n4. supervisor.py: add a periodic aggregator (existing metrics loop) summarizing the three metrics per node_id so ARMED vs PROBATION cohorts can be compared after \u2265200 fills.\n5. Guard all new code behind a `DIAGNOSTICS=1` env flag; no changes to quoting prices, sizes, or exit triggers.\n\nCALL_BACK_IF: \u2265200 maker fills logged and adverse_sel_bps(30s) median is negative, OR counterfactual taker PnL exceeds realized maker PnL on >40% of fills, OR median edge_destroyed_ratio > 0.5 \u2014 then revisit maker offset/exit thresholds for the ARMED node only.",
+    "usage": {
+      "prompt_tokens": 294,
+      "completion_tokens": 475
+    },
+    "finish_reason": "stop",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-29T04:07:43.879254+00:00"
+}
