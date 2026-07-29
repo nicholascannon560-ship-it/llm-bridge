@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import secrets
 import time
@@ -371,6 +372,70 @@ async def rename_repo(
         "html_url": data["html_url"],
         "description": data.get("description", ""),
     }
+
+
+# ── map freshness ────────────────────────────────────────────────────────────
+# change-log/check_map_freshness.py needs a GITHUB_TOKEN, which sandboxed agents
+# don't have -- so in practice nobody ran the gate. The bridge already holds the
+# token, so it runs the check here instead. Source of truth stays the script in
+# the change-log repo: it is fetched and executed rather than reimplemented, so
+# the two can't drift.
+
+MAP_FRESHNESS_SCRIPT = (
+    "/repos/nicholascannon560-ship-it/change-log/contents/check_map_freshness.py"
+)
+
+
+@app.get(
+    "/map_freshness",
+    tags=["maps"],
+    summary="Per-slice MAP.md freshness gate",
+)
+async def map_freshness(
+    repo: Optional[str] = Query(None, description="Check one repo; omit for all."),
+    days: int = Query(7, ge=1, le=365, description="Staleness window in days."),
+) -> Any:
+    import subprocess
+    import sys
+    import tempfile
+
+    response = await github_request("GET", MAP_FRESHNESS_SCRIPT)
+    payload = response.json()
+    source = base64.b64decode(payload["content"]).decode("utf-8")
+
+    argv = [sys.executable, "-", "--json", "--days", str(days)]
+    if repo:
+        argv += ["--repo", repo]
+
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=True) as fh:
+        fh.write(source)
+        fh.flush()
+        argv[1] = fh.name
+        try:
+            proc = subprocess.run(
+                argv,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**os.environ, "GITHUB_TOKEN": GITHUB_TOKEN or ""},
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(
+                status_code=504, detail="map freshness check timed out"
+            )
+
+    if proc.returncode not in (0, 1):  # 1 == stale found, which is a valid result
+        raise HTTPException(
+            status_code=500,
+            detail=f"freshness check failed: {proc.stderr[:500] or proc.stdout[:500]}",
+        )
+    try:
+        return json.loads(proc.stdout)
+    except ValueError:
+        raise HTTPException(
+            status_code=500,
+            detail=f"freshness check returned non-JSON: {proc.stdout[:500]}",
+        )
 
 
 # ── issues ───────────────────────────────────────────────────────────────────

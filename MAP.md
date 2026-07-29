@@ -83,3 +83,4 @@
 - 2026-07-28 | Forwarded reasoning_effort + raised LLM timeout to 120s | files: command_channel.py
 - 2026-07-28 | Added task slices section | files: MAP.md
 - 2026-07-28 | Added /issues endpoints (list, create, list+add comments) so agents can close the change-log loop | files: main.py
+- 2026-07-28 | Added GET /map_freshness: runs change-log's per-slice gate with the bridge's token | files: main.py
