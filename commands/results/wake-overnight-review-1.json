@@ -5,7 +5,7 @@
   "result": {
     "provider": "moonshot",
     "model": "kimi-k3",
-    "content": "WAKE_OK",
+    "content": "WAKE",
     "usage": {
       "prompt_tokens": 113,
       "completion_tokens": 20
@@ -15,5 +15,5 @@
     "requested_reasoning_effort": "low"
   },
   "error": null,
-  "processed_at": "2026-07-29T04:04:13.248785+00:00"
+  "processed_at": "2026-07-29T04:04:15.386250+00:00"
 }
