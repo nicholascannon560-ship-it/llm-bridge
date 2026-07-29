@@ -5,15 +5,15 @@
   "result": {
     "provider": "moonshot",
     "model": "kimi-k3",
-    "content": "VERDICT: Add log-only diagnostics correlating per-lead-time forecast error with cal_err failures and ranking worst settle_hours; no threshold or blend changes yet.\n\nREASONING: Tree is settle_hour-only and hourly_wx_axes/model_break_decay are gated behind autopilot criteria, so relaxing or reweighting now is premature. The highest-value, zero-risk move is to instrument skill-by-lead-time vs calibration error to identify which hours actually drive miscalibration, giving the autopilot graduation criteria concrete evidence.\n\nNEXT_STEPS:\n1. In model_skill.py (forecast error aggregation, e.g. compute_skill_metrics/by_lead_time), add a breakdown keyed by (lead_time_bucket, settle_hour) and persist to the existing diagnostics log.\n2. In calibration evaluation path (cal_err computation), join failures to the same (lead_time_bucket, settle_hour) keys and emit a correlation/attribution table \u2014 log-only.\n3. Emit top-N worst settle_hours by |cal_err| weighted by trade frequency into the autopilot graduation report for hourly_wx_axes.\n4. In model_blend_*.py, add a shadow log of what blend weights *would* be for the worst hours vs current settle_hour-only weights; do not apply them.\n5. Gate all of the above behind a diagnostics flag; leave promotion bars and live blend logic untouched.\n\nCALL_BACK_IF: Diagnostics show \u22653 settle_hours where cal_err breach is attributable to lead-time skill degradation with consistent shadow-blend improvement, or hourly_wx_axes/model_break_decay meet autopilot graduation criteria.",
+    "content": "VERDICT: Proceed with log-only diagnostics joining model_skill forecast error by lead time to cal_err failures before any promotion or blend weight changes.\n\nREASONING: Tree is settle_hour-only, so per-lead-time skill is invisible in current metrics; hourly_wx_axes and model_break_decay graduation requires evidence that calibration violations concentrate in specific hours/leads. A diagnostic cross-check (skill vs cal_err by lead hour) is zero-risk and directly gates whether blend or calibration fixes are the right lever. No promotion bar changes justified without that evidence.\n\nNEXT_STEPS:\n1. In model_skill.py, extend the forecast-error aggregation function (groupby lead_time / hours_to_settle) to emit per-lead MAE/RMSE to logs, keyed identically to cal_err records.\n2. Add a join diagnostic (e.g., diagnostics/skill_vs_cal.py or in model_blend_diagnostic.py) that merges skill-by-lead with cal_err failure rows on (market, lead_hour) and logs the top-N violating hours sorted by |cal_err| and count.\n3. In model_blend_*.py, log current blend weights and per-model contribution at the offending hours only \u2014 no weight mutation.\n4. Gate hourly_wx_axes and model_break_decay autopilot graduation on the diagnostic output: require documented calibration-violating hours + stable skill per lead before allowing graduation criteria to be evaluated.\n5. Add an assertion/log-warning when settle_hour-only tree masking hides >X% lead-time variance, so the limitation is surfaced in every run.\n\nCALL_BACK_IF: Diagnostic shows calibration violations concentrated in identifiable lead hours AND model_skill confirms error growth at those leads, justifying a scoped calibration or blend proposal.",
     "usage": {
       "prompt_tokens": 274,
-      "completion_tokens": 337
+      "completion_tokens": 380
     },
     "finish_reason": "stop",
     "requested_temperature": 1.0,
     "requested_reasoning_effort": "low"
   },
   "error": null,
-  "processed_at": "2026-07-29T04:09:56.286721+00:00"
+  "processed_at": "2026-07-29T04:10:03.582597+00:00"
 }
