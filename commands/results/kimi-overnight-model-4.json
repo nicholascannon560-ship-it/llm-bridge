@@ -1,0 +1,19 @@
+{
+  "id": "kimi-overnight-model-4",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "VERDICT: Keep promotion bars unchanged; add log-only lead-time calibration diagnostics before any profitability change.\nREASONING: Settle-hour-only aggregation can conceal horizon-dependent miscalibration and unsafe blending behavior. Comparing forecast-error and cal_err cohorts by lead time should identify repeatable failure windows without changing execution or promotion thresholds.\nNEXT_STEPS:\n1. In model_skill.py, add a diagnostic function such as `forecast_error_by_lead_time()` that joins predictions and outcomes by `(market, event, lead_time_bucket)` and logs Brier/log loss, signed error, sample count, and calibration failure rate.\n2. In the calibration path, add or extend `list_cal_err_violation_hours()` to rank `settle_hour` values by mean absolute calibration error, breach frequency, sample count, and minimum-confidence exclusions.\n3. Cross-check the two reports in a read-only `diagnose_skill_vs_calibration()` path using identical cohort filters, settlement timestamps, and lead-time bucket boundaries.\n4. In each `model_blend_*.py`, instrument existing blend construction functions with logged component weights, component forecasts, final probability, and post-clipping drift; do not alter weighting, clipping, thresholds, or fallback logic.\n5. Gate `hourly_wx_axes` and `model_break_decay` graduation exclusively through the existing autopilot criteria and emit an explicit pass/fail reason log.\nCALL_BACK_IF: Re-enter if ranked `settle_hour`/lead-time cohorts show reproducible calibration breaches with sufficient sample counts, or blend diagnostics expose unstable weights or post-clipping probability drift.",
+    "usage": {
+      "prompt_tokens": 274,
+      "completion_tokens": 375
+    },
+    "finish_reason": "stop",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-29T04:08:51.807459+00:00"
+}
