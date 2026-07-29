@@ -1,19 +1,6 @@
 {
   "id": "kimi-overnight-model-4",
-  "status": "ok",
-  "action": "llm_chat",
-  "result": {
-    "provider": "moonshot",
-    "model": "kimi-k3",
-    "content": "VERDICT: Add log-only forecast-error-by-lead-time diagnostics and calibration-violation hour ranking; no blend/promotion changes justified yet from settle_hour-only evidence.\n\nREASONING: The tree being settle_hour-only means lead-time error structure is invisible, so any blend weight tuning is premature. cal_err failures should be localized by hour before touching calibration paths. Diagnostic instrumentation will either confirm hourly_wx_axes / model_break_decay graduation criteria or reveal which hours drive miscalibration, keeping promotion bars untouched.\n\nNEXT_STEPS:\n1. In model_skill.py, add a diagnostic function (e.g., `log_forecast_error_by_lead()`) that buckets Brier/MAE by lead-time bucket (0-6h, 6-12h, 12-24h, 24h+) and cross-references each bucket against recorded cal_err failures \u2014 emit to the existing skill log, no return-path changes.\n2. Add `log_calibration_violation_hours()` alongside the calibration evaluation path: rank hours by |predicted \u2212 empirical| exceedance of the cal_err threshold, log top-N with sample counts; settle_hour-only entries should be tagged distinctly so the gap is measurable.\n3. In model_blend_*.py, add a shadow-comparison logger that computes what blend weights *would* have scored per lead bucket versus current weights \u2014 log-only, no weight mutation.\n4. Wire both diagnostics into the autopilot pre-graduation check for hourly_wx_axes and model_break_decay as informational fields in the criteria report, without altering thresholds.\n\nCALL_BACK_IF: Diagnostics show \u22653 distinct hours violating calibration with n\u226530 samples each, or lead-time error in any bucket exceeds the settle_hour baseline by >25% \u2014 then re-enter for a scoped blend or calibration review.",
-    "usage": {
-      "prompt_tokens": 274,
-      "completion_tokens": 395
-    },
-    "finish_reason": "stop",
-    "requested_temperature": 1.0,
-    "requested_reasoning_effort": "low"
-  },
-  "error": null,
-  "processed_at": "2026-07-29T04:09:04.144022+00:00"
+  "status": "error",
+  "error": "write commands/results/kimi-overnight-model-4.json failed: 409 {\"message\":\"is at 59943fcf9dae02d6d7031f01c4aee38c6d4c9724 but expected 1b32e501f7144448202deec9cc729e4016f26b5c\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "processed_at": "2026-07-29T04:09:24.899644+00:00"
 }
