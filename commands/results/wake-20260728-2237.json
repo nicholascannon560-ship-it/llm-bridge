@@ -1,0 +1,19 @@
+{
+  "id": "wake-20260728-2237",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "The user is asking for a wake check and explicitly instructs to reply WAKE_OK",
+    "usage": {
+      "prompt_tokens": 113,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-29T02:37:24.897392+00:00"
+}
