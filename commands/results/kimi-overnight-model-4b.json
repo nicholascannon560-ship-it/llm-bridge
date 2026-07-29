@@ -1,19 +1,6 @@
 {
   "id": "kimi-overnight-model-4b",
-  "status": "ok",
-  "action": "llm_chat",
-  "result": {
-    "provider": "moonshot",
-    "model": "kimi-k3",
-    "content": "VERDICT: Proceed with log-only diagnostics joining model_skill forecast error by lead time to cal_err failures before any promotion or blend weight changes.\n\nREASONING: Tree is settle_hour-only, so per-lead-time skill is invisible in current metrics; hourly_wx_axes and model_break_decay graduation requires evidence that calibration violations concentrate in specific hours/leads. A diagnostic cross-check (skill vs cal_err by lead hour) is zero-risk and directly gates whether blend or calibration fixes are the right lever. No promotion bar changes justified without that evidence.\n\nNEXT_STEPS:\n1. In model_skill.py, extend the forecast-error aggregation function (groupby lead_time / hours_to_settle) to emit per-lead MAE/RMSE to logs, keyed identically to cal_err records.\n2. Add a join diagnostic (e.g., diagnostics/skill_vs_cal.py or in model_blend_diagnostic.py) that merges skill-by-lead with cal_err failure rows on (market, lead_hour) and logs the top-N violating hours sorted by |cal_err| and count.\n3. In model_blend_*.py, log current blend weights and per-model contribution at the offending hours only \u2014 no weight mutation.\n4. Gate hourly_wx_axes and model_break_decay autopilot graduation on the diagnostic output: require documented calibration-violating hours + stable skill per lead before allowing graduation criteria to be evaluated.\n5. Add an assertion/log-warning when settle_hour-only tree masking hides >X% lead-time variance, so the limitation is surfaced in every run.\n\nCALL_BACK_IF: Diagnostic shows calibration violations concentrated in identifiable lead hours AND model_skill confirms error growth at those leads, justifying a scoped calibration or blend proposal.",
-    "usage": {
-      "prompt_tokens": 274,
-      "completion_tokens": 380
-    },
-    "finish_reason": "stop",
-    "requested_temperature": 1.0,
-    "requested_reasoning_effort": "low"
-  },
-  "error": null,
-  "processed_at": "2026-07-29T04:10:03.582597+00:00"
+  "status": "error",
+  "error": "write commands/results/kimi-overnight-model-4b.json failed: 409 {\"message\":\"commands/results/kimi-overnight-model-4b.json does not match 4ee9a8ecc4c2fb0a9453b1133c865423ade103e8\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "processed_at": "2026-07-29T04:10:22.620334+00:00"
 }
