@@ -1,0 +1,19 @@
+{
+  "id": "wake-railway-howto-2",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "The user asks to reply WAKE_OK only. Need final exactly WAKE_OK.",
+    "usage": {
+      "prompt_tokens": 113,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-29T03:21:29.485483+00:00"
+}
