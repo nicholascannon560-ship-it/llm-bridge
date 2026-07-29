@@ -1,19 +1,6 @@
 {
   "id": "wake-railway-howto-2",
-  "status": "ok",
-  "action": "llm_chat",
-  "result": {
-    "provider": "moonshot",
-    "model": "kimi-k3",
-    "content": "User asks reply WAKE_OK only. Need final exactly WAKE_OK. Ensure no",
-    "usage": {
-      "prompt_tokens": 113,
-      "completion_tokens": 20
-    },
-    "finish_reason": "length",
-    "requested_temperature": 1.0,
-    "requested_reasoning_effort": "low"
-  },
-  "error": null,
-  "processed_at": "2026-07-29T03:21:31.387117+00:00"
+  "status": "error",
+  "error": "write commands/results/wake-railway-howto-2.json failed: 409 {\"message\":\"is at 137e420fa53d3785b6d21b61cf0bef1903ef9243 but expected d4936d62918560d81213b33b3514459eecc115b7\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "processed_at": "2026-07-29T03:21:34.520885+00:00"
 }
