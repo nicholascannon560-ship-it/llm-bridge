@@ -373,6 +373,128 @@ async def rename_repo(
     }
 
 
+# ── issues ───────────────────────────────────────────────────────────────────
+# The change-log workflow (change-log/SKILL.md) asks every agent to log its work
+# as a comment on the project's open issue. Without these routes an agent can
+# commit code but cannot close its own logging loop, so the log silently rots.
+# Note: GitHub's issues API also returns pull requests; anything carrying a
+# "pull_request" key is filtered out so an agent never comments on a PR
+# believing it is the project's log issue.
+
+
+class CreateIssueRequest(BaseModel):
+    title: str = Field(..., description="Issue title.")
+    body: str = Field("", description="Issue body (markdown).")
+    labels: list[str] = Field(default_factory=list, description="Label names.")
+
+
+class IssueCommentRequest(BaseModel):
+    body: str = Field(..., description="Comment body (markdown).")
+
+
+def _slim_issue(i: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "number": i["number"],
+        "title": i["title"],
+        "state": i["state"],
+        "comments": i.get("comments", 0),
+        "labels": [l["name"] for l in i.get("labels", []) if isinstance(l, dict)],
+        "updated_at": i.get("updated_at"),
+        "html_url": i["html_url"],
+    }
+
+
+@app.get("/issues/{owner}/{repo}", tags=["issues"], summary="List issues")
+async def list_issues(
+    owner: str = Path(..., description="Repository owner."),
+    repo: str = Path(..., description="Repository name."),
+    state: str = Query("open", description="Issue state: open, closed, or all."),
+    per_page: int = Query(30, ge=1, le=100, description="Results per page."),
+    page: int = Query(1, ge=1, description="Page number."),
+) -> list[dict[str, Any]]:
+    response = await github_request(
+        "GET",
+        f"/repos/{owner}/{repo}/issues",
+        params={"state": state, "per_page": per_page, "page": page},
+    )
+    return [_slim_issue(i) for i in response.json() if "pull_request" not in i]
+
+
+@app.post(
+    "/issues/{owner}/{repo}",
+    tags=["issues"],
+    summary="Create an issue",
+    status_code=201,
+)
+async def create_issue(
+    owner: str = Path(..., description="Repository owner."),
+    repo: str = Path(..., description="Repository name."),
+    req: CreateIssueRequest = ...,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"title": req.title, "body": req.body}
+    if req.labels:
+        payload["labels"] = req.labels
+    response = await github_request(
+        "POST", f"/repos/{owner}/{repo}/issues", json=payload
+    )
+    return _slim_issue(response.json())
+
+
+@app.get(
+    "/issues/{owner}/{repo}/{issue_number}/comments",
+    tags=["issues"],
+    summary="List issue comments",
+)
+async def list_issue_comments(
+    owner: str = Path(..., description="Repository owner."),
+    repo: str = Path(..., description="Repository name."),
+    issue_number: int = Path(..., ge=1, description="Issue number."),
+    per_page: int = Query(30, ge=1, le=100, description="Results per page."),
+    page: int = Query(1, ge=1, description="Page number."),
+) -> list[dict[str, Any]]:
+    response = await github_request(
+        "GET",
+        f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        params={"per_page": per_page, "page": page},
+    )
+    return [
+        {
+            "id": c["id"],
+            "author": (c.get("user") or {}).get("login"),
+            "created_at": c.get("created_at"),
+            "body": c.get("body", ""),
+            "html_url": c["html_url"],
+        }
+        for c in response.json()
+    ]
+
+
+@app.post(
+    "/issues/{owner}/{repo}/{issue_number}/comments",
+    tags=["issues"],
+    summary="Comment on an issue",
+    status_code=201,
+)
+async def create_issue_comment(
+    owner: str = Path(..., description="Repository owner."),
+    repo: str = Path(..., description="Repository name."),
+    issue_number: int = Path(..., ge=1, description="Issue number."),
+    req: IssueCommentRequest = ...,
+) -> dict[str, Any]:
+    response = await github_request(
+        "POST",
+        f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        json={"body": req.body},
+    )
+    data = response.json()
+    return {
+        "id": data["id"],
+        "issue_number": issue_number,
+        "created_at": data.get("created_at"),
+        "html_url": data["html_url"],
+    }
+
+
 @app.post("/commit", tags=["files"], summary="Create or update a file")
 async def commit_file(req: CommitRequest) -> dict[str, Any]:
     contents_path = f"/repos/{req.owner}/{req.repo}/contents/{req.path}"

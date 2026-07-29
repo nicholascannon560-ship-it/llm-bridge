@@ -82,3 +82,4 @@
 <!-- Agents: append one-line deltas here. Format: - YYYY-MM-DD | short description | files: path1, path2 -->
 - 2026-07-28 | Forwarded reasoning_effort + raised LLM timeout to 120s | files: command_channel.py
 - 2026-07-28 | Added task slices section | files: MAP.md
+- 2026-07-28 | Added /issues endpoints (list, create, list+add comments) so agents can close the change-log loop | files: main.py
