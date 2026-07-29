@@ -1,19 +1,6 @@
 {
   "id": "wake-20260728-2237",
-  "status": "ok",
-  "action": "llm_chat",
-  "result": {
-    "provider": "moonshot",
-    "model": "kimi-k3",
-    "content": "The user is asking for a wake check and explicitly instructs to reply WAKE_OK",
-    "usage": {
-      "prompt_tokens": 113,
-      "completion_tokens": 20
-    },
-    "finish_reason": "length",
-    "requested_temperature": 1.0,
-    "requested_reasoning_effort": "low"
-  },
-  "error": null,
-  "processed_at": "2026-07-29T02:37:24.897392+00:00"
+  "status": "error",
+  "error": "write commands/results/wake-20260728-2237.json failed: 409 {\"message\":\"is at 9f0cf3ad216b8b49b4ade3e67d7cfa47684e833c but expected 31fcbb9d8733bffebfd0c36a8571d004e19a7b7e\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "processed_at": "2026-07-29T02:37:30.204529+00:00"
 }
