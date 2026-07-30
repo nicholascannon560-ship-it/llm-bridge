@@ -1,9 +1,6 @@
 {
   "id": "splitrail-set-resend-key-b64-1",
   "status": "error",
-  "action": "set_env",
-  "result": null,
-  "error": "set_env requires 'name' and 'value'",
-  "processed_at": "2026-07-30T18:34:17.818244+00:00",
-  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 274, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 202, in _execute\n    raise ValueError(\"set_env requires 'name' and 'value'\")\nValueError: set_env requires 'name' and 'value'\n"
+  "error": "Expecting value: line 1 column 1 (char 0)",
+  "processed_at": "2026-07-30T18:35:11.305049+00:00"
 }
