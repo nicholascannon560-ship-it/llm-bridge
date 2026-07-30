@@ -1,8 +1,0 @@
-{
-  "id": "splitrail-set-resend-key-b64-1",
-  "action": "set_env",
-  "name": "RESEND_API_KEY",
-  "value_b64": "cmVfVUdzSjhENlpfRHE2aVAyWEVpdEg3ZkZ6NEVWRFFaRGZB",
-  "service_id": "97a007f1-dd56-4ce0-8b8b-23bf26f5b59f",
-  "environment_name": "production"
-}
