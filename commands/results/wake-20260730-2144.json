@@ -1,0 +1,19 @@
+{
+  "id": "wake-20260730-2144",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "Need answer exactly WAKE_OK. Must ensure final only that. Done. Now final",
+    "usage": {
+      "prompt_tokens": 113,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-07-31T01:44:50.676093+00:00"
+}
