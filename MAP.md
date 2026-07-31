@@ -83,6 +83,7 @@
 <!-- Agents: append one-line deltas here, MAX 120 CHARS.
      Format: - YYYY-MM-DD | short description | files: path1, path2
      Longer detail belongs in the change-log issue, not here. -->
+- 2026-07-31 | Added agent_loop/ module: autonomous agent harness with tool calling + memory | files: agent_loop/*
 - 2026-07-28 | Forwarded reasoning_effort + raised LLM timeout to 120s | files: command_channel.py
 - 2026-07-28 | Added task slices section | files: MAP.md
 - 2026-07-28 | Added /issues endpoints (list, create, list+add comments) so agents can close the change-log loop | files: main.py
