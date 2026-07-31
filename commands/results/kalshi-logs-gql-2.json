@@ -1,0 +1,9 @@
+{
+  "id": "kalshi-logs-gql-2",
+  "status": "error",
+  "action": "railway_gql",
+  "result": null,
+  "error": "400: {\"errors\":[{\"message\":\"Cannot query field \\\"edges\\\" on type \\\"Log\\\". Did you mean \\\"tags\\\"?\",\"locations\":[{\"line\":1,\"column\":92}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"2616767670099344753\"}]}\n",
+  "processed_at": "2026-07-31T13:44:39.382555+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 282, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 200, in _execute\n    return railway_query(query, cmd.get(\"variables\"))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/railway_extension.py\", line 27, in railway_query\n    raise HTTPException(status_code=resp.status_code, detail=resp.text)\nfastapi.exceptions.HTTPException: 400: {\"errors\":[{\"message\":\"Cannot query field \\\"edges\\\" on type \\\"Log\\\". Did you mean \\\"tags\\\"?\",\"locations\":[{\"line\":1,\"column\":92}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"2616767670099344753\"}]}\n\n"
+}
