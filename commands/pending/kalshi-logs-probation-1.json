@@ -1,6 +1,0 @@
-{
-  "id": "kalshi-logs-probation-1",
-  "action": "get_logs",
-  "deployment_id": "de9e76c3-dca3-4210-a72d-a7c7918dac2f",
-  "limit": 300
-}
