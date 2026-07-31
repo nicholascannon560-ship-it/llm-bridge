@@ -1,0 +1,15 @@
+{
+  "id": "kalshi-logs-gql-3",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "deployment": {
+      "id": "de9e76c3-dca3-4210-a72d-a7c7918dac2f",
+      "status": "SUCCESS",
+      "createdAt": "2026-07-31T13:35:22.741Z",
+      "updatedAt": "2026-07-31T13:37:28.548Z"
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-31T13:45:01.888382+00:00"
+}
