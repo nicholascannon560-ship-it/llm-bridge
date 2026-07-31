@@ -1,0 +1,18 @@
+{
+  "action": "llm_chat",
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a senior engineer planning execution. Respond ONLY in the PLAN/RISKS/CHECKPOINTS/IF_FAIL/DECISION_RULES format. No prose, no preamble, no explanation outside the labeled sections."
+    },
+    {
+      "role": "user",
+      "content": "Objective: Turn the llm-bridge into a multi-agent home that hosts specialized agents (researcher, planner, auditor, executor) using the hierarchical loop engineering pattern (plan \u2192 research \u2192 execute \u2192 audit \u2192 replan checkpoints).\n\nState: Bridge is already live on Railway as central control plane. It has multi-provider LLM gateway (Moonshot/Kimi-K3 + Anthropic), GitHub command channel for sandboxed agents, and a working skills system (/skills/{name}/run) with structured output parsing. Currently only one skill exists: kimi-advisor-bridge (plan/advise/debug/review modes). Command channel supports llm_chat + Railway ops but no run_skill action yet. No specialized role skills exist. Goal is research/planner/auditor/executor agents living on the bridge so agents (including Grok) can do things pure chat cannot.\n\nConstraints: Keep changes minimal and incremental. Prefer skills over new services. Grok has no outbound internet so must use command channel. Do not invent large new architecture if simple skill files + existing loop already get most of the value.\n\nAlready tried: Discussed creating four thin skill files (researcher.md, planner.md, auditor.md, executor.md) as the first step.\n\nRespond only in the specified format. No preamble, no explanation, no prose."
+    }
+  ],
+  "temperature": 1.0,
+  "max_tokens": 4000,
+  "reasoning_effort": "low"
+}
