@@ -46,6 +46,10 @@ MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions"
 # caused frequent ReadTimeouts on anything beyond short WAKE checks.
 LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "120"))
 MAX_CMDS_PER_HEALTH = int(os.getenv("MAX_CMDS_PER_HEALTH", "1"))
+# A command that fails outside _execute (empty file, unreadable, bad JSON)
+# used to stay in pending forever and retry on every health tick. Cap the
+# attempts and quarantine it instead.
+MAX_CMD_ATTEMPTS = int(os.getenv("MAX_CMD_ATTEMPTS", "3"))
 
 
 def _github_headers() -> dict[str, str]:
@@ -295,19 +299,45 @@ def process_pending_commands() -> dict[str, Any]:
 
         except Exception as e:
             summary["errors"] += 1
+
+            # Count prior failures for this id. The result file is the only
+            # durable state we have, so the attempt counter lives there.
+            attempts = 1
+            try:
+                prior_raw, _ = _read_file(f"{RESULTS_PATH}/{cmd_id}.json")
+                attempts = int(json.loads(prior_raw).get("attempts", 0)) + 1
+            except Exception:
+                pass
+
+            give_up = attempts >= MAX_CMD_ATTEMPTS
+            status = "quarantined" if give_up else "error"
+
             try:
                 err_payload = {
                     "id": cmd_id,
-                    "status": "error",
+                    "status": status,
                     "error": str(e),
+                    "attempts": attempts,
                     "processed_at": datetime.now(timezone.utc).isoformat(),
                 }
                 _write_file(
                     f"{RESULTS_PATH}/{cmd_id}.json",
                     json.dumps(err_payload, indent=2),
-                    f"cmd error: {cmd_id}",
+                    f"cmd {status}: {cmd_id}",
                 )
             except Exception:
                 pass
+
+            # Remove the poison file so the next tick can make progress. The
+            # sha comes from the directory listing, so this works even when
+            # the file itself could not be read or parsed.
+            if give_up:
+                sha = item.get("sha")
+                if sha:
+                    try:
+                        _delete_file(path, sha, f"cmd quarantined: {cmd_id}")
+                    except Exception:
+                        pass
+                summary["quarantined"] = summary.get("quarantined", 0) + 1
 
     return summary
