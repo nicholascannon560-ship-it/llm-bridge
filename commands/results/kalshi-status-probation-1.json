@@ -1,0 +1,23 @@
+{
+  "id": "kalshi-status-probation-1",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "de9e76c3-dca3-4210-a72d-a7c7918dac2f",
+              "status": "SUCCESS",
+              "createdAt": "2026-07-31T13:35:22.741Z",
+              "updatedAt": "2026-07-31T13:37:28.548Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-07-31T13:42:43.181397+00:00"
+}
