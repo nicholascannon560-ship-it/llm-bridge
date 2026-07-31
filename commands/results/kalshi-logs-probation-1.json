@@ -1,0 +1,1516 @@
+{
+  "id": "kalshi-logs-probation-1",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": [
+      {
+        "message": "",
+        "timestamp": "2026-07-31T13:39:57.165235123Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:39:57.165240091Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:39:57.168981789Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:39:57.172407715Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:39:58.218977301Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:39:58.219188093Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:39:58.219194696Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:39:58.219391104Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:39:58.219400488Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Houston: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:39:58.366397148Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:39:59.218975067Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:00.333331774Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:00.333344764Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:00.333352113Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:00.333358683Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:00.333366202Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:00.421624095Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:00.433982129Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:00.475449244Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:00.475459266Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:00.475465640Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:01.480377683Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:01.480384162Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:01.480391032Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:01.480397197Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:01.480402039Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:02.443735040Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 503 {\"reason\":\"The service is overloaded\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:02.443739265Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 503 {\"reason\":\"The service is overloaded\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:02.443743354Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:02.443747742Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:02.443752176Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:02.443756501Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:03.426804551Z",
+        "severity": "info"
+      },
+      {
+        "message": "[CASH] live_cash=$14.11  per_trade_cap=$100.00  max_exposure=$1000.00",
+        "timestamp": "2026-07-31T13:40:04.295100277Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WATCH] 133 watched (1-99c), 6 tradeable (40-52c): HIGHNY@99c, HIGHNY@99c, HIGHNY@84c, HIGHNY@39c, HIGHNY@79c, OWTNYC@2c -- running full ensemble+obs check",
+        "timestamp": "2026-07-31T13:40:04.295123362Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN] 0 candidates this cycle -- reasons: no_ensemble_yet=133",
+        "timestamp": "2026-07-31T13:40:04.295245635Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN]   no_ensemble_yet: KXHIGHNY-26JUL31-T82: no ensemble snapshot for New York HIGH yet",
+        "timestamp": "2026-07-31T13:40:04.295250821Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:04.295255929Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:04.295261136Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:04.295266091Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:04.295271312Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:04.295276485Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:04.301768439Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:04.444644322Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:04.444653303Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:04.447414440Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:04.447432917Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:05.341519264Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:05.341531068Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:05.341599618Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:05.341608039Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:05.341621715Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:05.491567912Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:06.302642815Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:06.302660658Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:06.302671935Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:06.302762163Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Los Angeles: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:06.302770583Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:07.232624768Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:08.271167772Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:08.271189471Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:08.271254167Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:08.271262705Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:08.271272440Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:08.271280179Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:08.271284701Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:08.271285117Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:08.271291173Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:08.271296161Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:09.434984154Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:09.434991557Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:09.434998352Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:09.435005223Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:09.435013376Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:09.435020273Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:09.435026805Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:09.435036755Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:09.435087870Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:09.435093704Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:10.509557467Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:11.418079893Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:11.418084703Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:11.418147936Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:11.418160841Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:11.418169426Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:11.418175683Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:12.278207873Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:12.278261558Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:12.278269567Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:12.278279988Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:12.278287218Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270023970Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:13.270033010Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270040986Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270048040Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270055613Z",
+        "severity": "info"
+      },
+      {
+        "message": "[flow-audit] acted signals with age\u22655m: 309060",
+        "timestamp": "2026-07-31T13:40:13.270063255Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270090129Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270096987Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270102517Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:13.270107922Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:13.270112987Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Oklahoma City: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:14.245574787Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:15.220644192Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.216994131Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.217000377Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:16.217011974Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.217018768Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:16.217025866Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.317771694Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.349791358Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:16.546473770Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.546478435Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:16.546483024Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:17.198310906Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:17.232702481Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:17.360878921Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:17.402644445Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:18.206381316Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:18.206549032Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:18.206554182Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:18.216142986Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:18.226658808Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:18.379354356Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:19.180669963Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:20.447818342Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:21.495455270Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:21.495464605Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:21.495470536Z",
+        "severity": "info"
+      },
+      {
+        "message": "[CASH] live_cash=$14.11  per_trade_cap=$100.00  max_exposure=$1000.00",
+        "timestamp": "2026-07-31T13:40:40.929123997Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WATCH] 133 watched (1-99c), 6 tradeable (40-52c): HIGHNY@99c, HIGHNY@99c, HIGHNY@84c, HIGHNY@39c, HIGHNY@79c, OWTNYC@2c -- running full ensemble+obs check",
+        "timestamp": "2026-07-31T13:40:40.929133862Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN] 0 candidates this cycle -- reasons: no_ensemble_yet=133",
+        "timestamp": "2026-07-31T13:40:40.929141637Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN]   no_ensemble_yet: KXHIGHNY-26JUL31-T82: no ensemble snapshot for New York HIGH yet",
+        "timestamp": "2026-07-31T13:40:40.929147348Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:40:45.025040929Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:40:45.068427763Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:45.764975049Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:46.593284283Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:40:46.593336233Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:40:46.593344247Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:40:46.593350847Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:46.713999712Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:46.830860244Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:46.832025105Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:47.678292639Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:47.678509238Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:47.678518065Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:47.678524079Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:40:47.835349551Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:48.889348739Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:40:48.889352514Z",
+        "severity": "info"
+      },
+      {
+        "message": "[CASH] live_cash=$14.11  per_trade_cap=$100.00  max_exposure=$1000.00",
+        "timestamp": "2026-07-31T13:41:08.474046781Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WATCH] 133 watched (1-99c), 6 tradeable (40-52c): HIGHNY@99c, HIGHNY@99c, HIGHNY@84c, HIGHNY@39c, HIGHNY@79c, OWTNYC@2c -- running full ensemble+obs check",
+        "timestamp": "2026-07-31T13:41:08.474053180Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN] 0 candidates this cycle -- reasons: no_ensemble_yet=133",
+        "timestamp": "2026-07-31T13:41:08.474061255Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN]   no_ensemble_yet: KXHIGHNY-26JUL31-T82: no ensemble snapshot for New York HIGH yet",
+        "timestamp": "2026-07-31T13:41:08.474067129Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Phoenix: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:41:10.730299974Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:41:39.832225111Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832236665Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832243189Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832248749Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832254923Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832261675Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:39.832268975Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:39.832274324Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:39.832280283Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832286505Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:39.832292149Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.832297985Z",
+        "severity": "info"
+      },
+      {
+        "message": "[CASH] live_cash=$14.11  per_trade_cap=$100.00  max_exposure=$1000.00",
+        "timestamp": "2026-07-31T13:41:39.835555948Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WATCH] 133 watched (1-99c), 6 tradeable (40-52c): HIGHNY@99c, HIGHNY@99c, HIGHNY@84c, HIGHNY@39c, HIGHNY@79c, OWTNYC@2c -- running full ensemble+obs check",
+        "timestamp": "2026-07-31T13:41:39.835561217Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835566531Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835571721Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835576700Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835581840Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:39.835586969Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835592426Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835597849Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:39.835602975Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835608306Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:39.835613545Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN] 0 candidates this cycle -- reasons: no_ensemble_yet=133",
+        "timestamp": "2026-07-31T13:41:39.911670605Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN]   no_ensemble_yet: KXHIGHNY-26JUL31-T82: no ensemble snapshot for New York HIGH yet",
+        "timestamp": "2026-07-31T13:41:39.911676246Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:40.772383895Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:41.885439489Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:41.885459701Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:41.885465508Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:41.885471104Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:41.885478308Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:41.943400864Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:42.862638492Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:42.862646619Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:42.862647799Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:42.862655396Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:42.862656015Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:42.862662290Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:42.862669975Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:42.862700950Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:42.906345729Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:43.821666372Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:43.821677264Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:43.821683988Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:43.821687100Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:44.811547854Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Francisco: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:44.811558552Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:45.860493248Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:46.761834393Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:46.761839898Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:46.761845942Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:46.761851109Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:46.761857450Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:46.880867882Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:46.892618622Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:46.914264629Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:47.789084381Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:47.789089638Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:47.789093278Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:48.939464223Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:48.939469020Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:48.984047939Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:49.935027838Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:49.935036020Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:41:50.922493595Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:41:50.922626112Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WS-STALE] 1 tickers with no book update in >= 4m -- KXHIGHAUS-26JUL31-B100.5=4m",
+        "timestamp": "2026-07-31T13:42:10.028142802Z",
+        "severity": "info"
+      },
+      {
+        "message": "[CASH] live_cash=$14.11  per_trade_cap=$100.00  max_exposure=$1000.00",
+        "timestamp": "2026-07-31T13:42:10.868984540Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WATCH] 133 watched (1-99c), 6 tradeable (40-52c): HIGHNY@99c, HIGHNY@99c, HIGHNY@84c, HIGHNY@39c, HIGHNY@79c, OWTNYC@2c -- running full ensemble+obs check",
+        "timestamp": "2026-07-31T13:42:10.868990813Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:42:11.930732019Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:42:12.962816199Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN] 0 candidates this cycle -- reasons: no_ensemble_yet=133",
+        "timestamp": "2026-07-31T13:42:12.962820795Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN]   no_ensemble_yet: KXHIGHNY-26JUL31-T82: no ensemble snapshot for New York HIGH yet",
+        "timestamp": "2026-07-31T13:42:12.962826744Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo Seattle: ReadTimeout: HTTPSConnectionPool(host='api.open-meteo.com', port=443): Read timed out. (read timeout=25)",
+        "timestamp": "2026-07-31T13:42:12.962831700Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:13.993969266Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:14.929100758Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:14.929112297Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:14.929119238Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:14.929352236Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:14.929358299Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:15.836574389Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:15.836583502Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:15.836698840Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:15.836703330Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:15.836709818Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:15.935812059Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:15.935818761Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:15.938661668Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:15.952406184Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:16.839831891Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:16.839839219Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:16.839844153Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:16.839849178Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:16.839853622Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:17.790765326Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:17.790775355Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:18.819244925Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:19.717155556Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:19.717170690Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:19.717180089Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:19.717186948Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:19.717194098Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:19.949574292Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:19.949589443Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:19.952425262Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:19.964720202Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:19.976245636Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:20.778859253Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:20.778880096Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:20.778889609Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:20.778929616Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:20.784269975Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:21.833844886Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:21.833849927Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:21.833854673Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:21.833858936Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:21.833863684Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo New Orleans: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:22.936841131Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:23.903381101Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:23.903468385Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:23.903476634Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:23.903485269Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:23.903492611Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:23.903500557Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:24.909900028Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:24.909905696Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:24.909910700Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:24.909914904Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:24.909922001Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:25.881020692Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:25.881027528Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:25.881036362Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:25.881043986Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:25.881051513Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:25.947546642Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:25.954850512Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:26.788309931Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:26.788317061Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\",\"error\":true}",
+        "timestamp": "2026-07-31T13:42:26.788323559Z",
+        "severity": "info"
+      },
+      {
+        "message": "[ERROR] openmeteo San Antonio: HTTP 429 {\"error\":true,\"reason\":\"Daily API request limit exceeded. Please try again tomorrow.\"}",
+        "timestamp": "2026-07-31T13:42:26.788333754Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN] 0 candidates this cycle -- reasons: no_ensemble_yet=133",
+        "timestamp": "2026-07-31T13:42:46.904819824Z",
+        "severity": "info"
+      },
+      {
+        "message": "[SCAN]   no_ensemble_yet: KXHIGHNY-26JUL31-T82: no ensemble snapshot for New York HIGH yet",
+        "timestamp": "2026-07-31T13:42:46.904828689Z",
+        "severity": "info"
+      },
+      {
+        "message": "[CASH] live_cash=$14.11  per_trade_cap=$100.00  max_exposure=$1000.00",
+        "timestamp": "2026-07-31T13:42:46.904862386Z",
+        "severity": "info"
+      },
+      {
+        "message": "[WATCH] 133 watched (1-99c), 6 tradeable (40-52c): HIGHNY@99c, HIGHNY@99c, HIGHNY@84c, HIGHNY@39c, HIGHNY@79c, OWTNYC@2c -- running full ensemble+obs check",
+        "timestamp": "2026-07-31T13:42:46.904868175Z",
+        "severity": "info"
+      },
+      {
+        "message": "[HEARTBEAT] alive @ 2026-07-31 13:43:02 DRY_RUN=True REAL_ORDERS=False",
+        "timestamp": "2026-07-31T13:43:06.260671731Z",
+        "severity": "info"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-07-31T13:43:15.938739+00:00"
+}
