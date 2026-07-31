@@ -1,7 +1,7 @@
 {
   "id": "patch-selftest-poison",
-  "status": "error",
+  "status": "quarantined",
   "error": "Expecting property name enclosed in double quotes: line 1 column 3 (char 2)",
-  "attempts": 2,
-  "processed_at": "2026-07-31T01:05:05.940743+00:00"
+  "attempts": 3,
+  "processed_at": "2026-07-31T01:05:13.699368+00:00"
 }
