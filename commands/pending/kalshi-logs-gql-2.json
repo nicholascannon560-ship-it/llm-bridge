@@ -1,0 +1,5 @@
+{
+  "id": "kalshi-logs-gql-2",
+  "action": "railway_gql",
+  "query": "query { deploymentLogs(deploymentId: \"de9e76c3-dca3-4210-a72d-a7c7918dac2f\", limit: 300) { edges { node { message timestamp } } } }"
+}
