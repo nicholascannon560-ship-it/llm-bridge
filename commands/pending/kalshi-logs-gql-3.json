@@ -1,0 +1,5 @@
+{
+  "id": "kalshi-logs-gql-3",
+  "action": "railway_gql",
+  "query": "query { deployment(id: \"de9e76c3-dca3-4210-a72d-a7c7918dac2f\") { id status createdAt updatedAt } }"
+}
