@@ -1,15 +1,7 @@
 {
   "id": "kalshi-logs-gql-3",
-  "status": "ok",
-  "action": "railway_gql",
-  "result": {
-    "deployment": {
-      "id": "de9e76c3-dca3-4210-a72d-a7c7918dac2f",
-      "status": "SUCCESS",
-      "createdAt": "2026-07-31T13:35:22.741Z",
-      "updatedAt": "2026-07-31T13:37:28.548Z"
-    }
-  },
-  "error": null,
-  "processed_at": "2026-07-31T13:45:01.888382+00:00"
+  "status": "error",
+  "error": "write commands/results/kalshi-logs-gql-3.json failed: 409 {\"message\":\"is at 8c72d6eda94a8302240d3cab542338ea5218b8dc but expected bbc13f9858ba2844f97b151a597463df2cced915\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "attempts": 1,
+  "processed_at": "2026-07-31T13:45:03.266956+00:00"
 }
