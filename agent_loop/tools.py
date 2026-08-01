@@ -171,7 +171,7 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "entry": {"type": "string", "description": "The reflection text"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "e.g. [\"success\", "kalshiml\", "deployment\"]"}
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "e.g. [\"success\", \"kalshiml\", \"deployment\"]"}
                 },
                 "required": ["entry"]
             }
