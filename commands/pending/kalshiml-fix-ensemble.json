@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Fix the KalshiML \"no_ensemble_yet\" problem for NYC HIGH. You have permission to commit files.\n\nYou must do BOTH of these fixes:\n\nFIX 1 \u2014 Lower the minimum sample threshold for NYC in ensemble_optimizer.py:\n1. Read KalshiML/ensemble_optimizer.py\n2. Add a CITY_MIN_N_OVERRIDES dict near the top (after AGGREGATORS) with {\"NYC\": 5}\n3. Find where select_champion is called with min_n=20 and change it to use CITY_MIN_N_OVERRIDES.get(city, 20)\n4. Find the hardcoded \"< 30\" row skip and \"< 20\" truth-days skip, make them use the override too\n5. Commit the updated ensemble_optimizer.py\n\nFIX 2 \u2014 Seed ensemble_champions.json with a default NYC champion:\n1. Read KalshiML/ensemble_optimizer.py to find the EXACT key format used for champions (look for how the 'key' variable is built in run_optimizer)\n2. Create KalshiML/ensemble_champions.json with one entry for NYC temp SHORT using the grouping \"euro_blend\", aggregation \"trimmed_20\", spread \"std\", n=5, crps=2.5, and a \"seeded\": true flag\n3. Commit ensemble_champions.json\n\nAfter both commits, report: what key format you used, what changes you made, and confirm both files were committed successfully.\n\nDo NOT modify any other files. Do NOT redeploy.",
+  "max_turns": 15,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
