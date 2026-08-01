@@ -1,0 +1,185 @@
+{
+  "id": "kalshiml-full-audit",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "complete",
+    "task_id": "agent-20260801-011435",
+    "task": "Perform a full read-only audit of the KalshiML system. Do NOT commit files, do NOT redeploy services, do NOT modify anything.\n\nYour audit must cover:\n1. Read KalshiML/MAP.md \u2014 report status, last verified date, any stale slices\n2. Read KalshiML/INDEX.md or any top-level docs \u2014 report system architecture\n3. Check the Railway service status for KalshiML (service ID: 8039f258-225d-4f3a-944e-42fa3392de2a) \u2014 report deployment health, last deploy time, any errors\n4. Read 2-3 key source files mentioned in the MAP (e.g., main trading engine, data pipeline, backtester) \u2014 report if they exist and look coherent\n5. Check if there are any open issues or recent change-log comments for KalshiML (change-log issue #1)\n6. Summarize: what works, what's broken, what's stale, and what the next priority should be\n\nReturn a structured report with sections: Status, Architecture, Health, Code Quality, Issues/Logs, Recommendations.",
+    "final_answer": "# KalshiML System Audit (Read-Only) \u2014 2026-08-01\n\n## Status\n- **MAP.md**: active, `last_verified: 2026-07-28` (3 days stale).\n- **Slice verification**: Only `hourly`, `learning`, `daily` verified 2026-07-28. **Never verified:** config-safety, execution (\u26a0 highest risk), data, dashboard, tests.\n- Safety posture confirmed in code: `DRY_RUN=1` and `PLACE_REAL_ORDERS=0` defaults; live heartbeat confirms both are active.\n\n## Architecture\nSingle-process Python trading system for Kalshi weather markets (NYC hourly temp + daily HIGH contracts):\n- **Live path**: `run.py` orchestrator \u2192 `hourly_engine.py` (hourly loop) / `daily_engine.py` (execs daily_part_01\u201308).\n- **Learning core**: two licensing layers \u2014 flat cells (`learning.py`) + adaptive tree (`adaptive_tree.py`, BH-FDR-gated splits, depth \u22642). Tree licenses fully replace the flat gate (documented invariant).\n- **Execution/risk**: `maker_policy.py`, `exit_policy.py`, `supervisor.py`, `autopilot.py`, `flow_rule_gate.py`.\n- **Data**: candle recorder, settlement, `market_layers/` (SQLite + parquet book/OU rollups, toggleable).\n- **Observability**: `dashboard.py` (~100k). ~30 test files incl. safety-gate and axis-coverage tests.\n\n## Health (Railway 8039f258)\n- Last deploy: **SUCCESS, 2026-07-31 13:35 UTC**. Live logs (through 01:14 UTC 2026-08-01):\n  - \u2705 Heartbeat alive, DRY_RUN=True, REAL_ORDERS=False; cash $14.11.\n  - \u2705 Recorder + rollups working (18,263 book bars / 267 tickers for 2026-08-01; OU features computed).\n  - \u26a0\ufe0f Recurring `[WS-STALE]` \u2192 full reconnect every ~6 min (476/476 books stale). Handled, but suggests an unhealthy websocket stream.\n  - \u26a0\ufe0f All scans return 0 candidates \u2014 `no_ensemble_yet` for HIGHNY (ensemble snapshot missing for New York HIGH); could be timing or a stalled ensemble feed.\n\n## Code Quality\n- `config.py` (3.2k): clean, env-driven, atomic writes, secrets from env. Good.\n- `adaptive_tree.py` (22k): well-documented stats (Wilson, BH-FDR, resolution guard), frozen bucket edges, canonical `build_axis_values()`. Coherent and matches MAP.\n- `hourly_engine.py` (68k): coherent but shows notebook-port legacy (cell banners, import-time data loading/pip install). **\u26a0\ufe0f Hardcoded `KALSHI_KEY_ID` in source** (public key ID, low risk, but violates the \"secrets in env\" rule). PLACE_REAL_ORDERS correctly delegates to config (documented past bug).\n\n## Issues/Logs\n- No GitHub issue-reading tool available, so **change-log issue #1 could not be checked** \u2014 gap in this audit.\n- Operational issues from logs: websocket staleness loops; zero tradeable candidates (ensemble missing).\n\n## Recommendations (priority order)\n1. **Verify the never-verified slices** \u2014 execution and config-safety first (highest risk), then data/dashboard/tests.\n2. **Investigate `no_ensemble_yet`** \u2014 confirm the NYC HIGH ensemble feed is producing snapshots; the system is currently paper-idle.\n3. **Check websocket staleness** \u2014 reconnects work, but a 6-min dead-stream cadence may mean a subscription/auth/keepalive bug.\n4. **Remove the hardcoded API key ID** from `hourly_engine.py` \u2192 env.\n5. **Refresh MAP.md** `last_verified` and per-slice verification dates after the above.\n\n**Bottom line:** System is deployed, alive, and safe (dry-run). Nothing is broken outright, but it is currently finding zero candidates, the websocket stream is unstable, and 5/8 MAP slices have never been verified.",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-01T01:14:35.418504+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 3,
+          "cost_cents": 0.8180999999999999,
+          "usage": {
+            "prompt_tokens": 1797,
+            "completion_tokens": 186,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"MAP.md\",\"repo\":\"KalshiML\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"\",\"repo\":\"KalshiML\"}"
+          },
+          {
+            "name": "railway_get_status",
+            "args_preview": "{\"service_id\":\"8039f258-225d-4f3a-944e-42fa3392de2a\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'MAP.md', 'sha': '675b3d5e4e04d8ad4f1d9b64e53e7943986b743f', 'size': 11639, 'content': '# MAP: KalshiML\\n\\n**purpose:** Automated trading system for Kalshi prediction markets (especially NYC hourly temperature contracts). Uses HRRR / weather data, adaptive logic trees, learn"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': '.github', 'type': 'dir'}, {'name': '.gitignore', 'type': 'file'}, {'name': 'DESIGN_maker_execution_learning.md', 'type': 'file'}, {'name': 'DESIGN_model_skill_learning.md', 'type': 'file'}, {'name': 'DESIGN_multi_axis_learning.md', 'type': 'file'}, {'name'"
+          },
+          {
+            "status": "ok",
+            "preview": "{'service': {'deployments': {'edges': [{'node': {'id': 'de9e76c3-dca3-4210-a72d-a7c7918dac2f', 'status': 'SUCCESS', 'createdAt': '2026-07-31T13:35:22.741Z', 'updatedAt': '2026-07-31T13:37:28.548Z'}}]}}}"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-01T01:14:42.027300+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 1.46016,
+          "usage": {
+            "prompt_tokens": 5880,
+            "completion_tokens": 120,
+            "cached_tokens": 1792
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"hourly_engine.py\",\"repo\":\"KalshiML\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"config.py\",\"repo\":\"KalshiML\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'hourly_engine.py', 'sha': '3c9a1222915024cca86ccc5622e571371851c5b3', 'size': 68585, 'content': '\"\"\"hourly_engine.py \u2014 flattened sell-the-warmup KXTEMPNYCH scanner (v2.3).\\nHour-of-day filter + learning gate. Colab keep-awake JS removed; the blocking\\nhourly loop becomes ho"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'config.py', 'sha': '55fd742dac55eaf0ee17a4a33a592016c70be4d3', 'size': 3245, 'content': '\"\"\"\\nconfig.py \u2014 shared config for the Kalshi VM runner (Replit).\\n\\nEverything the daily engine, hourly engine, and learning machine need to find\\nfiles and secrets. Ported from the Co"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-01T01:14:47.516512+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 1.98546,
+          "usage": {
+            "prompt_tokens": 10922,
+            "completion_tokens": 153,
+            "cached_tokens": 5632
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"adaptive_tree.py\",\"repo\":\"KalshiML\"}"
+          },
+          {
+            "name": "railway_get_logs",
+            "args_preview": "{\"deployment_id\":\"de9e76c3-dca3-4210-a72d-a7c7918dac2f\",\"limit\":60}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'adaptive_tree.py', 'sha': '566e40c8728a4ef306a0bd0cb7773e5f8c46af13', 'size': 22169, 'content': '\"\"\"adaptive_tree.py \u2014 multi-axis adaptive-tree learning (DESIGN_multi_axis_learning.md\\nStage 2). Learns WHICH conditions produce edge by splitting a base cell on a\\ndecision-ti"
+          },
+          {
+            "status": "ok",
+            "preview": "{'deploymentLogs': [{'message': '[WS-STALE] 476 tickers with no book update in >= 4m -- KXHIGHAUS-26AUG01-B100.5=6m, KXHIGHAUS-26AUG01-B102.5=6m, KXHIGHAUS-26AUG01-B96.5=6m, KXHIGHAUS-26AUG01-B98.5=6m, KXHIGHAUS-26AUG01-T103=6m ...', 'timestamp': '2026-08-01T01:08:45.623615249Z', 'severity': 'info'}"
+          }
+        ]
+      },
+      {
+        "turn": 4,
+        "timestamp": "2026-08-01T01:14:54.154472+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 2.95176,
+          "usage": {
+            "prompt_tokens": 18146,
+            "completion_tokens": 274,
+            "cached_tokens": 10752
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"KalshiML read-only audit (2026-08-01): MAP last_verified 2026-07-28, slices config-safety/execution/data/dashboard/tests never verified. Railway service 8039f258 deploy SUCCESS 2026-07-31T13"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '77ba9750'}"
+          }
+        ]
+      },
+      {
+        "turn": 5,
+        "timestamp": "2026-08-01T01:15:04.922508+00:00",
+        "llm": {
+          "content_preview": "# KalshiML System Audit (Read-Only) \u2014 2026-08-01\n\n## Status\n- **MAP.md**: active, `last_verified: 2026-07-28` (3 days stale).\n- **Slice verification**: Only `hourly`, `learning`, `daily` verified 2026",
+          "tool_calls_count": 0,
+          "cost_cents": 2.055,
+          "usage": {
+            "prompt_tokens": 18403,
+            "completion_tokens": 915,
+            "cached_tokens": 17920
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "# KalshiML System Audit (Read-Only) \u2014 2026-08-01\n\n## Status\n- **MAP.md**: active, `last_verified: 2026-07-28` (3 days stale).\n- **Slice verification**: Only `hourly`, `learning`, `daily` verified 2026-07-28. **Never verified:** config-safety, execution (\u26a0 highest risk), data, dashboard, tests.\n- Safety posture confirmed in code: `DRY_RUN=1` and `PLACE_REAL_ORDERS=0` defaults; live heartbeat confirms both are active.\n\n## Architecture\nSingle-process Python trading system for Kalshi weather markets"
+      }
+    ],
+    "turns_used": 5,
+    "max_turns": 12,
+    "total_cost_cents": 9.2705,
+    "total_tokens": {
+      "prompt": 55148,
+      "completion": 1648
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3"
+  },
+  "error": null,
+  "processed_at": "2026-08-01T01:14:35.418062+00:00"
+}
