@@ -1,0 +1,12 @@
+{
+  "id": "list-projects-splitrail-1",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-01T13:21:15.797397+00:00"
+}
