@@ -1,0 +1,106 @@
+{
+  "id": "splitrail-logs-failed-1",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": [
+      {
+        "message": "Starting Container",
+        "timestamp": "2026-07-31T19:03:36.655427304Z",
+        "severity": "info"
+      },
+      {
+        "message": "Validation Error Count: 1",
+        "timestamp": "2026-07-31T19:03:36.987586626Z",
+        "severity": "error"
+      },
+      {
+        "message": "   | ",
+        "timestamp": "2026-07-31T19:03:36.987586666Z",
+        "severity": "error"
+      },
+      {
+        "message": "Prisma CLI Version : 5.22.0",
+        "timestamp": "2026-07-31T19:03:36.987586676Z",
+        "severity": "error"
+      },
+      {
+        "message": " 6 |   provider = \"postgresql\"",
+        "timestamp": "2026-07-31T19:03:36.987596056Z",
+        "severity": "error"
+      },
+      {
+        "message": "[Context: getConfig]",
+        "timestamp": "2026-07-31T19:03:36.987596356Z",
+        "severity": "error"
+      },
+      {
+        "message": " 7 |   url      = env(\"DATABASE_URL\")",
+        "timestamp": "2026-07-31T19:03:36.987602126Z",
+        "severity": "error"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-07-31T19:03:36.987603716Z",
+        "severity": "error"
+      },
+      {
+        "message": "   | ",
+        "timestamp": "2026-07-31T19:03:36.987607606Z",
+        "severity": "error"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-07-31T19:03:36.987614175Z",
+        "severity": "error"
+      },
+      {
+        "message": "npm warn config production Use `--omit=dev` instead.",
+        "timestamp": "2026-07-31T19:03:36.987618145Z",
+        "severity": "error"
+      },
+      {
+        "message": "Prisma schema loaded from prisma/schema.prisma",
+        "timestamp": "2026-07-31T19:03:36.987621555Z",
+        "severity": "info"
+      },
+      {
+        "message": "Datasource \"db\": PostgreSQL database",
+        "timestamp": "2026-07-31T19:03:36.987625255Z",
+        "severity": "info"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-07-31T19:03:36.987631035Z",
+        "severity": "info"
+      },
+      {
+        "message": "Error: Prisma schema validation - (get-config wasm)",
+        "timestamp": "2026-07-31T19:03:36.987634335Z",
+        "severity": "error"
+      },
+      {
+        "message": "Error code: P1012",
+        "timestamp": "2026-07-31T19:03:36.987637925Z",
+        "severity": "error"
+      },
+      {
+        "message": "error: Error validating datasource `db`: You must provide a nonempty URL. The environment variable `DATABASE_URL` resolved to an empty string.",
+        "timestamp": "2026-07-31T19:03:36.987641565Z",
+        "severity": "error"
+      },
+      {
+        "message": "  -->  prisma/schema.prisma:7",
+        "timestamp": "2026-07-31T19:03:36.987645645Z",
+        "severity": "error"
+      },
+      {
+        "message": "Stopping Container",
+        "timestamp": "2026-07-31T19:03:38.728718924Z",
+        "severity": "info"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-01T13:28:05.850068+00:00"
+}
