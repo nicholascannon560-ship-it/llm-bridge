@@ -191,8 +191,25 @@ TOOL_SCHEMAS = [
                 "required": []
             }
         }
-    }
-]
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "github_read_issue",
+            "description": "Read comments from a GitHub issue (used for project change-logs).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "owner": {"type": "string", "description": "Repo owner"},
+                    "repo": {"type": "string", "description": "Repo name"},
+                    "issue_number": {"type": "integer", "description": "Issue number"},
+                    "per_page": {"type": "integer", "default": 30}
+                },
+                "required": ["repo", "issue_number"]
+            }
+        }
+    },]
+
 
 # Convenience alias
 DEFAULT_TOOLS = TOOL_SCHEMAS
@@ -350,6 +367,39 @@ async def _tool_read_memory(args: Dict) -> Dict:
     return {"entries": entries, "count": len(entries)}
 
 
+
+
+async def _tool_github_read_issue(args: Dict) -> Dict:
+    import httpx
+    owner = args.get("owner", OWNER)
+    repo = args["repo"]
+    issue_num = args["issue_number"]
+    per_page = args.get("per_page", 30)
+
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{issue_num}/comments"
+    params = {"per_page": per_page}
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(url, headers=_github_headers(), params=params)
+
+    if resp.status_code != 200:
+        return {"error": f"GitHub API {resp.status_code}", "detail": resp.text[:300]}
+
+    comments = resp.json()
+    return {
+        "issue_number": issue_num,
+        "count": len(comments),
+        "comments": [
+            {
+                "id": c.get("id"),
+                "author": (c.get("user") or {}).get("login"),
+                "created_at": c.get("created_at"),
+                "body": c.get("body", "")[:500]
+            }
+            for c in comments
+        ]
+    }
+
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
@@ -360,4 +410,5 @@ _TOOL_HANDLERS = {
     "llm_chat": _tool_llm_chat,
     "write_memory": _tool_write_memory,
     "read_memory": _tool_read_memory,
+    "github_read_issue": _tool_github_read_issue,
 }
