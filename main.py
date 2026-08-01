@@ -100,6 +100,11 @@ app.include_router(llm_router)
 from skills_routes import skills_router
 app.include_router(skills_router)
 
+# Include allowlisted outbound fetch router (see fetch_routes.py for the
+# SSRF reasoning — this service holds admin-scoped tokens).
+from fetch_routes import fetch_router
+app.include_router(fetch_router)
+
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
