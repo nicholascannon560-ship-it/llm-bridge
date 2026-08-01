@@ -1,0 +1,12 @@
+{
+  "id": "gql-projects-splitrail-2",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-01T13:22:39.439740+00:00"
+}
