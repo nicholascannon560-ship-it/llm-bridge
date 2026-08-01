@@ -1,0 +1,9 @@
+{
+  "id": "test-agent-audit",
+  "status": "error",
+  "action": "agent_run",
+  "result": null,
+  "error": "unknown action: agent_run",
+  "processed_at": "2026-08-01T00:25:11.332527+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 282, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 241, in _execute\n    raise ValueError(f\"unknown action: {action}\")\nValueError: unknown action: agent_run\n"
+}
