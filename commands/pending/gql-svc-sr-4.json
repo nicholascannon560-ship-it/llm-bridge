@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "query { service(id: \"8039f258-225d-4f3a-944e-42fa3392de2a\") { id name projectId project { id name services(first: 20) { edges { node { id name } } } } } }"}
