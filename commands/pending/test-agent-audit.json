@@ -1,8 +1,0 @@
-{
-  "action": "agent_run",
-  "task": "Read the llm-bridge MAP.md from GitHub and report: (1) which repos are active, (2) the last verified date, (3) whether any slices look stale. Do not modify anything \u2014 this is a read-only audit.",
-  "max_turns": 6,
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "low"
-}
