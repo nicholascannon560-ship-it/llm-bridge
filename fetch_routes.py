@@ -9,6 +9,7 @@ WHY THIS IS NARROW
   ALLOWLIST, never a blocklist:
 
     - only hosts in FETCH_ALLOWED_HOSTS (exact, case-insensitive match)
+    - GET or POST only; a POST is never carried across a redirect
     - https only
     - every redirect hop re-checked against the same allowlist
     - DNS resolved up front; private, loopback, link-local, reserved and
@@ -84,12 +85,16 @@ def _check_url(url: str) -> str:
 
 class FetchRequest(BaseModel):
     url: str = Field(..., description="https URL whose host is in FETCH_ALLOWED_HOSTS")
+    method: str = Field("GET", description="GET or POST")
+    json_body: Optional[dict] = Field(None, description="JSON body, POST only")
+    headers: Optional[dict] = Field(None, description="extra request headers, POST or GET")
     timeout_s: Optional[float] = Field(None, description=f"seconds, cap {HARD_MAX_TIMEOUT}")
     max_bytes: Optional[int] = Field(None, description=f"response cap, hard cap {HARD_MAX_BYTES}")
 
 
 class FetchResponse(BaseModel):
     url: str
+    method: str
     final_url: str
     status: int
     content_type: str
@@ -119,6 +124,21 @@ async def fetch(req: FetchRequest):
     timeout = min(float(timeout_req), HARD_MAX_TIMEOUT)
     max_bytes = min(int(bytes_req), HARD_MAX_BYTES)
 
+    method = (req.method or "GET").upper()
+    if method not in ("GET", "POST"):
+        raise HTTPException(400, f"method must be GET or POST, got {method!r}")
+    if req.json_body is not None and method != "POST":
+        raise HTTPException(400, "json_body is only valid with method=POST")
+
+    # Caller headers are merged over the default UA. Hop-by-hop and host
+    # headers are dropped so a caller cannot retarget the request.
+    _BANNED_HEADERS = {"host", "content-length", "connection", "transfer-encoding"}
+    headers = {"User-Agent": "llm-bridge/fetch"}
+    for k, v in (req.headers or {}).items():
+        if k.lower() in _BANNED_HEADERS:
+            raise HTTPException(400, f"header {k!r} may not be set")
+        headers[str(k)] = str(v)
+
     started = time.time()
     current = req.url
     redirects: list[str] = []
@@ -128,11 +148,20 @@ async def fetch(req: FetchRequest):
         for _ in range(MAX_REDIRECTS + 1):
             _check_url(current)
             try:
-                resp = await client.get(current, headers={"User-Agent": "llm-bridge/fetch"})
+                if method == "POST":
+                    resp = await client.post(current, headers=headers, json=req.json_body)
+                else:
+                    resp = await client.get(current, headers=headers)
             except httpx.HTTPError as e:
                 raise HTTPException(502, f"fetch failed: {type(e).__name__}: {e}")
 
             if resp.status_code in (301, 302, 303, 307, 308):
+                if method == "POST":
+                    raise HTTPException(
+                        502,
+                        f"refusing to follow a {resp.status_code} redirect on POST — "
+                        "the method or body could change silently; call the final URL directly",
+                    )
                 location = resp.headers.get("location")
                 if not location:
                     raise HTTPException(502, f"{resp.status_code} with no Location header")
@@ -143,6 +172,7 @@ async def fetch(req: FetchRequest):
             body = resp.content[:max_bytes]
             return FetchResponse(
                 url=req.url,
+                method=method,
                 final_url=current,
                 status=resp.status_code,
                 content_type=resp.headers.get("content-type", ""),
