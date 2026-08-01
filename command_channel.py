@@ -24,8 +24,10 @@ try:
     from agent_loop.harness import run_agent
     from agent_loop.tools import TOOL_SCHEMAS
     AGENT_LOOP_AVAILABLE = True
-except ImportError:
+except Exception as _agent_loop_err:
     AGENT_LOOP_AVAILABLE = False
+    # Log the import failure so we know why agent_loop is disabled
+    print(f'[agent_loop] import failed: {_agent_loop_err}', flush=True)
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -258,15 +260,34 @@ def _execute(cmd: dict[str, Any]) -> Any:
         if not task:
             raise ValueError("agent_run requires 'task'")
         import asyncio
-        return asyncio.run(run_agent(
-            task=task,
-            tools=cmd.get("tools"),  # None = use defaults
-            max_turns=int(cmd.get("max_turns", 10)),
-            provider=cmd.get("provider", "moonshot"),
-            model=cmd.get("model", "kimi-k3"),
-            reasoning_effort=cmd.get("reasoning_effort", "low"),
-            task_id=cmd.get("id"),
-        ))
+        # The background worker may or may not have an event loop.
+        # Use get_event_loop if one exists, otherwise create one.
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in an async context — schedule and block until done
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, run_agent(
+                    task=task,
+                    tools=cmd.get("tools"),
+                    max_turns=int(cmd.get("max_turns", 10)),
+                    provider=cmd.get("provider", "moonshot"),
+                    model=cmd.get("model", "kimi-k3"),
+                    reasoning_effort=cmd.get("reasoning_effort", "low"),
+                    task_id=cmd.get("id"),
+                ))
+                return future.result()
+        except RuntimeError:
+            # No running loop — safe to use asyncio.run
+            return asyncio.run(run_agent(
+                task=task,
+                tools=cmd.get("tools"),
+                max_turns=int(cmd.get("max_turns", 10)),
+                provider=cmd.get("provider", "moonshot"),
+                model=cmd.get("model", "kimi-k3"),
+                reasoning_effort=cmd.get("reasoning_effort", "low"),
+                task_id=cmd.get("id"),
+            ))
 
     raise ValueError(f"unknown action: {action}")
 
