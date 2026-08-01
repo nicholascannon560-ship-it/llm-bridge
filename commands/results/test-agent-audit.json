@@ -1,9 +1,97 @@
 {
   "id": "test-agent-audit",
-  "status": "error",
+  "status": "ok",
   "action": "agent_run",
-  "result": null,
-  "error": "unknown action: agent_run",
-  "processed_at": "2026-08-01T01:02:28.771530+00:00",
-  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 282, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 241, in _execute\n    raise ValueError(f\"unknown action: {action}\")\nValueError: unknown action: agent_run\n"
+  "result": {
+    "status": "complete",
+    "task_id": "agent-20260801-010226",
+    "task": "Read the llm-bridge MAP.md from GitHub and report: (1) which repos are active, (2) the last verified date, (3) whether any slices look stale. Do not modify anything \u2014 this is a read-only audit.",
+    "final_answer": "## MAP.md Audit \u2014 llm-bridge (read-only)\n\n**1. Active repos / services:**\n- **llm-bridge** itself: status `active`, live on Railway at `kalshiml-production-b2e9.up.railway.app`, auto-deploys from repo. Health: `/health`.\n- It acts as the central control plane consumed by: **KalshiML, tali, resolume-bridge, change-log** workflows.\n\n**2. Last verified date:**\n- `last_verified: 2026-07-28` (3 days before today, 2026-08-01).\n\n**3. Stale slices \u2014 yes, notable drift:**\n- Only **app-wiring** slice is verified (2026-07-28).\n- **command-channel, llm-gateway, railway, skills** slices: all \"verified: \u2014\" (never verified).\n- **Map drift:** The `agent_loop/` module (autonomous agent harness, added 2026-07-31 per Pending Map Updates) is **absent from both the tree and the task slices table** \u2014 the map has not been structurally updated to reflect it.\n- Pending deltas show activity through 2026-07-31, but `last_verified` hasn't been bumped since 2026-07-28.\n\nNo modifications made. Findings recorded to memory.",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-01T01:02:26.091026+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 0.5733,
+          "usage": {
+            "prompt_tokens": 1461,
+            "completion_tokens": 90,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"MAP.md\",\"repo\":\"llm-bridge\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'MAP.md', 'sha': '8fd4fa9388131d0debc4d95296136d212dfe34cf', 'size': 5026, 'content': \"# MAP: llm-bridge\\n\\n**purpose:** Universal FastAPI bridge that gives agents controlled access to GitHub, Railway, multi-provider LLMs (Anthropic + Moonshot/Kimi), and a skills engine.  \\n"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-01T01:02:30.228593+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 0.8162999999999999,
+          "usage": {
+            "prompt_tokens": 3093,
+            "completion_tokens": 156,
+            "cached_tokens": 1280
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"Read-only audit of llm-bridge MAP.md (2026-08-01): last_verified 2026-07-28; only app-wiring slice verified, other 4 slices never verified; agent_loop/ module (added 2026-07-31) missing from"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '15688ce6'}"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-01T01:02:37.415154+00:00",
+        "llm": {
+          "content_preview": "## MAP.md Audit \u2014 llm-bridge (read-only)\n\n**1. Active repos / services:**\n- **llm-bridge** itself: status `active`, live on Railway at `kalshiml-production-b2e9.up.railway.app`, auto-deploys from repo",
+          "tool_calls_count": 0,
+          "cost_cents": 0.60216,
+          "usage": {
+            "prompt_tokens": 3277,
+            "completion_tokens": 299,
+            "cached_tokens": 3072
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "## MAP.md Audit \u2014 llm-bridge (read-only)\n\n**1. Active repos / services:**\n- **llm-bridge** itself: status `active`, live on Railway at `kalshiml-production-b2e9.up.railway.app`, auto-deploys from repo. Health: `/health`.\n- It acts as the central control plane consumed by: **KalshiML, tali, resolume-bridge, change-log** workflows.\n\n**2. Last verified date:**\n- `last_verified: 2026-07-28` (3 days before today, 2026-08-01).\n\n**3. Stale slices \u2014 yes, notable drift:**\n- Only **app-wiring** slice is v"
+      }
+    ],
+    "turns_used": 3,
+    "max_turns": 6,
+    "total_cost_cents": 1.9918,
+    "total_tokens": {
+      "prompt": 7831,
+      "completion": 545
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3"
+  },
+  "error": null,
+  "processed_at": "2026-08-01T01:02:26.090231+00:00"
 }
