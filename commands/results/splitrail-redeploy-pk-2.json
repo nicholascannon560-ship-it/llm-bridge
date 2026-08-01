@@ -1,0 +1,10 @@
+{
+  "id": "splitrail-redeploy-pk-2",
+  "status": "ok",
+  "action": "redeploy",
+  "result": {
+    "serviceInstanceDeploy": true
+  },
+  "error": null,
+  "processed_at": "2026-08-01T13:29:19.765422+00:00"
+}
