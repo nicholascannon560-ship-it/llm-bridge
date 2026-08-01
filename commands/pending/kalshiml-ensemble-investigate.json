@@ -1,8 +1,0 @@
-{
-  "action": "agent_run",
-  "task": "Investigate why KalshiML is showing \"no_ensemble_yet\" for NYC HIGH contracts and zero tradeable candidates.\n\nDo NOT modify or commit anything. Read-only investigation.\n\nSteps:\n1. Read KalshiML/MAP.md to understand the ensemble/data pipeline architecture\n2. Read the data pipeline files (look for ensemble, snapshot, or feed-related code in the repo)\n3. Check KalshiML Railway logs for the last 100 lines to see what the ensemble feed is doing\n4. Look for any config or env vars related to ensemble feeds, market data, or snapshot generation\n5. Read change-log issue #1 comments for KalshiML to see if this was discussed before\n\nReport: What is the ensemble snapshot, why is it missing, and what specific file or config should be checked/fixed?",
-  "max_turns": 10,
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "low"
-}
