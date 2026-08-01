@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Verify the 5 never-verified slices in KalshiML's MAP.md: execution, config-safety, data, dashboard, tests.\n\nDo NOT modify anything. Read-only verification.\n\nSteps:\n1. Read KalshiML/MAP.md fully to identify the 5 unverified slices and their key files\n2. Read each slice's key files (execution: maker_policy.py, exit_policy.py, supervisor.py; config-safety: config.py + safety checks; data: candle recorder, settlement, market_layers/; dashboard: dashboard.py; tests: test files)\n3. For each slice, report: do the files exist, do they look coherent, are there any obvious bugs or gaps\n4. Read change-log issue #1 for any recent discussion about these slices\n\nReport a table: Slice | Files Checked | Status (ok/stale/missing) | Notes",
+  "max_turns": 12,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
