@@ -1,10 +1,7 @@
 {
   "id": "splitrail-redeploy-pk-1",
-  "status": "ok",
-  "action": "redeploy",
-  "result": {
-    "serviceInstanceDeploy": true
-  },
-  "error": null,
-  "processed_at": "2026-08-01T13:27:01.541328+00:00"
+  "status": "error",
+  "error": "write commands/results/splitrail-redeploy-pk-1.json failed: 422 {\"message\":\"Invalid request.\\n\\n\\\"sha\\\" wasn't supplied.\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"422\"}",
+  "attempts": 1,
+  "processed_at": "2026-08-01T13:27:04.588317+00:00"
 }
