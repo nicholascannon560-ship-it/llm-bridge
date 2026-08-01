@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Investigate why KalshiML shows \"no_ensemble_yet\" for NYC HIGH contracts.\n\nFocus ONLY on these 3 files: run_ensemble_search.py, ensemble_optimizer.py, and daily_part_06.py.\nRead each one, identify what triggers \"no_ensemble_yet\", and report the root cause in 2-3 sentences.\n\nDo NOT read any other files. Do NOT check issues or logs. Do NOT modify anything.",
+  "max_turns": 6,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
