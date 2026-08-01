@@ -84,5 +84,35 @@ check("defaults to the KalshiML dashboard",
       fetch_routes.allowed_hosts())
 os.environ["FETCH_ALLOWED_HOSTS"] = saved
 
+print("\n== method guard ==")
+s, j = post(RAW, method="PUT")
+check("PUT rejected", s == 400, (s, j))
+s, j = post(RAW, method="DELETE")
+check("DELETE rejected", s == 400, (s, j))
+s, j = post(RAW, json_body={"a": 1})
+check("json_body on GET rejected", s == 400, (s, j))
+
+print("\n== header guard ==")
+for h, why in [({"Host": "evil.net"}, "Host"), ({"Content-Length": "0"}, "Content-Length"),
+               ({"Connection": "close"}, "Connection")]:
+    s, j = post(RAW, headers=h)
+    check(f"{why} header rejected", s == 400, (s, j))
+s, j = post(RAW, headers={"X-Custom": "ok"})
+check("ordinary custom header allowed", s == 200, (s, j))
+
+print("\n== POST still allowlist-gated ==")
+s, j = post("https://evil.example.net/x", method="POST", json_body={"a": 1})
+check("off-allowlist POST -> 403", s == 403, (s, j))
+s, j = post("http://api.github.com/", method="POST", json_body={})
+check("http POST -> 400", s == 400, (s, j))
+
+print("\n== POST reaches the wire ==")
+s, j = post("https://api.github.com/graphql", method="POST", json_body={"query": "{viewer{login}}"})
+check("POST executed, upstream auth error surfaced", s == 200 and j["method"] == "POST", (s, j))
+if s == 200:
+    # 401 unauthenticated, or 403 when this sandbox IP is rate-limited — either
+    # proves the POST reached GitHub rather than being swallowed locally.
+    check("origin rejected the unauthenticated POST", j["status"] in (401, 403), j["status"])
+
 print(f"\n{'='*46}\n  {PASS} passed, {FAIL} failed\n{'='*46}")
 sys.exit(1 if FAIL else 0)
