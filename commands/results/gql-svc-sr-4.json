@@ -1,0 +1,28 @@
+{
+  "id": "gql-svc-sr-4",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "service": {
+      "id": "8039f258-225d-4f3a-944e-42fa3392de2a",
+      "name": "KalshiML",
+      "projectId": "b37dd9c0-edb0-455f-aa9f-88f585476d97",
+      "project": {
+        "id": "b37dd9c0-edb0-455f-aa9f-88f585476d97",
+        "name": "adaptable-strength",
+        "services": {
+          "edges": [
+            {
+              "node": {
+                "id": "8039f258-225d-4f3a-944e-42fa3392de2a",
+                "name": "KalshiML"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-01T13:25:11.306118+00:00"
+}
