@@ -1,28 +1,7 @@
 {
   "id": "gql-services-splitrail-1",
-  "status": "ok",
-  "action": "railway_gql",
-  "result": {
-    "service": {
-      "id": "8039f258-225d-4f3a-944e-42fa3392de2a",
-      "name": "KalshiML",
-      "projectId": "b37dd9c0-edb0-455f-aa9f-88f585476d97",
-      "project": {
-        "id": "b37dd9c0-edb0-455f-aa9f-88f585476d97",
-        "name": "adaptable-strength",
-        "services": {
-          "edges": [
-            {
-              "node": {
-                "id": "8039f258-225d-4f3a-944e-42fa3392de2a",
-                "name": "KalshiML"
-              }
-            }
-          ]
-        }
-      }
-    }
-  },
-  "error": null,
-  "processed_at": "2026-08-01T13:23:11.126448+00:00"
+  "status": "error",
+  "error": "write commands/results/gql-services-splitrail-1.json failed: 422 {\"message\":\"Invalid request.\\n\\n\\\"sha\\\" wasn't supplied.\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"422\"}",
+  "attempts": 1,
+  "processed_at": "2026-08-01T13:23:13.121981+00:00"
 }
