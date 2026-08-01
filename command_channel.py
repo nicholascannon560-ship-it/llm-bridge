@@ -18,6 +18,16 @@ import base64
 import json
 import os
 import traceback
+
+# Agent loop (optional — only loaded when agent_run is used)
+try:
+    from agent_loop.harness import run_agent
+    from agent_loop.tools import TOOL_SCHEMAS
+    AGENT_LOOP_AVAILABLE = True
+except Exception as _agent_loop_err:
+    AGENT_LOOP_AVAILABLE = False
+    # Log the import failure so we know why agent_loop is disabled
+    print(f'[agent_loop] import failed: {_agent_loop_err}', flush=True)
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -152,6 +162,11 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
         "temperature": 1.0,
         "reasoning_effort": reasoning_effort,
     }
+    # Forward tool schemas if provided (enables agent loops via command channel)
+    if cmd.get("tools"):
+        payload["tools"] = cmd["tools"]
+    if cmd.get("tool_choice") is not None:
+        payload["tool_choice"] = cmd["tool_choice"]
 
     with httpx.Client(timeout=LLM_TIMEOUT_SEC) as client:
         resp = client.post(
@@ -237,6 +252,42 @@ def _execute(cmd: dict[str, Any]) -> Any:
         if not pid:
             raise ValueError("list_services requires 'project_id'")
         return list_services(pid)
+
+    if action == "agent_run":
+        if not AGENT_LOOP_AVAILABLE:
+            raise RuntimeError("agent_loop module not available — check import")
+        task = cmd.get("task")
+        if not task:
+            raise ValueError("agent_run requires 'task'")
+        import asyncio
+        # The background worker may or may not have an event loop.
+        # Use get_event_loop if one exists, otherwise create one.
+        try:
+            loop = asyncio.get_running_loop()
+            # Already in an async context — schedule and block until done
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, run_agent(
+                    task=task,
+                    tools=cmd.get("tools"),
+                    max_turns=int(cmd.get("max_turns", 10)),
+                    provider=cmd.get("provider", "moonshot"),
+                    model=cmd.get("model", "kimi-k3"),
+                    reasoning_effort=cmd.get("reasoning_effort", "low"),
+                    task_id=cmd.get("id"),
+                ))
+                return future.result()
+        except RuntimeError:
+            # No running loop — safe to use asyncio.run
+            return asyncio.run(run_agent(
+                task=task,
+                tools=cmd.get("tools"),
+                max_turns=int(cmd.get("max_turns", 10)),
+                provider=cmd.get("provider", "moonshot"),
+                model=cmd.get("model", "kimi-k3"),
+                reasoning_effort=cmd.get("reasoning_effort", "low"),
+                task_id=cmd.get("id"),
+            ))
 
     raise ValueError(f"unknown action: {action}")
 
