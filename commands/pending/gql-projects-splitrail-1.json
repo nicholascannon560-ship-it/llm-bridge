@@ -1,0 +1,1 @@
+{"action": "railway_gql", "query": "query { projects(first: 50) { edges { node { id name services(first: 10) { edges { node { id name } } } } } } }"}
