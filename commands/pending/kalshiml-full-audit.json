@@ -1,8 +1,0 @@
-{
-  "action": "agent_run",
-  "task": "Perform a full read-only audit of the KalshiML system. Do NOT commit files, do NOT redeploy services, do NOT modify anything.\n\nYour audit must cover:\n1. Read KalshiML/MAP.md \u2014 report status, last verified date, any stale slices\n2. Read KalshiML/INDEX.md or any top-level docs \u2014 report system architecture\n3. Check the Railway service status for KalshiML (service ID: 8039f258-225d-4f3a-944e-42fa3392de2a) \u2014 report deployment health, last deploy time, any errors\n4. Read 2-3 key source files mentioned in the MAP (e.g., main trading engine, data pipeline, backtester) \u2014 report if they exist and look coherent\n5. Check if there are any open issues or recent change-log comments for KalshiML (change-log issue #1)\n6. Summarize: what works, what's broken, what's stale, and what the next priority should be\n\nReturn a structured report with sections: Status, Architecture, Health, Code Quality, Issues/Logs, Recommendations.",
-  "max_turns": 12,
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "low"
-}
