@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "mutation { serviceUpdate(id: \"255d3e31-2154-4c7c-a828-e250a89a28af\", input: { sleepApplication: true }) { id name } }"}
