@@ -37,6 +37,7 @@ Known limits (documented rather than hidden):
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -453,6 +454,22 @@ async def sample_once(client: httpx.AsyncClient) -> dict[str, Any]:
 
     # Disk is polled on its own slower clock: /api/files walks the whole tree.
     if now - (_STATE.get("last_disk_poll") or 0.0) >= DISK_POLL_SEC:
+        # market_layers.db is NOT in /api/files — that endpoint only lists data
+        # extensions, and .db is excluded. It is 7.6 GB, roughly 92% of the
+        # volume, so a disk check built on /api/files alone measures the wrong
+        # 8% and would have reported "66% used" on a volume that was nearly
+        # full. ml_status.json carries db_bytes; both are summed below.
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/file",
+                                 params={"path": "ml_status.json"},
+                                 timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            ml = json.loads(r.text)
+            out["db_mb"] = float(ml.get("db_bytes") or 0) / 1_048_576
+            out["db_snapshots"] = ((ml.get("counts") or {}).get("book_snapshots"))
+            out["db_trades"] = ((ml.get("counts") or {}).get("trades"))
+        except Exception as e:
+            out["db_error"] = f"{type(e).__name__}: {e}"
         try:
             r = await client.get(f"{TARGET_BASE}/api/files", timeout=HTTP_TIMEOUT)
             r.raise_for_status()
@@ -460,12 +477,15 @@ async def sample_once(client: httpx.AsyncClient) -> dict[str, Any]:
             files = payload if isinstance(payload, list) else (
                 payload.get("files") or payload.get("entries") or [])
             total = sum((f.get("bytes") or 0) for f in files if isinstance(f, dict))
-            out["disk_mb"] = total / 1_048_576
+            out["disk_mb"] = total / 1_048_576 + (out.get("db_mb") or 0.0)
+            out["files_mb"] = total / 1_048_576
             out["disk_files"] = len(files)
             biggest = sorted(((f.get("bytes") or 0), f.get("path") or "")
                              for f in files if isinstance(f, dict))[-3:]
-            out["disk_largest"] = ", ".join(
-                f"{p} {b/1_048_576:.0f}MB" for b, p in reversed(biggest))
+            parts = [f"{p} {b/1_048_576:.0f}MB" for b, p in reversed(biggest)]
+            if out.get("db_mb"):
+                parts.insert(0, f"market_layers.db {out['db_mb']:.0f}MB")
+            out["disk_largest"] = ", ".join(parts)
             _STATE["last_disk_poll"] = now
         except Exception as e:
             out["disk_error"] = f"{type(e).__name__}: {e}"
