@@ -1,0 +1,23 @@
+{
+  "id": "kml-defunct-status-1",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "93fe0625-e3dd-435c-9514-58bc280158be",
+              "status": "FAILED",
+              "createdAt": "2026-07-25T14:49:52.029Z",
+              "updatedAt": "2026-07-25T14:49:57.345Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-02T13:57:17.379827+00:00"
+}
