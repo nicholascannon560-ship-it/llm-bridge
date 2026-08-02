@@ -204,6 +204,8 @@ _STATE: dict[str, Any] = {
     "corpus_peak": 0,
     "verify_only_since": None,
     "last_disk_poll": 0.0,
+    "last_disk_mb": None,
+    "last_disk_largest": None,
 }
 _SAMPLES: deque = deque(maxlen=1200)     # rolling trend window
 _PROC_STARTS: deque = deque(maxlen=50)   # (epoch_seen, proc_started_string)
@@ -317,12 +319,21 @@ def _chk_degradation(s: dict, now: float) -> tuple[bool, str]:
 def _chk_disk(s: dict, now: float) -> tuple[bool, str]:
     """Volume headroom. Sampled hourly, not per-cycle — /api/files walks the
     whole tree and there is no point paying for that every 5 minutes."""
+    # Read through to the last poll rather than the current sample. Disk is
+    # sampled hourly; without this the check would go bad on a poll cycle and
+    # "recover" on the very next one, emailing a problem-then-recovered pair
+    # every hour. A stale-but-known value is the correct state between polls.
     mb = s.get("disk_mb")
     if mb is None:
-        return False, "disk not sampled this cycle"
+        mb = _STATE.get("last_disk_mb")
+    else:
+        _STATE["last_disk_mb"] = mb
+        _STATE["last_disk_largest"] = s.get("disk_largest")
+    if mb is None:
+        return False, "disk not sampled yet"
     frac = mb / DISK_TOTAL_MB if DISK_TOTAL_MB > 0 else 0.0
     if frac >= DISK_WARN_FRAC:
-        big = s.get("disk_largest") or ""
+        big = s.get("disk_largest") or _STATE.get("last_disk_largest") or ""
         return True, (f"volume at {mb:.0f} MB of {DISK_TOTAL_MB:.0f} "
                       f"({frac*100:.0f}%) — largest: {big}")
     return False, f"{mb:.0f} MB ({frac*100:.0f}%)"
