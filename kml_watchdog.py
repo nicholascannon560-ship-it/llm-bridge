@@ -92,6 +92,8 @@ DISK_WARN_FRAC       = _f("WATCHDOG_DISK_WARN_FRAC", 0.85)
 DISK_POLL_SEC        = _f("WATCHDOG_DISK_POLL_SEC", 3600.0)
 CORPUS_DROP_FRAC     = _f("WATCHDOG_CORPUS_DROP_FRAC", 0.10)
 VERIFY_ONLY_MAX_DAYS = _f("WATCHDOG_VERIFY_ONLY_MAX_DAYS", 3.0)
+GRADE_LAG_MAX_DAYS   = _f("WATCHDOG_GRADE_LAG_MAX_DAYS", 3.0)
+GRADE_STALL_HOURS    = _f("WATCHDOG_GRADE_STALL_HOURS", 26.0)
 
 # --------------------------------------------------------------------------- #
 # Log parsing
@@ -207,6 +209,10 @@ _STATE: dict[str, Any] = {
     "last_disk_poll": 0.0,
     "last_disk_mb": None,
     "last_disk_largest": None,
+    "last_grade_cum": None,
+    "last_grade_ckpt": None,
+    "last_grade_nkey": None,
+    "last_grade_progress_at": None,
 }
 _SAMPLES: deque = deque(maxlen=1200)     # rolling trend window
 _PROC_STARTS: deque = deque(maxlen=50)   # (epoch_seen, proc_started_string)
@@ -391,6 +397,55 @@ def _chk_rotation(s: dict, now: float) -> tuple[bool, str]:
     return False, f"rotated ok, {freed:.1f} MB freed, {bad} unparseable rows kept"
 
 
+def _chk_grading(s: dict, now: float) -> tuple[bool, str]:
+    """Watches the exec-grading backlog drain.
+
+    Two failure modes, both silent otherwise: the drain stalls (cumulative
+    count stops rising while the checkpoint is still far behind), and the
+    `n_graded` key going missing from the scorecard, which drops
+    maker_policy's live evidence count to 0 and quietly downgrades the
+    promote gate from offline+live to the weaker offline_only.
+    """
+    cum = s.get("grade_cumulative")
+    if cum is None:
+        cum = _STATE.get("last_grade_cum")
+        ck = _STATE.get("last_grade_ckpt")
+        nkey = _STATE.get("last_grade_nkey")
+    else:
+        ck = s.get("grade_checkpoint_ms")
+        nkey = s.get("grade_n_graded_key")
+        prev = _STATE.get("last_grade_cum")
+        if prev is None or cum > prev:
+            _STATE["last_grade_progress_at"] = now
+        _STATE["last_grade_cum"] = cum
+        _STATE["last_grade_ckpt"] = ck
+        _STATE["last_grade_nkey"] = nkey
+    if cum is None:
+        return False, "no exec scorecard sampled yet"
+
+    if nkey is None:
+        return True, (f"exec_scorecard is missing the `n_graded` key — "
+                      f"maker_policy will read live_n=0 and fall back to the "
+                      f"weaker offline_only promote gate (cumulative={cum})")
+
+    lag_days = None
+    if ck:
+        try:
+            lag_days = (now - float(ck) / 1000.0) / 86400.0
+        except (TypeError, ValueError):
+            lag_days = None
+
+    since = _STATE.get("last_grade_progress_at") or now
+    stalled_h = (now - since) / 3600.0
+    if (lag_days is not None and lag_days > GRADE_LAG_MAX_DAYS
+            and stalled_h > GRADE_STALL_HOURS):
+        return True, (f"grading backlog stalled: checkpoint {lag_days:.1f}d "
+                      f"behind and cumulative stuck at {cum} for "
+                      f"{stalled_h:.0f}h")
+    lag_s = "unknown" if lag_days is None else f"{lag_days:.1f}d behind"
+    return False, f"{cum} graded, checkpoint {lag_s}"
+
+
 CHECKS = {
     "dashboard_unreachable": _chk_unreachable,
     "restart_loop":          _chk_restart_loop,
@@ -402,6 +457,7 @@ CHECKS = {
     "disk_usage":            _chk_disk,
     "learning_corpus":       _chk_corpus,
     "evidence_rotation":     _chk_rotation,
+    "exec_grading":          _chk_grading,
 }
 
 # Checks that only make sense when we actually reached the dashboard.
@@ -459,6 +515,20 @@ async def sample_once(client: httpx.AsyncClient) -> dict[str, Any]:
         # volume, so a disk check built on /api/files alone measures the wrong
         # 8% and would have reported "66% used" on a volume that was nearly
         # full. ml_status.json carries db_bytes; both are summed below.
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/file",
+                                 params={"path": "exec_scorecard.json"},
+                                 timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            sc = json.loads(r.text)
+            out["grade_cumulative"] = sc.get("n_graded_cumulative")
+            out["grade_checkpoint_ms"] = sc.get("checkpoint_ts_ms")
+            out["grade_fill_pess"] = sc.get("fill_rate_pessimistic")
+            # maker_policy reads `n_graded`; if it goes missing the promote
+            # gate silently weakens to offline_only. Worth watching directly.
+            out["grade_n_graded_key"] = sc.get("n_graded")
+        except Exception as e:
+            out["grade_error"] = f"{type(e).__name__}: {e}"
         try:
             r = await client.get(f"{TARGET_BASE}/api/file",
                                  params={"path": "ml_status.json"},
