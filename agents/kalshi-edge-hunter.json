@@ -1,0 +1,26 @@
+{
+  "id": "kalshi-edge-hunter",
+  "name": "Kalshi Edge Hunter",
+  "goal": "Find tradable edges in Kalshi NYC hourly temperature contracts (and related markets) that survive fees and have positive expected value over recent history.",
+  "status": "idle",
+  "created": "2026-08-02T21:41:00Z",
+  "last_run": null,
+  "next_wake": null,
+  "budget_cents_remaining": 200,
+  "max_turns_per_cycle": 8,
+  "data_map": {
+    "base": "https://kalshiml-production.up.railway.app",
+    "brain": "/api/state",
+    "scorecard": "/api/scorecard",
+    "cells": "/api/performance",
+    "one_cell": "/api/cell?cell=",
+    "evidence": "/api/evidence",
+    "logs": "/api/logs",
+    "files": "/api/files",
+    "file": "/api/file?path=",
+    "flow_overview": "/api/ml/status",
+    "catalog": "/api"
+  },
+  "findings_path": "agents/kalshi-edge-hunter/findings.jsonl",
+  "notes": "Always prefer summary endpoints. Never attempt to download multi-GB raw volumes. Write every concrete finding to findings.jsonl."
+}
