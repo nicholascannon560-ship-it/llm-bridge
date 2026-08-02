@@ -1,0 +1,4 @@
+{
+  "action": "get_status",
+  "id": "wake-for-map-update"
+}
