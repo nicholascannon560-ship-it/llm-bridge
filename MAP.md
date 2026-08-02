@@ -80,6 +80,8 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-02 | kml_watchdog.py: external KalshiML monitor, own asyncio task, Resend alerts on transitions, off by default | files: kml_watchdog.py, main.py
+- 2026-08-02 | DEPLOY BRANCH IS Agent-loop, not main — commits to main never reach service 509d2aef | files: main.py
 <!-- Agents: append one-line deltas here, MAX 120 CHARS.
      Format: - YYYY-MM-DD | short description | files: path1, path2
      Longer detail belongs in the change-log issue, not here. -->
