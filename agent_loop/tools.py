@@ -13,6 +13,7 @@ import json
 import os
 import traceback
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 # Import bridge modules when running inside the bridge
 try:
@@ -33,6 +34,15 @@ except ImportError:
 
 GITHUB_API = "https://api.github.com"
 OWNER = os.getenv("GITHUB_OWNER", "nicholascannon560-ship-it")
+
+# Hard allow-list for http_get. Agents may only reach these hosts.
+# KalshiML dashboard already exposes the full learning + market-flow surface.
+HTTP_ALLOW_HOSTS = {
+    "kalshiml-production.up.railway.app",
+}
+
+# Hard response size cap so agents cannot pull multi-MB payloads into context.
+HTTP_MAX_BYTES = int(os.getenv("AGENT_HTTP_MAX_BYTES", str(1_500_000)))  # ~1.5 MB
 
 
 def _github_headers() -> dict:
@@ -208,7 +218,45 @@ TOOL_SCHEMAS = [
                 "required": ["repo", "issue_number"]
             }
         }
-    },]
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "http_get",
+            "description": (
+                "Sandboxed HTTP GET. Currently allow-listed only to the KalshiML production dashboard "
+                "(kalshiml-production.up.railway.app). Use this to read the full live data surface:\n"
+                "- /api/state          → learning brain snapshot (cells, tree, recent decisions)\n"
+                "- /api/scorecard      → realized performance (would-bet vs baseline)\n"
+                "- /api/performance    → every cell's current stats\n"
+                "- /api/cell?cell=...  → one cell history + lead-time breakdown\n"
+                "- /api/evidence       → decision log (use limit/since/base_cell filters)\n"
+                "- /api/logs           → live process logs\n"
+                "- /api/files          → list raw data files under KALSHI_DIR\n"
+                "- /api/file?path=...  → read one sandboxed data file (size-capped)\n"
+                "- /api/ml/status      → market-flow / candle layer overview (the bulk of the ~8 GB)\n"
+                "- /api/ml/signals, /api/ml/tickers, /api/ml/train, /api/ml/flow\n"
+                "- /api                → full catalog of every endpoint\n"
+                "Never try to download multi-GB raw volumes; always prefer the summary endpoints."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "Full URL (must be https://kalshiml-production.up.railway.app/...)"
+                    },
+                    "timeout_sec": {
+                        "type": "integer",
+                        "default": 25,
+                        "description": "Request timeout in seconds (max 60)"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    },
+]
 
 
 # Convenience alias
@@ -367,8 +415,6 @@ async def _tool_read_memory(args: Dict) -> Dict:
     return {"entries": entries, "count": len(entries)}
 
 
-
-
 async def _tool_github_read_issue(args: Dict) -> Dict:
     import httpx
     owner = args.get("owner", OWNER)
@@ -400,6 +446,71 @@ async def _tool_github_read_issue(args: Dict) -> Dict:
         ]
     }
 
+
+async def _tool_http_get(args: Dict) -> Dict:
+    """Sandboxed HTTP GET limited to the KalshiML production dashboard.
+
+    Covers the entire learning brain + market-flow surface without ever
+    requiring direct volume access or multi-GB downloads.
+    """
+    import httpx
+
+    url = (args.get("url") or "").strip()
+    if not url:
+        return {"error": "url is required"}
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return {"error": "invalid url"}
+
+    if parsed.scheme != "https":
+        return {"error": "only https is allowed"}
+    host = (parsed.hostname or "").lower()
+    if host not in HTTP_ALLOW_HOSTS:
+        return {
+            "error": f"host '{host}' is not allow-listed",
+            "allowed": sorted(HTTP_ALLOW_HOSTS),
+        }
+
+    timeout = min(max(int(args.get("timeout_sec") or 25), 5), 60)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+            resp = await client.get(url)
+    except httpx.TimeoutException:
+        return {"error": f"request timed out after {timeout}s", "url": url}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}", "url": url}
+
+    content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+    raw = resp.content or b""
+    truncated = False
+    if len(raw) > HTTP_MAX_BYTES:
+        raw = raw[:HTTP_MAX_BYTES]
+        truncated = True
+
+    text = raw.decode("utf-8", errors="replace")
+
+    # Prefer structured JSON when the endpoint returns it
+    body: Any = text
+    if "json" in content_type or text.lstrip().startswith(("{", "[")):
+        try:
+            body = json.loads(text)
+        except Exception:
+            body = text  # leave as text if not valid JSON
+
+    return {
+        "ok": 200 <= resp.status_code < 300,
+        "status_code": resp.status_code,
+        "url": str(resp.url),
+        "content_type": content_type,
+        "bytes": len(raw),
+        "truncated": truncated,
+        "body": body,
+    }
+
+
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
@@ -411,4 +522,5 @@ _TOOL_HANDLERS = {
     "write_memory": _tool_write_memory,
     "read_memory": _tool_read_memory,
     "github_read_issue": _tool_github_read_issue,
+    "http_get": _tool_http_get,
 }
