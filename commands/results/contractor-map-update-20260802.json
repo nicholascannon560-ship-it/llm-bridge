@@ -1,0 +1,349 @@
+{
+  "id": "contractor-map-update-20260802",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "complete",
+    "task_id": "contractor-map-update-20260802",
+    "task": "Fully audit and update the contractor-payroll MAP.md.\n\nGoal: Produce an accurate, up-to-date L1 MAP.md for the contractor-payroll repo that reflects the current code and the detailed history in the change-log.\n\nSteps you must follow:\n1. Read the current MAP.md from repo contractor-payroll (path: MAP.md).\n2. Read the change-log issue comments: use github_read_issue on repo=change-log, issue_number=3, per_page=40. Focus on everything after 2026-07-30.\n3. Inspect key current files to verify state (use github_read):\n   - prisma/schema.prisma\n   - lib/billing.ts or lib/billing-v2.ts (whichever exists)\n   - lib/fees.ts\n   - app/dashboard/client/page.tsx and contractor/page.tsx (high level)\n   - Any other files the change-log or MAP points to as critical.\n4. Identify what is still accurate vs what has drifted (collectives removed, fee model, admin role, auto-pay, period timing, estimates, etc.).\n5. Write a complete new MAP.md that follows the same style and structure as the existing one (purpose, status, last_verified, token budget, Entry Points, Task Slices, Tree, Key Files, Current State, Relationships, Agent Start Instructions, Deep Docs, Pending Map Updates).\n6. Set last_verified to 2026-08-02.\n7. Commit the updated MAP.md to contractor-payroll with a clear commit message.\n8. Also append a short one-line delta to the Pending Map Updates section if needed, and log a proper change-log comment to issue #3 using the standard Agent/What/When/Where/Verified/State/Next format (you can use github_commit or another method if available; otherwise summarize what should be logged).\n9. Write a memory entry summarizing the audit findings.\n\nBe thorough but efficient. Prefer reading the change-log comments and schema/billing files over exhaustive tree walks. Max turns available: 15. Use reasoning_effort low for mechanical reads, higher if needed for synthesis.\n\nFinal answer should include the new MAP content summary and confirmation of the commit.",
+    "final_answer": "## Task Complete\n\n**Committed:** new MAP.md to `contractor-payroll` (commit `76e0103`), `last_verified: 2026-08-02`.\n\n### Audit findings (accurate vs drifted)\n\n**Drifted (fixed in new MAP):**\n1. **Billing engine** \u2014 `lib/billing.ts` no longer exists; `lib/billing-v2.ts` is the live engine: direct charges on each contractor's Express connected account, platform never holds funds, no \"funding cleared + approvals closed\" payout gate (ACH-return protection is the connected account's payout delay).\n2. **Fee model** \u2014 new `lib/fees.ts`: funder pays card at par or ACH with 2% pay-ahead discount (+1% more with auto-pay, ACH-only = 3%); platform cut comes from the *contractor* side as an application fee (0.1% card floor, ACH headroom up to 3% all-in contractor cost ceiling).\n3. **Auto-pay + admin role** \u2014 `Org.autoPay` (ACH-only) with three approval modes: `approved` / `adminGated` (admin contractor double-check via `Org.adminContractorId`) / `all`. Admin API routes exist (`app/api/admin/`: review, set, transfer, delete-project).\n4. **Estimates & timing** \u2014 Friday\u2013Thursday periods; estimate = contractor-declared (approved) \u2192 last actual \u2192 org seed; variance = prior actual \u2212 prior funded, rolled forward (covers true-up + failed charges uniformly).\n\n**Still accurate (verified):**\n- Collectives were **NOT** removed \u2014 Collective/CollectiveMember/Project models live, Org = Funder\n- Unified Invite table (3 directions) + Resend email delivery\n- Session-derived identity rule; application-layer tenant isolation only (no RLS)\n- README.md is partially stale (still cites `lib/billing.ts` / payout gate) \u2014 flagged in the MAP's Agent Start Instructions.\n\n### Change-log note\n`github_read_issue` / issue-comment tools are not available in this environment, so I could not read change-log issue #3 comments after 2026-07-30 or post the Agent/What/When/Where/Verified/State/Next comment. The one-line delta was appended to Pending Map Updates in MAP.md instead; the change-log comment to post manually would be: **Agent:** llm-bridge contractor-map-update-20260802 \u00b7 **What:** Full L1 MAP audit \u2014 billing-v2 direct-charge, fee model, auto-pay/admin, collectives retained \u00b7 **When:** 2026-08-02 \u00b7 **Where:** MAP.md \u00b7 **Verified:** against schema.prisma, billing-v2.ts, fees.ts, app tree \u00b7 **State:** committed 76e0103 \u00b7 **Next:** update stale README billing references.\n\nMemory entry written (`7e0ddb71`).",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-02T20:25:19.148845+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 0.7077,
+          "usage": {
+            "prompt_tokens": 1694,
+            "completion_tokens": 133,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"MAP.md\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'MAP.md', 'sha': '0d88ae73e9caa0fb15f20cbcaa152a9ba918005e', 'size': 8205, 'content': '# MAP: contractor-payroll (SplitRail)\\n\\n**purpose:** Multi-tenant Stripe Connect SaaS for contractor crews. Client pays once via ACH; contractors get paid their share after approval + fun"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': '.env.example', 'type': 'file'}, {'name': '.gitignore', 'type': 'file'}, {'name': '.railway-deploy-trigger', 'type': 'file'}, {'name': 'MAP.md', 'type': 'file'}, {'name': 'README.md', 'type': 'file'}, {'name': 'app', 'type': 'dir'}, {'name': 'components', '"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-02T20:25:25.113656+00:00",
+        "llm": {
+          "content_preview": "Note: `github_read_issue` isn't in my toolset, so I'll reconstruct history from MAP.md's changelog and current code. Reading key files now.",
+          "tool_calls_count": 2,
+          "cost_cents": 1.2307799999999998,
+          "usage": {
+            "prompt_tokens": 4610,
+            "completion_tokens": 175,
+            "cached_tokens": 1536
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"prisma/schema.prisma\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"lib\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'prisma/schema.prisma', 'sha': '35dc1300c1303b035615566a4e673d0216ead251', 'size': 12772, 'content': 'generator client {\\n  provider = \"prisma-client-js\"\\n}\\n\\ndatasource db {\\n  provider = \"postgresql\"\\n  url      = env(\"DATABASE_URL\")\\n}\\n\\nenum OrgRole {\\n  ADMIN\\n  MEMBE"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'auth.ts', 'type': 'file'}, {'name': 'billing-v2.ts', 'type': 'file'}, {'name': 'connect.ts', 'type': 'file'}, {'name': 'db.ts', 'type': 'file'}, {'name': 'email.ts', 'type': 'file'}, {'name': 'export-csv.ts', 'type': 'file'}, {'name': 'fees.ts', 'type': 'f"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-02T20:25:32.056184+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 1.08264,
+          "usage": {
+            "prompt_tokens": 7126,
+            "completion_tokens": 126,
+            "cached_tokens": 4608
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"lib/fees.ts\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"lib/billing-v2.ts\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'lib/fees.ts', 'sha': '9eb88140af7edaba6639f4dd6f69736e118c84b6', 'size': 4123, 'content': '/**\\n * Charge math.\\n *\\n * SplitRail\\'s cut comes from the CONTRACTOR side, per rail\\n * (platformFeeFor), collected as a Stripe application fee on each direct\\n * charge \u2014 never in"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'lib/billing-v2.ts', 'sha': '5fa0265e667da3fd608b6d4135f7457b5a4d19df', 'size': 19355, 'content': 'import { db } from \"./db\";\\nimport { stripe } from \"./stripe\";\\nimport { chargeCentsFor, stripeFeeFor, platformFeeFor, Rail } from \"./fees\";\\nimport { ChargeStatus, PaymentPath"
+          }
+        ]
+      },
+      {
+        "turn": 4,
+        "timestamp": "2026-08-02T20:25:37.864659+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 1.58886,
+          "usage": {
+            "prompt_tokens": 10927,
+            "completion_tokens": 118,
+            "cached_tokens": 6912
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"app\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"scripts\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'api', 'type': 'dir'}, {'name': 'contractor', 'type': 'dir'}, {'name': 'dashboard', 'type': 'dir'}, {'name': 'globals.css', 'type': 'file'}, {'name': 'invite', 'type': 'dir'}, {'name': 'layout.tsx', 'type': 'file'}, {'name': 'login', 'type': 'dir'}, {'name'"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'db-check.ts', 'type': 'file'}, {'name': 'tenant-isolation-test.ts', 'type': 'file'}, {'name': 'test-fees.ts', 'type': 'file'}, {'name': 'weekly-cron.ts', 'type': 'file'}]}"
+          }
+        ]
+      },
+      {
+        "turn": 5,
+        "timestamp": "2026-08-02T20:25:44.400554+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 0.6621600000000001,
+          "usage": {
+            "prompt_tokens": 11284,
+            "completion_tokens": 120,
+            "cached_tokens": 10752
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"app/dashboard\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"app/api\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'client', 'type': 'dir'}, {'name': 'contractor', 'type': 'dir'}, {'name': 'page.tsx', 'type': 'file'}]}"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'admin', 'type': 'dir'}, {'name': 'auth', 'type': 'dir'}, {'name': 'billing', 'type': 'dir'}, {'name': 'connect', 'type': 'dir'}, {'name': 'contractors', 'type': 'dir'}, {'name': 'estimates', 'type': 'dir'}, {'name': 'invites', 'type': 'dir'}, {'name': 'pro"
+          }
+        ]
+      },
+      {
+        "turn": 6,
+        "timestamp": "2026-08-02T20:25:49.741741+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 0.6391199999999999,
+          "usage": {
+            "prompt_tokens": 11648,
+            "completion_tokens": 124,
+            "cached_tokens": 11264
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"app/dashboard/client\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"app/dashboard/contractor\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'invite', 'type': 'dir'}, {'name': 'page.tsx', 'type': 'file'}]}"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'page.tsx', 'type': 'file'}]}"
+          }
+        ]
+      },
+      {
+        "turn": 7,
+        "timestamp": "2026-08-02T20:25:55.645545+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 0.6341999999999999,
+          "usage": {
+            "prompt_tokens": 11877,
+            "completion_tokens": 121,
+            "cached_tokens": 11520
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"app/api/admin\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"README.md\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'directory', 'entries': [{'name': 'delete-project', 'type': 'dir'}, {'name': 'review', 'type': 'dir'}, {'name': 'set', 'type': 'dir'}, {'name': 'transfer', 'type': 'dir'}]}"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'README.md', 'sha': '5b802c47afd572d1629bd22b977a0c4755012605', 'size': 7296, 'content': \"# SplitRail\\n\\nA crew of independent contractors works a job together \u2014 paid by one client,\\nbut nobody wants to be the one splitting that payment five ways over Venmo\\nafterward. Split"
+          }
+        ]
+      },
+      {
+        "turn": 8,
+        "timestamp": "2026-08-02T20:26:00.819753+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 4.455780000000001,
+          "usage": {
+            "prompt_tokens": 14231,
+            "completion_tokens": 2244,
+            "cached_tokens": 11776
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_commit",
+            "args_preview": "{\"content\":\"# MAP: contractor-payroll (SplitRail)\\n\\n**purpose:** Multi-tenant Stripe Connect SaaS for contractor crews. A Funder (client org) pays once per week per contractor via direct charges on e"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'committed': True, 'path': 'MAP.md', 'commit_sha': '76e01035f4f70731e25bf52e5c17f58162478431', 'updated': True}"
+          }
+        ]
+      },
+      {
+        "turn": 9,
+        "timestamp": "2026-08-02T20:26:58.540322+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 1.5906,
+          "usage": {
+            "prompt_tokens": 16449,
+            "completion_tokens": 305,
+            "cached_tokens": 14080
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"Audited contractor-payroll MAP.md (2026-08-02). Key drift found: (1) lib/billing.ts replaced by lib/billing-v2.ts \u2014 direct-charge model on contractor Express accounts, no platform payout gat"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '7e0ddb71'}"
+          }
+        ]
+      },
+      {
+        "turn": 10,
+        "timestamp": "2026-08-02T20:27:07.337084+00:00",
+        "llm": {
+          "content_preview": "## Task Complete\n\n**Committed:** new MAP.md to `contractor-payroll` (commit `76e0103`), `last_verified: 2026-08-02`.\n\n### Audit findings (accurate vs drifted)\n\n**Drifted (fixed in new MAP):**\n1. **Bil",
+          "tool_calls_count": 0,
+          "cost_cents": 1.54542,
+          "usage": {
+            "prompt_tokens": 16797,
+            "completion_tokens": 620,
+            "cached_tokens": 16384
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "## Task Complete\n\n**Committed:** new MAP.md to `contractor-payroll` (commit `76e0103`), `last_verified: 2026-08-02`.\n\n### Audit findings (accurate vs drifted)\n\n**Drifted (fixed in new MAP):**\n1. **Billing engine** \u2014 `lib/billing.ts` no longer exists; `lib/billing-v2.ts` is the live engine: direct charges on each contractor's Express connected account, platform never holds funds, no \"funding cleared + approvals closed\" payout gate (ACH-return protection is the connected account's payout delay).\n2"
+      }
+    ],
+    "turns_used": 10,
+    "max_turns": 15,
+    "total_cost_cents": 14.1373,
+    "total_tokens": {
+      "prompt": 106643,
+      "completion": 4086
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3"
+  },
+  "error": null,
+  "processed_at": "2026-08-02T20:25:19.148524+00:00"
+}
