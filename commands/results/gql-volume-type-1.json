@@ -1,0 +1,63 @@
+{
+  "id": "gql-volume-type-1",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "__type": {
+      "fields": [
+        {
+          "name": "createdAt",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "DateTime"
+            }
+          }
+        },
+        {
+          "name": "id",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "ID"
+            }
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "String"
+            }
+          }
+        },
+        {
+          "name": "project",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "Project"
+            }
+          }
+        },
+        {
+          "name": "projectId",
+          "type": {
+            "name": null,
+            "kind": "NON_NULL",
+            "ofType": {
+              "name": "String"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-02T13:43:53.744552+00:00"
+}
