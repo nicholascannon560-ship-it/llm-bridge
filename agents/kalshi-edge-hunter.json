@@ -6,7 +6,7 @@
   "created": "2026-08-02T21:41:00Z",
   "last_run": null,
   "next_wake": null,
-  "budget_cents_remaining": 200,
+  "budget_cents_remaining": 500,
   "max_turns_per_cycle": 8,
   "data_map": {
     "base": "https://kalshiml-production.up.railway.app",
@@ -22,5 +22,5 @@
     "catalog": "/api"
   },
   "findings_path": "agents/kalshi-edge-hunter/findings.jsonl",
-  "notes": "Always prefer summary endpoints. Never attempt to download multi-GB raw volumes. Write every concrete finding to findings.jsonl."
+  "notes": "Always prefer summary endpoints. Never attempt to download multi-GB raw volumes. Write every concrete finding to findings.jsonl. Budget is soft guidance until hard enforcement lands in the harness."
 }
