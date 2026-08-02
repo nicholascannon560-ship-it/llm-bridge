@@ -1,5 +1,0 @@
-{
-  "action": "llm_chat",
-  "prompt": "Wake acknowledgment. Reply with one short sentence.",
-  "max_tokens": 40
-}
