@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "query { projectA: project(id: \"795ef390-adf7-4af9-8412-87e5a96f501a\") { name volumes { edges { node { id name mountPath sizeMB usedMB serviceId } } } } projectB: project(id: \"b37dd9c0-edb0-455f-aa9f-88f585476d97\") { name volumes { edges { node { id name mountPath sizeMB usedMB serviceId } } } } }"}
