@@ -1,0 +1,5 @@
+{
+  "action": "llm_chat",
+  "prompt": "Acknowledge wake. Confirm whether the http_get tool is available in the current agent tool list. Reply with one short sentence.",
+  "max_tokens": 100
+}
