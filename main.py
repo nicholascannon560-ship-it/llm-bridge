@@ -31,6 +31,7 @@ from starlette.responses import JSONResponse
 from railway_extension import router as railway_router, set_service_variable
 from llm_routes import llm_router
 from command_channel import process_pending_commands
+from kml_watchdog import watchdog_worker, watchdog_router
 
 GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -69,14 +70,20 @@ async def _command_worker() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(_command_worker())
+    # Watchdog runs as its own task, NOT inside /health: that endpoint is
+    # Railway's liveness probe, and multi-second outbound HTTP there turns a
+    # slow dependency into a restart loop. Disabled unless WATCHDOG_ENABLED,
+    # so the second service building from this repo stays silent.
+    wd_task = asyncio.create_task(watchdog_worker())
     try:
         yield
     finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        for t in (task, wd_task):
+            t.cancel()
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(
@@ -86,7 +93,7 @@ app = FastAPI(
         "repos, list repos and read file contents using a single "
         "GITHUB_TOKEN."
     ),
-    version="1.4.2",
+    version="1.5.0",
     lifespan=lifespan,
 )
 
@@ -104,6 +111,9 @@ app.include_router(skills_router)
 # SSRF reasoning — this service holds admin-scoped tokens).
 from fetch_routes import fetch_router
 app.include_router(fetch_router)
+
+# Watchdog status / manual-trigger routes (auth-gated like everything else).
+app.include_router(watchdog_router)
 
 
 # --------------------------------------------------------------------------- #
