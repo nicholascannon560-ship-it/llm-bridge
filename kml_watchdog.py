@@ -84,6 +84,14 @@ TREND_WINDOW_SEC     = _f("WATCHDOG_TREND_WINDOW_SEC", 6 * 3600.0)
 TREND_MIN_SAMPLES    = int(_f("WATCHDOG_TREND_MIN_SAMPLES", 12))
 TREND_WORSE_FRAC     = _f("WATCHDOG_TREND_WORSE_FRAC", 0.5)
 
+# Disk + evidence-rotation checks. These exist because every one of them was
+# something a human was otherwise going to be told to "go check tomorrow".
+DISK_TOTAL_MB        = _f("WATCHDOG_DISK_TOTAL_MB", 1024.0)
+DISK_WARN_FRAC       = _f("WATCHDOG_DISK_WARN_FRAC", 0.85)
+DISK_POLL_SEC        = _f("WATCHDOG_DISK_POLL_SEC", 3600.0)
+CORPUS_DROP_FRAC     = _f("WATCHDOG_CORPUS_DROP_FRAC", 0.10)
+VERIFY_ONLY_MAX_DAYS = _f("WATCHDOG_VERIFY_ONLY_MAX_DAYS", 3.0)
+
 # --------------------------------------------------------------------------- #
 # Log parsing
 # --------------------------------------------------------------------------- #
@@ -91,6 +99,14 @@ _RE_CANDIDATES = re.compile(r"\[SCAN\]\s+(\d+)\s+candidates this cycle")
 _RE_DRYRUN     = re.compile(r"DRY_RUN=(\w+)\s+PLACE_REAL_ORDERS=(\w+)")
 _RE_CASH       = re.compile(r"live_cash=\$([0-9.]+)")
 _RE_IEM_BACKOFF= re.compile(r"iem asos: HTTP (\d+) -- backing off ([0-9.]+)s")
+# Nightly-cadence lines. These are why the sampler makes targeted `contains`
+# fetches instead of relying on the raw tail: they appear once a day and would
+# scroll out of any tail short enough to be cheap.
+_RE_LEARN_CORPUS = re.compile(
+    r"\[LEARN\] evidence: (\d+) rows -> (\d+) independent")
+_RE_EVIDENCE_SUM = re.compile(
+    r"\[evidence\] (\S+): ok=(\w+) hot=(\d+) cold=(\d+) undated=(\d+) bad=(\d+) "
+    r"freed=([0-9.]+)MB \((.*)\)")
 
 
 def _is_openmeteo_429(line: str) -> bool:
@@ -103,6 +119,27 @@ def _is_openmeteo_429(line: str) -> bool:
     if "iem asos" in low:
         return False
     return "open-meteo" in low or "openmeteo" in low or "api.open-meteo.com" in low
+
+
+def parse_nightly(lines: list[str]) -> dict[str, Any]:
+    """Facts from the once-a-day lines: learning corpus size and the evidence
+    rotation summary. Last occurrence wins."""
+    out: dict[str, Any] = {}
+    for ln in lines:
+        m = _RE_LEARN_CORPUS.search(ln)
+        if m:
+            out["corpus_rows"] = int(m.group(1))
+            out["corpus_independent"] = int(m.group(2))
+        m = _RE_EVIDENCE_SUM.search(ln)
+        if m:
+            rot = out.setdefault("rotation", {})
+            rot[m.group(1)] = {
+                "ok": m.group(2).lower() == "true",
+                "hot": int(m.group(3)), "cold": int(m.group(4)),
+                "undated": int(m.group(5)), "bad": int(m.group(6)),
+                "freed_mb": float(m.group(7)), "note": m.group(8),
+            }
+    return out
 
 
 def parse_log_lines(lines: list[str]) -> dict[str, Any]:
@@ -164,6 +201,9 @@ _STATE: dict[str, Any] = {
     "emails_sent": 0,
     "emails_suppressed": 0,
     "last_email_at": None,
+    "corpus_peak": 0,
+    "verify_only_since": None,
+    "last_disk_poll": 0.0,
 }
 _SAMPLES: deque = deque(maxlen=1200)     # rolling trend window
 _PROC_STARTS: deque = deque(maxlen=50)   # (epoch_seen, proc_started_string)
@@ -274,6 +314,71 @@ def _chk_degradation(s: dict, now: float) -> tuple[bool, str]:
     return False, "trends stable"
 
 
+def _chk_disk(s: dict, now: float) -> tuple[bool, str]:
+    """Volume headroom. Sampled hourly, not per-cycle — /api/files walks the
+    whole tree and there is no point paying for that every 5 minutes."""
+    mb = s.get("disk_mb")
+    if mb is None:
+        return False, "disk not sampled this cycle"
+    frac = mb / DISK_TOTAL_MB if DISK_TOTAL_MB > 0 else 0.0
+    if frac >= DISK_WARN_FRAC:
+        big = s.get("disk_largest") or ""
+        return True, (f"volume at {mb:.0f} MB of {DISK_TOTAL_MB:.0f} "
+                      f"({frac*100:.0f}%) — largest: {big}")
+    return False, f"{mb:.0f} MB ({frac*100:.0f}%)"
+
+
+def _chk_corpus(s: dict, now: float) -> tuple[bool, str]:
+    """Guards the learning corpus against silent shrinkage.
+
+    This is the check that makes evidence rotation safe to leave running. If a
+    rotation bug drops rows, the independent-observation count falls and this
+    fires — instead of a human noticing weeks later that cell states drifted.
+    Compares against the high-water mark, since the count should only ever grow.
+    """
+    n = s.get("corpus_independent")
+    if n is None:
+        return False, "no recompute line in buffer yet"
+    peak = _STATE.get("corpus_peak") or 0
+    if n > peak:
+        _STATE["corpus_peak"] = n
+        return False, f"{n} independent observations (new high)"
+    if peak and n < peak * (1 - CORPUS_DROP_FRAC):
+        return True, (f"independent observations fell {peak} -> {n} "
+                      f"({100*(peak-n)/peak:.0f}%) — evidence rotation may be "
+                      f"dropping rows; set EVIDENCE_ROTATE_VERIFY_ONLY=1")
+    return False, f"{n} independent observations (peak {peak})"
+
+
+def _chk_rotation(s: dict, now: float) -> tuple[bool, str]:
+    """Watches the nightly evidence rotation: failures, and parking in
+    verify-only. Verify-only doubles the corpus on disk (chunks written, live
+    file still full), so it is safe but must not become permanent."""
+    rot = s.get("rotation") or {}
+    if not rot:
+        return False, "no rotation summary in buffer yet"
+    failed = [f"{k}: {v['note']}" for k, v in rot.items() if not v["ok"]]
+    if failed:
+        return True, "rotation failed — " + "; ".join(failed)
+    verify = [k for k, v in rot.items() if "verify-only" in (v["note"] or "")]
+    if verify:
+        since = _STATE.get("verify_only_since")
+        if since is None:
+            _STATE["verify_only_since"] = now
+            since = now
+        days = (now - since) / 86400.0
+        if days >= VERIFY_ONLY_MAX_DAYS:
+            return True, (f"evidence rotation parked in verify-only for "
+                          f"{days:.1f}d ({', '.join(verify)}) — chunks are being "
+                          f"written but nothing is truncated, so disk is growing "
+                          f"on both sides")
+        return False, f"verify-only for {days:.1f}d ({', '.join(verify)})"
+    _STATE["verify_only_since"] = None
+    freed = sum(v["freed_mb"] for v in rot.values())
+    bad = sum(v["bad"] for v in rot.values())
+    return False, f"rotated ok, {freed:.1f} MB freed, {bad} unparseable rows kept"
+
+
 CHECKS = {
     "dashboard_unreachable": _chk_unreachable,
     "restart_loop":          _chk_restart_loop,
@@ -282,6 +387,9 @@ CHECKS = {
     "openmeteo_cap_early":   _chk_openmeteo_cap,
     "iem_backoff_pinned":    _chk_iem_pinned,
     "degradation":           _chk_degradation,
+    "disk_usage":            _chk_disk,
+    "learning_corpus":       _chk_corpus,
+    "evidence_rotation":     _chk_rotation,
 }
 
 # Checks that only make sense when we actually reached the dashboard.
@@ -316,6 +424,40 @@ async def sample_once(client: httpx.AsyncClient) -> dict[str, Any]:
     except Exception as e:
         # Version worked, logs did not: still "reachable", just thinner data.
         out["log_error"] = f"{type(e).__name__}: {e}"
+
+    # Targeted fetches for the once-a-day lines. `contains` searches the whole
+    # buffer, so these survive scrolling out of the cheap tail above.
+    for needle in ("[LEARN] evidence:", "[evidence]"):
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/logs",
+                                 params={"n": 8000, "contains": needle},
+                                 timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            raw = (r.json() or {}).get("lines") or []
+            got = [(x.get("line") if isinstance(x, dict) else str(x)) for x in raw]
+            out.update(parse_nightly([g for g in got if g]))
+        except Exception as e:
+            out.setdefault("nightly_errors", []).append(
+                f"{needle}: {type(e).__name__}")
+
+    # Disk is polled on its own slower clock: /api/files walks the whole tree.
+    if now - (_STATE.get("last_disk_poll") or 0.0) >= DISK_POLL_SEC:
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/files", timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            payload = r.json()
+            files = payload if isinstance(payload, list) else (
+                payload.get("files") or payload.get("entries") or [])
+            total = sum((f.get("bytes") or 0) for f in files if isinstance(f, dict))
+            out["disk_mb"] = total / 1_048_576
+            out["disk_files"] = len(files)
+            biggest = sorted(((f.get("bytes") or 0), f.get("path") or "")
+                             for f in files if isinstance(f, dict))[-3:]
+            out["disk_largest"] = ", ".join(
+                f"{p} {b/1_048_576:.0f}MB" for b, p in reversed(biggest))
+            _STATE["last_disk_poll"] = now
+        except Exception as e:
+            out["disk_error"] = f"{type(e).__name__}: {e}"
     return out
 
 
