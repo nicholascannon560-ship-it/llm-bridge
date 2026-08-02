@@ -1,0 +1,197 @@
+{
+  "id": "contractor-readme-update-20260802",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "complete",
+    "task_id": "contractor-readme-update-20260802",
+    "task": "Update the contractor-payroll README.md so it accurately matches the current system and the freshly updated MAP.md (last_verified 2026-08-02).\n\nContext: The MAP was just rewritten. The README is still full of stale language from the old model (ACH clearing + payout gate, lib/billing.ts, maybeRunPayout, old estimate/payout timing, missing admin/auto-pay/fee model, etc.).\n\nRequired steps:\n1. Read the current README.md and the current MAP.md from contractor-payroll.\n2. Read key source files if needed for precision: lib/billing-v2.ts, lib/fees.ts, prisma/schema.prisma (high-level), scripts/weekly-cron.ts.\n3. Rewrite the README so it is accurate and useful for a new developer or agent:\n   - Keep the good product description / voice at the top.\n   - Completely rewrite the timing model section to match reality (Fri\u2013Thu periods, contractor estimates, Friday charge of approved estimate + true-up, no platform payout gate, direct charges on contractor Express accounts).\n   - Update \"What's built\" to reflect the real current features (billing-v2, fees.ts, auto-pay ACH-only, Administrator role, sidebars, project switcher, ChargeStatusDetail, Resend email, etc.).\n   - Update \"What's NOT built yet\" to the real remaining items (tenant isolation test not yet run, end-to-end email not fully verified, no Postgres RLS, etc.).\n   - Keep the Setup section, just make sure any env vars or commands are still accurate.\n4. Commit the updated README.md to contractor-payroll with a clear message.\n5. Append a one-line delta to the MAP.md Pending Map Updates section noting the README refresh.\n6. Write a short memory entry about what was fixed.\n\nDo not invent features that don't exist. Prefer concise, accurate language over marketing fluff. Max turns: 12.\n\nFinal answer should confirm the commit SHA and summarize the major sections that changed.",
+    "final_answer": "Task complete.\n\n**Commits:**\n- `README.md` \u2014 **8b418a8712f91d4ed77c0b6b7ef16e30b0263f8e**\n- `MAP.md` (Pending Map Updates delta) \u2014 **6eff48984ddf4f89c86f03d7799803215c1da194**\n\n**Major sections changed in the README:**\n\n1. **Intro** \u2014 kept the product voice, updated the plumbing description: project = funder org, charges are direct charges on each contractor's Express account, platform never holds funds, SplitRail cut via `application_fee_amount`.\n2. **Timing model** \u2014 fully rewritten. Removed the old \"charge clears \u2192 `maybeRunPayout` gate\" ASCII flow; now describes Fri\u2013Thu periods, in-week estimate declaration + funder approval, Friday 9am ET charge of approved estimate + prior true-up, Thursday 5pm ET reminders, and explicitly states there is no platform payout gate (ACH protection = Stripe payout delay on the connected account).\n3. **New \"Fee model\" section** \u2014 documents `lib/fees.ts` reality: card at par / ACH \u22122%, ACH-only auto-pay stacking +1%, the three approval modes (`approved`/`adminGated`/`all`), and the contractor-side ACH headroom-to-3%-cap cut with the token 0.1% card cut.\n4. **What's built** \u2014 replaced `lib/billing.ts` references with billing-v2 + fees, added auto-pay (ACH-only), Administrator role, PaymentElement-based `PaymentMethodSetup`, Resend email, sidebar layouts, project switcher, `ChargeStatusDetail`, legacy Collective/Project note. Removed \"invite pages missing\" (no longer true \u2014 invites are emailed now).\n5. **What's NOT built** \u2014 updated to real items: tenant-isolation test written but never executed, email E2E unverified, no Postgres RLS, variance carry-forward clamp, Connect-status check, login-collision assumption, `db-check.ts` kept.\n6. **Setup** \u2014 kept; confirmed env vars against `.env.example` (added Resend mention).\n\nMemory entry written.",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-02T20:40:49.320917+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 0.7305,
+          "usage": {
+            "prompt_tokens": 1770,
+            "completion_tokens": 133,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"README.md\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"MAP.md\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'README.md', 'sha': '5b802c47afd572d1629bd22b977a0c4755012605', 'size': 7296, 'content': \"# SplitRail\\n\\nA crew of independent contractors works a job together \u2014 paid by one client,\\nbut nobody wants to be the one splitting that payment five ways over Venmo\\nafterward. Split"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'MAP.md', 'sha': 'efa20458d05e18f55e7d4152780e734d1ab69622', 'size': 8290, 'content': '# MAP: contractor-payroll (SplitRail)\\n\\n**purpose:** Stripe Connect SaaS for contractor crews. A Project IS the funder org; contractors are linked directly (the Collective layer is gone)."
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-02T20:40:53.964604+00:00",
+        "llm": {
+          "content_preview": "I have the MAP (freshly verified) and the stale README. Let me quickly check the setup details (env vars) in the cron script and fees to keep the Setup section accurate.",
+          "tool_calls_count": 2,
+          "cost_cents": 1.8376799999999998,
+          "usage": {
+            "prompt_tokens": 6373,
+            "completion_tokens": 227,
+            "cached_tokens": 1536
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\".env.example\",\"repo\":\"contractor-payroll\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"path\":\"lib/fees.ts\",\"repo\":\"contractor-payroll\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': '.env.example', 'sha': '4a879d4a683cdf45737cfb8d1e03205c5e1cf2b1', 'size': 707, 'content': 'DATABASE_URL=\"postgresql://user:password@localhost:5432/contractor_payroll\"\\nSTRIPE_SECRET_KEY=\"sk_test_...\"\\nNEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=\"pk_test_...\"\\nSTRIPE_WEBHOOK_SECRET=\""
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'lib/fees.ts', 'sha': '9eb88140af7edaba6639f4dd6f69736e118c84b6', 'size': 4123, 'content': '/**\\n * Charge math.\\n *\\n * SplitRail\\'s cut comes from the CONTRACTOR side, per rail\\n * (platformFeeFor), collected as a Stripe application fee on each direct\\n * charge \u2014 never in"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-02T20:41:01.530840+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 3.76842,
+          "usage": {
+            "prompt_tokens": 8161,
+            "completion_tokens": 1986,
+            "cached_tokens": 6144
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_commit",
+            "args_preview": "{\"content\":\"# SplitRail\\n\\nA crew of independent contractors works a job together \u2014 paid by one client,\\nbut nobody wants to be the one splitting that payment five ways over Venmo\\nafterward. SplitRai"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'committed': True, 'path': 'README.md', 'commit_sha': '8b418a8712f91d4ed77c0b6b7ef16e30b0263f8e', 'updated': True}"
+          }
+        ]
+      },
+      {
+        "turn": 4,
+        "timestamp": "2026-08-02T20:41:49.596524+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 4.15128,
+          "usage": {
+            "prompt_tokens": 10225,
+            "completion_tokens": 2151,
+            "cached_tokens": 7936
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_commit",
+            "args_preview": "{\"content\":\"# MAP: contractor-payroll (SplitRail)\\n\\n**purpose:** Stripe Connect SaaS for contractor crews. A Project IS the funder org; contractors are linked directly (the Collective layer is gone)."
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'committed': True, 'path': 'MAP.md', 'commit_sha': '6eff48984ddf4f89c86f03d7799803215c1da194', 'updated': True}"
+          }
+        ]
+      },
+      {
+        "turn": 5,
+        "timestamp": "2026-08-02T20:42:34.495457+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 1.41492,
+          "usage": {
+            "prompt_tokens": 12447,
+            "completion_tokens": 251,
+            "cached_tokens": 9984
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"contractor-payroll README refresh (2026-08-02): replaced stale old-model language (ACH clearing + maybeRunPayout payout gate, lib/billing.ts) with current reality from MAP.md + lib/fees.ts: "
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '1be22997'}"
+          }
+        ]
+      },
+      {
+        "turn": 6,
+        "timestamp": "2026-08-02T20:42:42.082225+00:00",
+        "llm": {
+          "content_preview": "Task complete.\n\n**Commits:**\n- `README.md` \u2014 **8b418a8712f91d4ed77c0b6b7ef16e30b0263f8e**\n- `MAP.md` (Pending Map Updates delta) \u2014 **6eff48984ddf4f89c86f03d7799803215c1da194**\n\n**Major sections change",
+          "tool_calls_count": 0,
+          "cost_cents": 1.2062400000000002,
+          "usage": {
+            "prompt_tokens": 12740,
+            "completion_tokens": 468,
+            "cached_tokens": 12288
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "Task complete.\n\n**Commits:**\n- `README.md` \u2014 **8b418a8712f91d4ed77c0b6b7ef16e30b0263f8e**\n- `MAP.md` (Pending Map Updates delta) \u2014 **6eff48984ddf4f89c86f03d7799803215c1da194**\n\n**Major sections changed in the README:**\n\n1. **Intro** \u2014 kept the product voice, updated the plumbing description: project = funder org, charges are direct charges on each contractor's Express account, platform never holds funds, SplitRail cut via `application_fee_amount`.\n2. **Timing model** \u2014 fully rewritten. Removed t"
+      }
+    ],
+    "turns_used": 6,
+    "max_turns": 12,
+    "total_cost_cents": 13.109,
+    "total_tokens": {
+      "prompt": 51716,
+      "completion": 5216
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3"
+  },
+  "error": null,
+  "processed_at": "2026-08-02T20:40:49.320478+00:00"
+}
