@@ -1,0 +1,12 @@
+{
+  "id": "list-projects-kml-offload-1",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-02T13:31:02.847418+00:00"
+}
