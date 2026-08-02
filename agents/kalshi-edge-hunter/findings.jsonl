@@ -1,0 +1,1 @@
+{"ts": "2026-08-02T21:42:00Z", "type": "system", "title": "findings log initialized", "summary": "Append-only log. One JSON object per line. See agents/kalshi-edge-hunter/README.md for schema.", "evidence": [], "confidence": 1.0}
