@@ -1,0 +1,9 @@
+{
+  "id": "wake-daily-deep",
+  "status": "error",
+  "action": "llm_chat",
+  "result": null,
+  "error": "llm_chat requires 'messages'",
+  "processed_at": "2026-08-02T22:25:05.765149+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 333, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 209, in _execute\n    return _llm_chat(cmd)\n           ^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 142, in _llm_chat\n    raise ValueError(\"llm_chat requires 'messages'\")\nValueError: llm_chat requires 'messages'\n"
+}
