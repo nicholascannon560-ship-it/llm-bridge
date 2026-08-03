@@ -299,8 +299,89 @@ TOOL_SCHEMAS = [
     }
 ]
 
-# Convenience alias
-DEFAULT_TOOLS = TOOL_SCHEMAS
+# ── Tool sets and the separation rule ────────────────────────────────────────
+#
+# browser_research reads attacker-controllable text into the model's context.
+# It must never share a loop with a tool that writes code, env vars, or the
+# memory file that is replayed into later runs. That is enforced here, not
+# left to the caller's discipline.
+
+try:
+    from .browser import BROWSER_TOOL_SCHEMA, browser_research as _tool_browser_research
+    BROWSER_TOOL_AVAILABLE = True
+except Exception as _browser_import_err:  # pragma: no cover
+    BROWSER_TOOL_AVAILABLE = False
+    print(f"[agent_loop] browser tool unavailable: {_browser_import_err}", flush=True)
+
+WRITE_TOOL_NAMES = {
+    "github_commit",
+    "railway_set_env",
+    "railway_redeploy",
+    "write_memory",
+}
+
+UNTRUSTED_INPUT_TOOL_NAMES = {"browser_research"}
+
+READ_ONLY_TOOL_NAMES = [
+    "github_read",
+    "github_list_repos",
+    "railway_get_status",
+    "railway_get_logs",
+    "railway_list",
+    "llm_chat",
+    "read_memory",
+    "http_get",
+    "kml_data_read",
+    "kml_app_logs",
+]
+
+
+def _by_name(names) -> list:
+    wanted = set(names)
+    return [t for t in TOOL_SCHEMAS if t["function"]["name"] in wanted]
+
+
+# Everything the bridge can do, minus the browser. This is the default.
+BUILD_TOOLS = list(TOOL_SCHEMAS)
+
+# Read + browse, no writes anywhere. write_memory is deliberately excluded:
+# a page that talks the agent into writing a "lesson" would be planting an
+# instruction for every later run.
+RESEARCH_TOOLS = _by_name(READ_ONLY_TOOL_NAMES) + (
+    [BROWSER_TOOL_SCHEMA] if BROWSER_TOOL_AVAILABLE else []
+)
+
+TOOL_SETS = {"build": BUILD_TOOLS, "research": RESEARCH_TOOLS}
+
+
+def assert_tool_set_safe(tools) -> None:
+    """Refuse a tool set that hands a browsing agent write access."""
+    names = {t.get("function", {}).get("name") for t in (tools or [])}
+    untrusted = names & UNTRUSTED_INPUT_TOOL_NAMES
+    writes = names & WRITE_TOOL_NAMES
+    if untrusted and writes:
+        raise ValueError(
+            "unsafe tool set: "
+            f"{sorted(untrusted)} reads untrusted web content and cannot be combined with "
+            f"{sorted(writes)}. Use tool_set='research' to browse, then hand the findings to a "
+            "separate build run."
+        )
+
+
+def resolve_tools(tools=None, tool_set: str = None) -> list:
+    """Pick a tool set by name or validate an explicit list."""
+    if tools:
+        assert_tool_set_safe(tools)
+        return tools
+    chosen = TOOL_SETS.get((tool_set or "build").lower())
+    if chosen is None:
+        raise ValueError(f"unknown tool_set {tool_set!r}; expected one of {sorted(TOOL_SETS)}")
+    assert_tool_set_safe(chosen)
+    return chosen
+
+
+# Convenience alias — unchanged meaning: the full build-capable set, no browser.
+DEFAULT_TOOLS = BUILD_TOOLS
 
 
 # ── Tool Handlers ────────────────────────────────────────────────────────────
@@ -401,9 +482,28 @@ async def _tool_railway_redeploy(args: Dict) -> Dict:
     return {"redeployed": True, "service_id": sid, "result": result}
 
 
+# Variables the agent must never be able to write. Self-granting browser
+# permissions, rotating the bridge key out from under the operator, or
+# swapping a token are all one set_env away otherwise.
+PROTECTED_ENV_PREFIXES = ("BROWSER_", "BRIDGE_")
+PROTECTED_ENV_SUBSTRINGS = ("TOKEN", "API_KEY", "SECRET", "PASSWORD", "CREDENTIAL")
+
+
+def env_name_is_protected(name: str) -> bool:
+    upper = (name or "").upper()
+    return upper.startswith(PROTECTED_ENV_PREFIXES) or any(
+        s in upper for s in PROTECTED_ENV_SUBSTRINGS
+    )
+
+
 async def _tool_railway_set_env(args: Dict) -> Dict:
     name = args["name"]
     value = args["value"]
+    if env_name_is_protected(name):
+        return {
+            "error": f"{name} is operator-only and cannot be set by an agent",
+            "hint": "permission grants and secrets are changed by hand in the Railway dashboard",
+        }
     sid = args.get("service_id")
     result = set_service_variable(name, value, service_id=sid, environment_name="production")
     return {"set": True, "name": name, "result": result}
@@ -538,3 +638,6 @@ _TOOL_HANDLERS = {
     "github_list_repos": _tool_github_list_repos,
     "railway_list": _tool_railway_list,
 }
+
+if BROWSER_TOOL_AVAILABLE:
+    _TOOL_HANDLERS["browser_research"] = _tool_browser_research

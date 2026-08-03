@@ -17,12 +17,13 @@ from __future__ import annotations
 import base64
 import json
 import os
+import threading
 import traceback
 
 # Agent loop (optional — only loaded when agent_run is used)
 try:
     from agent_loop.harness import run_agent
-    from agent_loop.tools import TOOL_SCHEMAS
+    from agent_loop.tools import TOOL_SCHEMAS, env_name_is_protected
     AGENT_LOOP_AVAILABLE = True
 except Exception as _agent_loop_err:
     AGENT_LOOP_AVAILABLE = False
@@ -60,6 +61,12 @@ MAX_CMDS_PER_HEALTH = int(os.getenv("MAX_CMDS_PER_HEALTH", "1"))
 # used to stay in pending forever and retry on every health tick. Cap the
 # attempts and quarantine it instead.
 MAX_CMD_ATTEMPTS = int(os.getenv("MAX_CMD_ATTEMPTS", "3"))
+
+# Kill switch. Set AGENT_LOOP_ENABLED=0 in Railway to stop all autonomous runs
+# without redeploying code.
+AGENT_LOOP_ENABLED = os.getenv("AGENT_LOOP_ENABLED", "1").lower() not in ("0", "false", "no")
+# One agent run at a time, and never inside the health probe (see below).
+_agent_slot = threading.BoundedSemaphore(1)
 
 
 def _github_headers() -> dict[str, str]:
@@ -200,7 +207,58 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _execute(cmd: dict[str, Any]) -> Any:
+def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
+    """Run an agent on a background thread and write its result when done.
+
+    Caller must already hold _agent_slot; this releases it.
+    """
+    import asyncio
+
+    from agent_loop.browser import RunAuthorization
+
+    def _worker() -> None:
+        payload: dict[str, Any] = {
+            "id": cmd_id,
+            "action": "agent_run",
+            "status": "ok",
+            "result": None,
+            "error": None,
+        }
+        try:
+            payload["result"] = asyncio.run(
+                run_agent(
+                    task=cmd["task"],
+                    tools=cmd.get("tools"),
+                    tool_set=cmd.get("tool_set"),
+                    max_turns=int(cmd.get("max_turns", 10)),
+                    provider=cmd.get("provider", "moonshot"),
+                    model=cmd.get("model", "kimi-k3"),
+                    reasoning_effort=cmd.get("reasoning_effort", "low"),
+                    task_id=cmd_id or cmd.get("id"),
+                    browser_auth=RunAuthorization(),
+                )
+            )
+        except Exception as exc:
+            payload["status"] = "error"
+            payload["error"] = str(exc)
+            payload["traceback"] = traceback.format_exc()[-1500:]
+        finally:
+            _agent_slot.release()
+
+        payload["processed_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            _write_file(
+                f"{RESULTS_PATH}/{cmd_id}.json",
+                json.dumps(payload, indent=2, default=str),
+                f"agent result: {cmd_id}",
+            )
+        except Exception as write_err:  # nothing useful left to do but say so
+            print(f"[agent_loop] could not write result for {cmd_id}: {write_err}", flush=True)
+
+    threading.Thread(target=_worker, name=f"agent-{cmd_id or 'run'}", daemon=True).start()
+
+
+def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
     action = cmd.get("action")
     if not action:
         raise ValueError("missing 'action'")
@@ -223,6 +281,11 @@ def _execute(cmd: dict[str, Any]) -> Any:
             value = base64.b64decode(cmd["value_b64"]).decode("utf-8")
         if not name or value is None:
             raise ValueError("set_env requires 'name' and 'value' (or 'value_b64')")
+        if AGENT_LOOP_AVAILABLE and env_name_is_protected(name):
+            raise ValueError(
+                f"{name} is operator-only — permission grants and secrets are set by hand "
+                "in the Railway dashboard, not through the command channel"
+            )
         return set_service_variable(
             name=name,
             value=str(value),
@@ -256,38 +319,30 @@ def _execute(cmd: dict[str, Any]) -> Any:
     if action == "agent_run":
         if not AGENT_LOOP_AVAILABLE:
             raise RuntimeError("agent_loop module not available — check import")
+        if not AGENT_LOOP_ENABLED:
+            raise RuntimeError("agent runs are disabled (AGENT_LOOP_ENABLED=0)")
         task = cmd.get("task")
         if not task:
             raise ValueError("agent_run requires 'task'")
-        import asyncio
-        # The background worker may or may not have an event loop.
-        # Use get_event_loop if one exists, otherwise create one.
+        if not _agent_slot.acquire(blocking=False):
+            raise RuntimeError("an agent run is already in progress; try again when it finishes")
+
+        # An agent run takes minutes. _execute is called from GET /health,
+        # which is Railway's liveness probe, so it must NOT block: a long run
+        # here means failed probes, a restarted container, and a half-finished
+        # run with no result. Start it on a background thread and return
+        # immediately; the thread overwrites the result file when it is done.
         try:
-            loop = asyncio.get_running_loop()
-            # Already in an async context — schedule and block until done
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, run_agent(
-                    task=task,
-                    tools=cmd.get("tools"),
-                    max_turns=int(cmd.get("max_turns", 10)),
-                    provider=cmd.get("provider", "moonshot"),
-                    model=cmd.get("model", "kimi-k3"),
-                    reasoning_effort=cmd.get("reasoning_effort", "low"),
-                    task_id=cmd.get("id"),
-                ))
-                return future.result()
-        except RuntimeError:
-            # No running loop — safe to use asyncio.run
-            return asyncio.run(run_agent(
-                task=task,
-                tools=cmd.get("tools"),
-                max_turns=int(cmd.get("max_turns", 10)),
-                provider=cmd.get("provider", "moonshot"),
-                model=cmd.get("model", "kimi-k3"),
-                reasoning_effort=cmd.get("reasoning_effort", "low"),
-                task_id=cmd.get("id"),
-            ))
+            _start_agent_run(cmd, cmd_id)
+        except Exception:
+            _agent_slot.release()
+            raise
+        return {
+            "status": "started",
+            "task_id": cmd_id,
+            "note": "running in the background; this result file is overwritten on completion",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     raise ValueError(f"unknown action: {action}")
 
@@ -330,7 +385,7 @@ def process_pending_commands() -> dict[str, Any]:
             }
 
             try:
-                result_payload["result"] = _execute(cmd)
+                result_payload["result"] = _execute(cmd, cmd_id)
             except Exception as exec_err:
                 result_payload["status"] = "error"
                 result_payload["error"] = str(exec_err)
