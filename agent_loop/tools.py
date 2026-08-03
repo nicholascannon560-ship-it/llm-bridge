@@ -307,7 +307,11 @@ TOOL_SCHEMAS = [
 # left to the caller's discipline.
 
 try:
-    from .browser import BROWSER_TOOL_SCHEMA, browser_research as _tool_browser_research
+    from .browser import (
+        BROWSER_TOOL_SCHEMAS,
+        browser_read as _tool_browser_read,
+        browser_research as _tool_browser_research,
+    )
     BROWSER_TOOL_AVAILABLE = True
 except Exception as _browser_import_err:  # pragma: no cover
     BROWSER_TOOL_AVAILABLE = False
@@ -320,7 +324,7 @@ WRITE_TOOL_NAMES = {
     "write_memory",
 }
 
-UNTRUSTED_INPUT_TOOL_NAMES = {"browser_research"}
+UNTRUSTED_INPUT_TOOL_NAMES = {"browser_research", "browser_read"}
 
 READ_ONLY_TOOL_NAMES = [
     "github_read",
@@ -348,7 +352,7 @@ BUILD_TOOLS = list(TOOL_SCHEMAS)
 # a page that talks the agent into writing a "lesson" would be planting an
 # instruction for every later run.
 RESEARCH_TOOLS = _by_name(READ_ONLY_TOOL_NAMES) + (
-    [BROWSER_TOOL_SCHEMA] if BROWSER_TOOL_AVAILABLE else []
+    list(BROWSER_TOOL_SCHEMAS) if BROWSER_TOOL_AVAILABLE else []
 )
 
 TOOL_SETS = {"build": BUILD_TOOLS, "research": RESEARCH_TOOLS}
@@ -640,4 +644,5 @@ _TOOL_HANDLERS = {
 }
 
 if BROWSER_TOOL_AVAILABLE:
+    _TOOL_HANDLERS["browser_read"] = _tool_browser_read
     _TOOL_HANDLERS["browser_research"] = _tool_browser_research
