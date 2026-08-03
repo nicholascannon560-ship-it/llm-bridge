@@ -5,7 +5,7 @@ Autonomous agent harness that runs multi-turn tool-calling loops via Kimi (or an
 ## What it does
 
 - Receives a **task** (natural language)
-- Calls the LLM with **tool schemas** (GitHub, Railway, memory, sub-LLM)
+- Calls the LLM with **tool schemas** (GitHub, Railway, memory, sub-LLM, browser)
 - **Executes** any tool_calls returned
 - **Feeds results back** as `role="tool"` messages
 - **Repeats** until the model says it is done or `max_turns` is hit
@@ -34,6 +34,9 @@ Autonomous agent harness that runs multi-turn tool-calling loops via Kimi (or an
 | `llm_chat` | Recursive LLM call for sub-analysis |
 | `write_memory` | Append a reflection to `agent_memory.jsonl` |
 | `read_memory` | Read recent reflections |
+| `github_read_issue` | Read comments from a GitHub issue |
+| `http_get` | Sandboxed HTTP GET (KalshiML dashboard only) |
+| `browser_research` | Real browser research via Browser Use + Browserbase CDP or local Chromium (read_only / elevated modes) |
 
 ## Integration
 
@@ -72,6 +75,14 @@ Drop a JSON command into `commands/pending/`:
 
 The bridge processes it on the next health tick and writes the full transcript to `commands/results/<id>.json`.
 
+## browser_research notes
+
+- Requires `browser-use` package (add to requirements.txt and redeploy).
+- Set `BROWSER_RUNTIME=browserbase` (default) + `BROWSERBASE_CDP_URL=...` for managed sessions.
+- Or `BROWSER_RUNTIME=local` for Chromium inside the container.
+- Modes: `read_only` (default, extract only) or `elevated` (limited interaction).
+- Returns structured result with `success`, `final_result`, `urls_visited`, `steps_taken`, etc.
+
 ## Self-Learning Loop
 
 The agent automatically writes a memory entry after every run summarizing:
@@ -95,3 +106,4 @@ Future agent runs load the 5 most recent memories into the system prompt, so the
 - Railway operations use the bridge's existing token (no new secrets)
 - Memory is append-only JSONL (no destructive updates)
 - Agent cannot delete repos, branches, or files — only read and commit
+- browser_research defaults to read_only and has hard step/time limits
