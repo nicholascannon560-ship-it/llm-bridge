@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Call the browser_research tool with this exact request: task='Go to https://example.com and extract the main heading text on the page. Stay in read_only mode.', mode='read_only', max_steps=6. Then report exactly what the tool returned.",
+  "max_turns": 5,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
