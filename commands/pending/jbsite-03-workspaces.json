@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "query { me { workspaces { id name } } }"}
