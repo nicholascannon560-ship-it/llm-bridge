@@ -1,13 +1,7 @@
 {
   "id": "jbsite-04-projectcreate",
-  "status": "ok",
-  "action": "railway_gql",
-  "result": {
-    "projectCreate": {
-      "id": "1e3d021e-a6ef-4562-9f7b-6219943f03b0",
-      "name": "jason-boyd-site"
-    }
-  },
-  "error": null,
-  "processed_at": "2026-08-03T04:17:19.446308+00:00"
+  "status": "error",
+  "error": "read commands/pending/jbsite-04-projectcreate.json failed: 404",
+  "attempts": 1,
+  "processed_at": "2026-08-03T04:17:21.780875+00:00"
 }
