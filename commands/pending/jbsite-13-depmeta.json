@@ -1,0 +1,1 @@
+{"action": "railway_gql", "query": "query { deployment(id: \"34092b5d-240e-4382-8940-6699db329079\") { id status meta staticUrl url } }"}
