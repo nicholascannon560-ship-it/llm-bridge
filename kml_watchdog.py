@@ -112,6 +112,19 @@ _RE_EVIDENCE_SUM = re.compile(
     r"freed=([0-9.]+)MB \((.*)\)")
 
 
+def _parse_log_ts(v: Any) -> Optional[float]:
+    """/api/logs stamps each line with an ISO-8601 UTC time. Returns epoch
+    seconds, or None if absent/unparseable — callers fall back to sample time."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
 def _is_openmeteo_429(line: str) -> bool:
     """Open-Meteo 429s only. The IEM feed also 429s and has its own limit and
     its own check — conflating them would fire the quota alert on an obs
@@ -145,17 +158,33 @@ def parse_nightly(lines: list[str]) -> dict[str, Any]:
     return out
 
 
-def parse_log_lines(lines: list[str]) -> dict[str, Any]:
+def parse_log_lines(lines: list[Any]) -> dict[str, Any]:
     """Derive per-cycle facts from a dashboard log tail. Pure — unit-testable
-    without network."""
+    without network.
+
+    Accepts either bare strings or {"line", "t"} dicts as /api/logs returns.
+    When timestamps are present, Open-Meteo 429s carry their OWN time out of
+    here. They must: the tail is a ring buffer spanning hours, so a 429 from
+    last night is still sitting in it after the UTC rollover. Stamping those
+    with the sample time is what made the cap look like it was hit one minute
+    after midnight, every night.
+    """
     candidates: list[int] = []
     dry_run: Optional[bool] = None
     real_orders: Optional[bool] = None
     cash: Optional[float] = None
     om_429 = 0
+    om_429_ts: list[float] = []
     iem_backoff_max = 0.0
 
-    for ln in lines:
+    for item in lines:
+        if isinstance(item, dict):
+            ln = item.get("line") or ""
+            ts = _parse_log_ts(item.get("t"))
+        else:
+            ln, ts = str(item), None
+        if not ln:
+            continue
         m = _RE_CANDIDATES.search(ln)
         if m:
             candidates.append(int(m.group(1)))
@@ -171,6 +200,8 @@ def parse_log_lines(lines: list[str]) -> dict[str, Any]:
                 pass
         if _is_openmeteo_429(ln):
             om_429 += 1
+            if ts is not None:
+                om_429_ts.append(ts)
         m = _RE_IEM_BACKOFF.search(ln)
         if m:
             try:
@@ -186,6 +217,7 @@ def parse_log_lines(lines: list[str]) -> dict[str, Any]:
         "place_real_orders": real_orders,
         "live_cash": cash,
         "openmeteo_429": om_429,
+        "openmeteo_429_ts": sorted(om_429_ts),
         "iem_backoff_max_sec": iem_backoff_max,
     }
 
@@ -501,8 +533,9 @@ async def sample_once(client: httpx.AsyncClient) -> dict[str, Any]:
         lr.raise_for_status()
         payload = lr.json()
         raw = payload.get("lines") or []
-        lines = [(x.get("line") if isinstance(x, dict) else str(x)) for x in raw]
-        out.update(parse_log_lines([l for l in lines if l]))
+        # Pass the entries through whole: parse_log_lines needs each line's own
+        # timestamp to date an Open-Meteo 429 correctly.
+        out.update(parse_log_lines(raw))
     except Exception as e:
         # Version worked, logs did not: still "reachable", just thinner data.
         out["log_error"] = f"{type(e).__name__}: {e}"
@@ -583,8 +616,21 @@ def record_sample(s: dict[str, Any]) -> None:
         if not _PROC_STARTS or _PROC_STARTS[-1][1] != s["proc_started"]:
             _PROC_STARTS.append((now, s["proc_started"]))
     if (s.get("openmeteo_429") or 0) > 0:
-        day = _utc_day(now)
-        _FIRST_OM429_BY_DAY.setdefault(day, _utc_hour(now))
+        # Attribute each 429 to the day it actually happened on, taking the
+        # EARLIEST time seen for that day. Stamping the sample time instead
+        # made every 429 still lingering in the ring buffer look like it had
+        # just occurred, so the day always opened with a 00:0Xh "first 429".
+        stamps = s.get("openmeteo_429_ts") or []
+        if stamps:
+            for ts in stamps:
+                day, hour = _utc_day(ts), _utc_hour(ts)
+                prev = _FIRST_OM429_BY_DAY.get(day)
+                if prev is None or hour < prev:
+                    _FIRST_OM429_BY_DAY[day] = hour
+        else:
+            # No usable timestamps (older dashboard payload): fall back to the
+            # old behaviour rather than dropping the signal entirely.
+            _FIRST_OM429_BY_DAY.setdefault(_utc_day(now), _utc_hour(now))
         for k in list(_FIRST_OM429_BY_DAY):
             if k < _utc_day(now - 7 * 86400):
                 _FIRST_OM429_BY_DAY.pop(k, None)
