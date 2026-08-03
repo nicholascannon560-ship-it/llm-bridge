@@ -1,5 +1,0 @@
-{
-  "action": "llm_chat",
-  "prompt": "Wake. Ack in one sentence.",
-  "max_tokens": 30
-}
