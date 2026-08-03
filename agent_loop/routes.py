@@ -11,16 +11,36 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from .browser import API, FREE_TIER, _client, browser_read, budget_status, parse_grant
+from .browser import (
+    API,
+    FREE_TIER,
+    _client,
+    _reconcile_budget,
+    browser_read,
+    budget_status,
+    parse_grant,
+)
 
 agent_router = APIRouter(tags=["agent"])
 
 
 @agent_router.get("/agent/browser_budget")
 async def get_browser_budget():
+    # Reconcile against Browserbase before answering: the local ledger is wiped
+    # by every deploy, so without this the number is only true until the next
+    # commit. Needs BROWSERBASE_PROJECT_ID; no-ops without it.
+    reconciled = False
+    try:
+        async with _client(20) as client:
+            await _reconcile_budget(client)
+        reconciled = True
+    except Exception:
+        pass
+
     grant = parse_grant()
     return {
         "budget": budget_status(),
+        "reconciled_with_browserbase": reconciled,
         "free_tier": FREE_TIER,
         "interactive_grant": {
             "valid": grant["valid"],
