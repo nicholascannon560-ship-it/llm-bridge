@@ -1,0 +1,241 @@
+{
+  "id": "jbsite-15-buildlogs",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "buildLogs": [
+      {
+        "message": "scheduling build on Metal builder \"production-builderv3-us-east4-f1s6\"",
+        "timestamp": "2026-08-03T04:27:41.552296604Z",
+        "severity": "info"
+      },
+      {
+        "message": "unpacking archive",
+        "timestamp": "2026-08-03T04:27:42.914213446Z",
+        "severity": "info"
+      },
+      {
+        "message": "uploading snapshot",
+        "timestamp": "2026-08-03T04:27:43.189162132Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build definition from Dockerfile",
+        "timestamp": "2026-08-03T04:27:43.448017639Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build definition from Dockerfile",
+        "timestamp": "2026-08-03T04:27:43.448055439Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build definition from Dockerfile",
+        "timestamp": "2026-08-03T04:27:43.449354507Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build definition from Dockerfile",
+        "timestamp": "2026-08-03T04:27:43.476647285Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load metadata for docker.io/library/nginx:alpine",
+        "timestamp": "2026-08-03T04:27:43.483630708Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load metadata for docker.io/library/alpine:3.20",
+        "timestamp": "2026-08-03T04:27:43.483648523Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load metadata for docker.io/library/alpine:3.20",
+        "timestamp": "2026-08-03T04:27:43.558343682Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load metadata for docker.io/library/nginx:alpine",
+        "timestamp": "2026-08-03T04:27:43.562652057Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load .dockerignore",
+        "timestamp": "2026-08-03T04:27:43.563086017Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load .dockerignore",
+        "timestamp": "2026-08-03T04:27:43.563086752Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load .dockerignore",
+        "timestamp": "2026-08-03T04:27:43.564774166Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load .dockerignore",
+        "timestamp": "2026-08-03T04:27:43.591993837Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 4/4] RUN cat bundle.part-* | base64 -d > site-bundle.tar.gz  && echo \"36e8c26126df49b4745ca3814ba0b221bd108212d08bcd649b233fe14f076fcc  site-bundle.tar.gz\" | sha256sum -c -  && mkdir /out && tar -xzf site-bundle.tar.gz -C /out",
+        "timestamp": "2026-08-03T04:27:43.619470226Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 3/4] COPY bundle.part-* ./",
+        "timestamp": "2026-08-03T04:27:43.619471479Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build context",
+        "timestamp": "2026-08-03T04:27:43.619472388Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 2/4] WORKDIR /b",
+        "timestamp": "2026-08-03T04:27:43.619472895Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 1/5] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+        "timestamp": "2026-08-03T04:27:43.619473376Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 1/4] FROM docker.io/library/nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752",
+        "timestamp": "2026-08-03T04:27:43.619473968Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 4/4] COPY nginx.conf.template /etc/nginx/templates/default.conf.template",
+        "timestamp": "2026-08-03T04:27:43.625269669Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 3/4] COPY --from=imgs /dl/out/builds /usr/share/nginx/html/builds",
+        "timestamp": "2026-08-03T04:27:43.625270938Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 5/5] RUN sh download-images.sh",
+        "timestamp": "2026-08-03T04:27:43.625271793Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 4/5] COPY images.txt download-images.sh ./",
+        "timestamp": "2026-08-03T04:27:43.625272731Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 3/5] WORKDIR /dl",
+        "timestamp": "2026-08-03T04:27:43.625273264Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 2/5] RUN apk add --no-cache curl imagemagick",
+        "timestamp": "2026-08-03T04:27:43.625274007Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 2/4] COPY --from=bundle /out/site/ /usr/share/nginx/html/",
+        "timestamp": "2026-08-03T04:27:43.625274659Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 1/5] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+        "timestamp": "2026-08-03T04:27:43.625417871Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build context",
+        "timestamp": "2026-08-03T04:27:43.625418774Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build context",
+        "timestamp": "2026-08-03T04:27:43.625419338Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 1/4] FROM docker.io/library/nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752",
+        "timestamp": "2026-08-03T04:27:43.625424751Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 1/5] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+        "timestamp": "2026-08-03T04:27:43.637657532Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 1/4] FROM docker.io/library/nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752",
+        "timestamp": "2026-08-03T04:27:43.643402176Z",
+        "severity": "info"
+      },
+      {
+        "message": "[internal] load build context",
+        "timestamp": "2026-08-03T04:27:43.648046796Z",
+        "severity": "info"
+      },
+      {
+        "message": "[stage-2 1/4] FROM docker.io/library/nginx:alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752",
+        "timestamp": "2026-08-03T04:27:43.656344859Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 1/5] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+        "timestamp": "2026-08-03T04:27:43.656345819Z",
+        "severity": "info"
+      },
+      {
+        "message": "[imgs 2/5] RUN apk add --no-cache curl imagemagick",
+        "timestamp": "2026-08-03T04:27:43.656459996Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 2/4] WORKDIR /b",
+        "timestamp": "2026-08-03T04:27:43.659792036Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 3/4] COPY bundle.part-* ./",
+        "timestamp": "2026-08-03T04:27:43.659792896Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 4/4] RUN cat bundle.part-* | base64 -d > site-bundle.tar.gz  && echo \"36e8c26126df49b4745ca3814ba0b221bd108212d08bcd649b233fe14f076fcc  site-bundle.tar.gz\" | sha256sum -c -  && mkdir /out && tar -xzf site-bundle.tar.gz -C /out",
+        "timestamp": "2026-08-03T04:27:43.659813256Z",
+        "severity": "info"
+      },
+      {
+        "message": "base64: truncated input\n",
+        "timestamp": "2026-08-03T04:27:43.748474620Z",
+        "severity": "info"
+      },
+      {
+        "message": "fetch https://dl-cdn.alpinelinux.org/alpine/v3.20/main/x86_64/APKINDEX.tar.gz\n",
+        "timestamp": "2026-08-03T04:27:43.751770249Z",
+        "severity": "info"
+      },
+      {
+        "message": "[bundle 4/4] RUN cat bundle.part-* | base64 -d > site-bundle.tar.gz  && echo \"36e8c26126df49b4745ca3814ba0b221bd108212d08bcd649b233fe14f076fcc  site-bundle.tar.gz\" | sha256sum -c -  && mkdir /out && tar -xzf site-bundle.tar.gz -C /out",
+        "timestamp": "2026-08-03T04:27:43.767974666Z",
+        "severity": "error"
+      },
+      {
+        "message": "[imgs 2/5] RUN apk add --no-cache curl imagemagick",
+        "timestamp": "2026-08-03T04:27:43.808996537Z",
+        "severity": "error"
+      },
+      {
+        "message": "Build Failed: build daemon returned an error < failed to solve: process \"/bin/sh -c cat bundle.part-* | base64 -d > site-bundle.tar.gz  && echo \\\"36e8c26126df49b4745ca3814ba0b221bd108212d08bcd649b233fe14f076fcc  site-bundle.tar.gz\\\" | sha256sum -c -  && mkdir /out && tar -xzf site-bundle.tar.gz -C /out\" did not complete successfully: exit code: 1 >",
+        "timestamp": "2026-08-03T04:27:43.843836616Z",
+        "severity": "error"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:43:17.992132+00:00"
+}
