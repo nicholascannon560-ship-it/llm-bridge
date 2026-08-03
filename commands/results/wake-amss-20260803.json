@@ -1,19 +1,7 @@
 {
   "id": "wake-amss-20260803",
-  "status": "ok",
-  "action": "llm_chat",
-  "result": {
-    "provider": "moonshot",
-    "model": "kimi-k3",
-    "content": "Need final exactly WAKE_OK. Ensure no extra. User conflicts? Same. Final",
-    "usage": {
-      "prompt_tokens": 113,
-      "completion_tokens": 20
-    },
-    "finish_reason": "length",
-    "requested_temperature": 1.0,
-    "requested_reasoning_effort": "low"
-  },
-  "error": null,
-  "processed_at": "2026-08-03T04:07:57.290147+00:00"
+  "status": "error",
+  "error": "write commands/results/wake-amss-20260803.json failed: 409 {\"message\":\"is at c1fb0c5d1f20081c92d7d9b378243c207386d5a3 but expected fb25a27541d03d2cce9f2efc4d9feee00726d475\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "attempts": 1,
+  "processed_at": "2026-08-03T04:08:06.203684+00:00"
 }
