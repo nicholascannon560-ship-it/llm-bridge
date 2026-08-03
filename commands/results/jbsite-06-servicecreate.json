@@ -1,0 +1,13 @@
+{
+  "id": "jbsite-06-servicecreate",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "serviceCreate": {
+      "id": "70d3bd14-3bd0-4679-be3c-0fb2807595b0",
+      "name": "web"
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:21:19.606015+00:00"
+}
