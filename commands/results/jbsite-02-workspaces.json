@@ -1,0 +1,17 @@
+{
+  "id": "jbsite-02-workspaces",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "me": {
+      "workspaces": [
+        {
+          "id": "aadf39b5-5691-4d05-bc7f-d85a5155ffb1",
+          "name": "nicholascannon560-ship-it's Projects"
+        }
+      ]
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:13:27.475040+00:00"
+}
