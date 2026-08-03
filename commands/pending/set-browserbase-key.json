@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Use the railway_set_env tool to set the environment variable BROWSERBASE_API_KEY to the value bb_live_o0rc-JkcgvrV-OZtHyu0m68gjI0 on the bridge service (default service). Then confirm it was set successfully.",
+  "max_turns": 4,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
