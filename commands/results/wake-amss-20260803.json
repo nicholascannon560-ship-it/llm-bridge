@@ -1,0 +1,19 @@
+{
+  "id": "wake-amss-20260803",
+  "status": "ok",
+  "action": "llm_chat",
+  "result": {
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "content": "Need final exactly WAKE_OK. Ensure no extra. User conflicts? Same. Final",
+    "usage": {
+      "prompt_tokens": 113,
+      "completion_tokens": 20
+    },
+    "finish_reason": "length",
+    "requested_temperature": 1.0,
+    "requested_reasoning_effort": "low"
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:07:57.290147+00:00"
+}
