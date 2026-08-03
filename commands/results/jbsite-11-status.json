@@ -1,0 +1,23 @@
+{
+  "id": "jbsite-11-status",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "34092b5d-240e-4382-8940-6699db329079",
+              "status": "FAILED",
+              "createdAt": "2026-08-03T04:27:39.281Z",
+              "updatedAt": "2026-08-03T04:27:45.316Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:35:45.655918+00:00"
+}
