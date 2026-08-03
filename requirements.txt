@@ -8,3 +8,6 @@ pydantic==2.10.4
 # serving, the bridge looks healthy while all new builds silently fail.
 requests>=2.31.0
 pyyaml>=6.0
+
+# Browser research tool (agent_loop/tools.py → browser_research)
+browser-use>=0.1.0
