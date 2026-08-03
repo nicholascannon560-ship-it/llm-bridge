@@ -37,13 +37,11 @@ GITHUB_API = "https://api.github.com"
 OWNER = os.getenv("GITHUB_OWNER", "nicholascannon560-ship-it")
 
 # Hard allow-list for http_get. Agents may only reach these hosts.
-# KalshiML dashboard already exposes the full learning + market-flow surface.
 HTTP_ALLOW_HOSTS = {
     "kalshiml-production.up.railway.app",
 }
 
-# Hard response size cap so agents cannot pull multi-MB payloads into context.
-HTTP_MAX_BYTES = int(os.getenv("AGENT_HTTP_MAX_BYTES", str(1_500_000)))  # ~1.5 MB
+HTTP_MAX_BYTES = int(os.getenv("AGENT_HTTP_MAX_BYTES", str(1_500_000)))
 
 
 def _github_headers() -> dict:
@@ -226,19 +224,7 @@ TOOL_SCHEMAS = [
             "name": "http_get",
             "description": (
                 "Sandboxed HTTP GET. Currently allow-listed only to the KalshiML production dashboard "
-                "(kalshiml-production.up.railway.app). Use this to read the full live data surface:\n"
-                "- /api/state          → learning brain snapshot (cells, tree, recent decisions)\n"
-                "- /api/scorecard      → realized performance (would-bet vs baseline)\n"
-                "- /api/performance    → every cell's current stats\n"
-                "- /api/cell?cell=...  → one cell history + lead-time breakdown\n"
-                "- /api/evidence       → decision log (use limit/since/base_cell filters)\n"
-                "- /api/logs           → live process logs\n"
-                "- /api/files          → list raw data files under KALSHI_DIR\n"
-                "- /api/file?path=...  → read one sandboxed data file (size-capped)\n"
-                "- /api/ml/status      → market-flow / candle layer overview (the bulk of the ~8 GB)\n"
-                "- /api/ml/signals, /api/ml/tickers, /api/ml/train, /api/ml/flow\n"
-                "- /api                → full catalog of every endpoint\n"
-                "Never try to download multi-GB raw volumes; always prefer the summary endpoints."
+                "(kalshiml-production.up.railway.app). Use this to read the full live data surface."
             ),
             "parameters": {
                 "type": "object",
@@ -262,9 +248,9 @@ TOOL_SCHEMAS = [
         "function": {
             "name": "browser_research",
             "description": (
-                "Use a real browser (Browser Use + Browserbase CDP or local Chromium) to research a topic, "
-                "extract information, or complete limited multi-step web tasks. Prefer after cheaper search "
-                "or http_get tools are insufficient. Supports read_only (default) and elevated modes."
+                "Use a real browser (Browser Use + Browserbase) to research a topic, extract information, "
+                "or complete limited multi-step web tasks. Creates a fresh Browserbase session on each call. "
+                "Supports read_only (default) and elevated modes."
             ),
             "parameters": {
                 "type": "object",
@@ -275,18 +261,17 @@ TOOL_SCHEMAS = [
                     },
                     "start_url": {
                         "type": "string",
-                        "description": "Optional starting URL. If omitted the agent may search first."
+                        "description": "Optional starting URL."
                     },
                     "mode": {
                         "type": "string",
                         "enum": ["read_only", "elevated"],
                         "default": "read_only",
-                        "description": "read_only = browse + extract only. elevated = limited interaction (forms/clicks) allowed."
+                        "description": "read_only = browse + extract only. elevated = limited interaction allowed."
                     },
                     "max_steps": {
                         "type": "integer",
-                        "default": 12,
-                        "description": "Hard limit on browser actions."
+                        "default": 12
                     },
                     "timeout_seconds": {
                         "type": "integer",
@@ -300,16 +285,14 @@ TOOL_SCHEMAS = [
 ]
 
 
-# Convenience alias
 DEFAULT_TOOLS = TOOL_SCHEMAS
 
 
 # ── Tool Handlers ────────────────────────────────────────────────────────────
 
 async def run_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute a tool by name with the given arguments."""
     if not BRIDGE_MODE:
-        return {"error": "Agent tools require bridge environment (llm_gateway + railway_extension not importable)"}
+        return {"error": "Agent tools require bridge environment"}
 
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -350,7 +333,7 @@ async def _tool_github_read(args: Dict) -> Dict:
         "path": data["path"],
         "sha": data.get("sha"),
         "size": data.get("size"),
-        "content": content[:8000]  # Truncate very large files
+        "content": content[:8000]
     }
 
 
@@ -489,11 +472,6 @@ async def _tool_github_read_issue(args: Dict) -> Dict:
 
 
 async def _tool_http_get(args: Dict) -> Dict:
-    """Sandboxed HTTP GET limited to the KalshiML production dashboard.
-
-    Covers the entire learning brain + market-flow surface without ever
-    requiring direct volume access or multi-GB downloads.
-    """
     import httpx
 
     url = (args.get("url") or "").strip()
@@ -533,13 +511,12 @@ async def _tool_http_get(args: Dict) -> Dict:
 
     text = raw.decode("utf-8", errors="replace")
 
-    # Prefer structured JSON when the endpoint returns it
     body: Any = text
     if "json" in content_type or text.lstrip().startswith(("{", "[")):
         try:
             body = json.loads(text)
         except Exception:
-            body = text  # leave as text if not valid JSON
+            body = text
 
     return {
         "ok": 200 <= resp.status_code < 300,
@@ -553,11 +530,10 @@ async def _tool_http_get(args: Dict) -> Dict:
 
 
 async def _tool_browser_research(args: Dict) -> Dict:
-    """Browser research tool using Browser Use + (Browserbase CDP | local Chromium).
+    """Browser research using Browser Use + Browserbase.
 
-    Returns a structured result suitable for Opportunity Cards / research ledger.
-    Lazy-imports browser_use so the rest of the bridge still works if the
-    dependency is not yet installed.
+    Creates a fresh Browserbase session on every call using BROWSERBASE_API_KEY.
+    Falls back to local Chromium if no API key is set.
     """
     task = (args.get("task") or "").strip()
     if not task:
@@ -572,38 +548,48 @@ async def _tool_browser_research(args: Dict) -> Dict:
         mode = "read_only"
 
     started_at = datetime.now(timezone.utc).isoformat()
+    session_id = None
 
-    # Lazy import so missing dependency does not break the whole tools module
+    # Lazy imports
     try:
         from browser_use import Agent, Browser
         from browser_use.browser.browser import BrowserConfig
     except ImportError as e:
         return {
             "success": False,
-            "error": f"browser-use not installed: {e}. Add 'browser-use' to requirements and redeploy.",
+            "error": f"browser-use not installed: {e}",
             "mode_used": mode,
             "started_at": started_at,
         }
 
-    runtime = os.getenv("BROWSER_RUNTIME", "browserbase").lower()
     browser = None
+    runtime = "local"
 
     try:
-        if runtime == "browserbase":
-            cdp_url = os.getenv("BROWSERBASE_CDP_URL")
-            if not cdp_url:
+        api_key = os.getenv("BROWSERBASE_API_KEY")
+
+        if api_key:
+            try:
+                from browserbase import Browserbase
+                bb = Browserbase(api_key=api_key)
+                session = bb.sessions.create()
+                session_id = session.id
+                cdp_url = session.connect_url
+                browser = Browser(cdp_url=cdp_url)
+                runtime = "browserbase"
+            except Exception as e:
                 return {
                     "success": False,
-                    "error": "BROWSERBASE_CDP_URL env var required when BROWSER_RUNTIME=browserbase",
+                    "error": f"Failed to create Browserbase session: {e}",
                     "mode_used": mode,
-                    "runtime": runtime,
                     "started_at": started_at,
                 }
-            browser = Browser(cdp_url=cdp_url)
         else:
+            # Fallback to local Chromium
             browser = Browser(config=BrowserConfig(headless=True))
+            runtime = "local"
 
-        # Permission constraints injected into the task
+        # Permission constraints
         if mode == "read_only":
             constraints = (
                 "STRICT RULES — READ ONLY MODE:\n"
@@ -625,18 +611,13 @@ async def _tool_browser_research(args: Dict) -> Dict:
         if start_url:
             full_task = f"Start by going to: {start_url}\n\n{full_task}"
 
-        # We need an LLM for Browser Use. Re-use the bridge router via a thin adapter.
-        # For the first version we call llm_chat style; a proper ChatBrowserUse adapter
-        # can be swapped in later.
         router = get_router()
 
-        # Minimal adapter so Browser Use can call the bridge LLM
         class _BridgeLLM:
             def __init__(self, router):
                 self.router = router
 
             async def ainvoke(self, messages, **kwargs):
-                # Convert to bridge ChatRequest format
                 chat_messages = []
                 for m in messages:
                     role = getattr(m, "type", None) or getattr(m, "role", "user")
@@ -657,7 +638,6 @@ async def _tool_browser_research(args: Dict) -> Dict:
                     reasoning_effort="low",
                 )
                 resp = await self.router.chat(req)
-                # Return something Browser Use can consume
                 class _Resp:
                     content = resp.content
                 return _Resp()
@@ -683,6 +663,7 @@ async def _tool_browser_research(args: Dict) -> Dict:
                 "error": f"Timed out after {timeout_seconds}s",
                 "mode_used": mode,
                 "runtime": runtime,
+                "session_id": session_id,
                 "started_at": started_at,
                 "finished_at": datetime.now(timezone.utc).isoformat(),
                 "task": task,
@@ -704,18 +685,22 @@ async def _tool_browser_research(args: Dict) -> Dict:
         except Exception:
             pass
 
-        return {
+        result = {
             "success": True,
             "final_result": final_result,
             "steps_taken": len(getattr(history, "history", [])),
             "urls_visited": urls_visited,
             "mode_used": mode,
             "runtime": runtime,
+            "session_id": session_id,
             "started_at": started_at,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "task": task,
             "start_url": start_url,
         }
+        if session_id:
+            result["replay_url"] = f"https://www.browserbase.com/sessions/{session_id}"
+        return result
 
     except Exception as e:
         return {
@@ -724,6 +709,7 @@ async def _tool_browser_research(args: Dict) -> Dict:
             "traceback": traceback.format_exc()[-600:],
             "mode_used": mode,
             "runtime": runtime,
+            "session_id": session_id,
             "started_at": started_at,
             "finished_at": datetime.now(timezone.utc).isoformat(),
             "task": task,
