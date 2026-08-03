@@ -1,0 +1,33 @@
+{
+  "id": "jbsite-08-getids",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "project": {
+      "id": "cb4a98c2-f856-4a30-a684-e1164a5d1b81",
+      "name": "jason-boyd-site",
+      "services": {
+        "edges": [
+          {
+            "node": {
+              "id": "70d3bd14-3bd0-4679-be3c-0fb2807595b0",
+              "name": "web"
+            }
+          }
+        ]
+      },
+      "environments": {
+        "edges": [
+          {
+            "node": {
+              "id": "cd26ac39-86ab-49e4-a5dc-aa4bbfc383be",
+              "name": "production"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:25:31.030170+00:00"
+}
