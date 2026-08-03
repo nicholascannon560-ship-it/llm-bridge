@@ -1,0 +1,97 @@
+{
+  "id": "browser-test-simple",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "complete",
+    "task_id": "agent-20260803-050432",
+    "task": "Call the browser_research tool with this exact request: task='Go to https://example.com and extract the main heading text on the page. Stay in read_only mode.', mode='read_only', max_steps=6. Then report exactly what the tool returned.",
+    "final_answer": "I cannot execute this task as specified:\n\n1. **No `browser_research` tool exists** in this environment. My available tools are github_read/commit, railway_*, llm_chat, memory, http_get, kml_data_read, and kml_app_logs. There is no tool named `browser_research` to call with `task=`, `mode=`, or `max_steps=` parameters.\n\n2. **Fallback attempt also failed**: I tried `http_get` on `https://example.com` as the closest equivalent, but it was refused: `host 'example.com' is not in FETCH_ALLOWED_HOSTS` (allowed hosts are limited to railway.app, Kalshi, GitHub API, Open-Meteo, weather.gov, and IEM mesonet).\n\n**Report**: The requested tool call was never made because the tool doesn't exist, and no permitted alternative can fetch example.com. For reference, example.com's main heading is famously \"Example Domain\" per its RFC 2606 placeholder content \u2014 but that is prior knowledge, not a live tool result.",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-03T05:04:32.963667+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 0.8957999999999999,
+          "usage": {
+            "prompt_tokens": 2571,
+            "completion_tokens": 83,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "http_get",
+            "args_preview": "{\"url\":\"https://example.com\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "error",
+            "preview": "{'error': \"host 'example.com' is not in FETCH_ALLOWED_HOSTS. Allowed: ['*.up.railway.app', 'api.elections.kalshi.com', 'api.github.com', 'api.open-meteo.com', 'api.weather.gov', 'archive-api.open-meteo.com', 'mesonet.agron.iastate.edu', 'raw.githubusercontent.com']\", 'hint': 'If this names FETCH_ALL"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-03T05:04:37.199545+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 0.3342,
+          "usage": {
+            "prompt_tokens": 2763,
+            "completion_tokens": 131,
+            "cached_tokens": 2560
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"Task agent-20260803-050432 asked to call non-existent 'browser_research' tool. Confirmed again: no such tool exists in this environment. http_get on example.com refused (host not in FETCH_AL"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '58a9fa34'}"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-03T05:04:44.675727+00:00",
+        "llm": {
+          "content_preview": "I cannot execute this task as specified:\n\n1. **No `browser_research` tool exists** in this environment. My available tools are github_read/commit, railway_*, llm_chat, memory, http_get, kml_data_read,",
+          "tool_calls_count": 0,
+          "cost_cents": 0.5409,
+          "usage": {
+            "prompt_tokens": 2937,
+            "completion_tokens": 234,
+            "cached_tokens": 2560
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "I cannot execute this task as specified:\n\n1. **No `browser_research` tool exists** in this environment. My available tools are github_read/commit, railway_*, llm_chat, memory, http_get, kml_data_read, and kml_app_logs. There is no tool named `browser_research` to call with `task=`, `mode=`, or `max_steps=` parameters.\n\n2. **Fallback attempt also failed**: I tried `http_get` on `https://example.com` as the closest equivalent, but it was refused: `host 'example.com' is not in FETCH_ALLOWED_HOSTS` "
+      }
+    ],
+    "turns_used": 3,
+    "max_turns": 5,
+    "total_cost_cents": 1.7709,
+    "total_tokens": {
+      "prompt": 8271,
+      "completion": 448
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3"
+  },
+  "error": null,
+  "processed_at": "2026-08-03T05:04:32.963156+00:00"
+}
