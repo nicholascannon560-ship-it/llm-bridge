@@ -1,0 +1,9 @@
+{
+  "id": "jbsite-07-servicecreate",
+  "status": "error",
+  "action": "railway_gql",
+  "result": null,
+  "error": "400: [{'message': 'A service named \"web\" already exists in this project', 'locations': [{'line': 1, 'column': 55}], 'path': ['serviceCreate'], 'extensions': {'code': 'INTERNAL_SERVER_ERROR'}, 'traceId': '6498246071262006408'}]",
+  "processed_at": "2026-08-03T04:23:22.910803+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 333, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 215, in _execute\n    return railway_query(query, cmd.get(\"variables\"))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/railway_extension.py\", line 30, in railway_query\n    raise HTTPException(status_code=400, detail=data[\"errors\"])\nfastapi.exceptions.HTTPException: 400: [{'message': 'A service named \"web\" already exists in this project', 'locations': [{'line': 1, 'column': 55}], 'path': ['serviceCreate'], 'extensions': {'code': 'INTERNAL_SERVER_ERROR'}, 'traceId': '6498246071262006408'}]\n"
+}
