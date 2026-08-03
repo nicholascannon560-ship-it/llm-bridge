@@ -1,0 +1,177 @@
+{
+  "id": "maker-audit-grounded-2",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "complete",
+    "task_id": "agent-20260803-033032",
+    "task": "Audit the KalshiML maker-execution layer using LIVE data. You now have http_get, kml_data_read, kml_app_logs, github_list_repos and railway_list \u2014 USE THEM. Do not reason from repo code or design docs alone; if you find yourself without a tool, re-read your tool list.\n\nStart by reading these live files with kml_data_read: exec_scorecard.json, exec_backfill_scorecard.json, maker_policy_promote.json. Then read market_layers/fill_sim.py and market_layers/exec_evidence.py from repo KalshiML (branch main) with github_read.\n\nEstablished facts you must not re-derive or contradict without evidence:\n- Unfilled maker rows are scored PnL 0. join_best: 16721 filled x 3.833 / 79900 settled = 0.802 = reported mean_pnl_maker exactly. So the +1.346c maker-over-taker delta is partly NOT-TRADING, not better execution, and mean_pnl_taker on that population is -0.544.\n- Comparing counterfactual taker PnL on filled vs unfilled rows is INVALID: fill status is decided by the same post-t0 tape that sets PnL (collider). Do not propose that test.\n- forecast_age / model_run_age_h is NULL on hourly by design.\n- depth_at_price now returns -1 (DEPTH_UNRESOLVED) when depth cannot be resolved vs a real 0; grade_nightly still floors it to 0 so behaviour is unchanged. New scorecard keys by_family and by_lead_bucket populate from tonight only.\n- promote_live is true, gate_note \"offline+live\", gates_ok true, and there is NO auto-demote and NO order-cancel path.\n\nAnswer three things, in order:\n1. Given fills are simulated and unfilled scores 0, how would you SPLIT the maker delta into \"better execution on the trades that filled\" vs \"avoided trades that lose as taker\"? Give the exact computation over graded rows.\n2. What demote trigger should exist, keyed on what observable, given no auto-demote exists today?\n3. Anything in the live numbers that contradicts the facts above.\n\nBe concrete. Cite the numbers you actually read, not remembered ones.",
+    "final_answer": "Audit complete. Summary of the three answers:\n\n1. **Delta split (join_best):** execution leg = (16721/79900)\u00d7(3.833\u22121.263) = **+0.538c**; avoidance leg = 1.346\u22120.538 = **+0.808c** (implies taker PnL on unfilled rows = \u22121.022c, recovered arithmetically from reported means). ~60% of the maker edge is not-trading. improve_1c is the reverse: +0.909c execution vs +0.470c avoidance.\n\n2. **Demote trigger:** nightly, demote promote_live if trailing \u22655k newly-graded rows show mean_pnl_maker_on_fill \u2264 0 or on-fill maker\u2212taker delta \u2264 0 (the execution leg \u2014 the only causal-skill component), or rolling fill_pess < 0.12, with 2-night hysteresis; plus a per-family floor excluding families like KXLOWTLV (0.0331) / KXLOWTHOU (0.0497).\n\n3. **Contradictions/tensions:** no fact is directly falsified, but live fill rates are below backfill (0.1652 vs 0.1936 join_best), the aggregate gate hides 10+ sub-gate families, DEPTH_UNRESOLVED\u21920 flooring makes pessimistic fills in low-liquidity families biased upward (up to 100% unresolved), backfill delta is negative in good-flow deciles (\u22120.317, \u22123.277), and 2,300 live rows grade with policy \"unknown\". Findings recorded to memory.",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-03T03:30:32.336567+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 3,
+          "cost_cents": 1.0554,
+          "usage": {
+            "prompt_tokens": 2848,
+            "completion_tokens": 134,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "kml_data_read",
+            "args_preview": "{\"path\":\"exec_scorecard.json\"}"
+          },
+          {
+            "name": "kml_data_read",
+            "args_preview": "{\"path\":\"exec_backfill_scorecard.json\"}"
+          },
+          {
+            "name": "kml_data_read",
+            "args_preview": "{\"path\":\"maker_policy_promote.json\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'url': 'https://kalshiml-production.up.railway.app/api/file?path=exec_scorecard.json', 'method': 'GET', 'final_url': 'https://kalshiml-production.up.railway.app/api/file?path=exec_scorecard.json', 'status': 200, 'content_type': 'text/plain; charset=utf-8', 'bytes_read': 8000, 'truncated': True, 're"
+          },
+          {
+            "status": "ok",
+            "preview": "{'url': 'https://kalshiml-production.up.railway.app/api/file?path=exec_backfill_scorecard.json', 'method': 'GET', 'final_url': 'https://kalshiml-production.up.railway.app/api/file?path=exec_backfill_scorecard.json', 'status': 200, 'content_type': 'text/plain; charset=utf-8', 'bytes_read': 2966, 'tru"
+          },
+          {
+            "status": "ok",
+            "preview": "{'url': 'https://kalshiml-production.up.railway.app/api/file?path=maker_policy_promote.json', 'method': 'GET', 'final_url': 'https://kalshiml-production.up.railway.app/api/file?path=maker_policy_promote.json', 'status': 200, 'content_type': 'text/plain; charset=utf-8', 'bytes_read': 611, 'truncated'"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-03T03:30:38.237666+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 2,
+          "cost_cents": 1.94118,
+          "usage": {
+            "prompt_tokens": 8030,
+            "completion_tokens": 195,
+            "cached_tokens": 2816
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"branch\":\"main\",\"path\":\"market_layers/fill_sim.py\",\"repo\":\"KalshiML\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"branch\":\"main\",\"path\":\"market_layers/exec_evidence.py\",\"repo\":\"KalshiML\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'market_layers/fill_sim.py', 'sha': 'cf582a73850200a20bbc2082099bedccf4ad5993', 'size': 8692, 'content': '\"\"\"\\nfill_sim.py \u2014 Stage 0 of DESIGN_maker_execution_learning.md\\n\\nOffline fill simulator over recorder tapes (ml_trades + ml_book_snapshots).\\nNothing live. Used to gr"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'market_layers/exec_evidence.py', 'sha': '1c2c147b1e5039b92128b429ea23dfb404f47515', 'size': 19723, 'content': '\"\"\"\\nexec_evidence.py \u2014 Stage 1 maker logging + nightly grade.\\n\\nResting price comes from maker_policy (join_best / improve_1c by spread).\\n\"\"\"\\nfrom __future__ i"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-03T03:30:57.877426+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 1.88508,
+          "usage": {
+            "prompt_tokens": 12856,
+            "completion_tokens": 114,
+            "cached_tokens": 7936
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "kml_app_logs",
+            "args_preview": "{\"contains\":\"exec-grade\",\"n\":3000}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'url': 'https://kalshiml-production.up.railway.app/api/logs?n=3000&contains=exec-grade', 'method': 'GET', 'final_url': 'https://kalshiml-production.up.railway.app/api/logs?n=3000&contains=exec-grade', 'status': 200, 'content_type': 'application/json', 'bytes_read': 473, 'truncated': False, 'redirec"
+          }
+        ]
+      },
+      {
+        "turn": 4,
+        "timestamp": "2026-08-03T03:31:09.566511+00:00",
+        "llm": {
+          "content_preview": "## Audit results (all numbers read live just now)\n\n**Live state read:** exec_scorecard (n_graded=225,152, fill_pess=0.1969, fill_opt=0.2751), backfill scorecard (computed 2026-07-25), promote file (co",
+          "tool_calls_count": 1,
+          "cost_cents": 4.2363,
+          "usage": {
+            "prompt_tokens": 13261,
+            "completion_tokens": 2476,
+            "cached_tokens": 12800
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"KalshiML maker audit (2026-08-03): split join_best +1.346c delta arithmetically: execution leg = f*(maker_on_fill - taker_on_fill) = 0.2093*2.570 = +0.538c; avoidance leg = +0.808c (implied "
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '662982ab'}"
+          }
+        ]
+      },
+      {
+        "turn": 5,
+        "timestamp": "2026-08-03T03:32:44.992019+00:00",
+        "llm": {
+          "content_preview": "Audit complete. Summary of the three answers:\n\n1. **Delta split (join_best):** execution leg = (16721/79900)\u00d7(3.833\u22121.263) = **+0.538c**; avoidance leg = 1.346\u22120.538 = **+0.808c** (implies taker PnL o",
+          "tool_calls_count": 0,
+          "cost_cents": 1.0463399999999998,
+          "usage": {
+            "prompt_tokens": 15021,
+            "completion_tokens": 366,
+            "cached_tokens": 14848
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "Audit complete. Summary of the three answers:\n\n1. **Delta split (join_best):** execution leg = (16721/79900)\u00d7(3.833\u22121.263) = **+0.538c**; avoidance leg = 1.346\u22120.538 = **+0.808c** (implies taker PnL on unfilled rows = \u22121.022c, recovered arithmetically from reported means). ~60% of the maker edge is not-trading. improve_1c is the reverse: +0.909c execution vs +0.470c avoidance.\n\n2. **Demote trigger:** nightly, demote promote_live if trailing \u22655k newly-graded rows show mean_pnl_maker_on_fill \u2264 0 o"
+      }
+    ],
+    "turns_used": 5,
+    "max_turns": 14,
+    "total_cost_cents": 10.1643,
+    "total_tokens": {
+      "prompt": 52016,
+      "completion": 3285
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3"
+  },
+  "error": null,
+  "processed_at": "2026-08-03T03:30:32.335589+00:00"
+}
