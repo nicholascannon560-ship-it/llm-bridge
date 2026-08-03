@@ -1,0 +1,13 @@
+{
+  "id": "jbsite-10-domain",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "serviceDomainCreate": {
+      "id": "8a2c73b0-bd88-44f0-a1dd-de79d5b8f31c",
+      "domain": "web-production-43304b.up.railway.app"
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:29:32.296184+00:00"
+}
