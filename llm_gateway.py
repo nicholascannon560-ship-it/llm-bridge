@@ -9,6 +9,7 @@ but escalate to Claude/Kimi/GPT for hard problems — all through one interface,
 all at API rates instead of subscription/chat-app rates.
 """
 
+import asyncio
 import os
 import json
 import time
@@ -72,6 +73,63 @@ USAGE_LOG_PATH = os.environ.get("LLM_USAGE_LOG", "llm_usage.jsonl")
 # Agent-loop turns at reasoning_effort="max" measured 20-36s; tool round trips
 # push higher. 60s was the old hardcoded ceiling and is too tight.
 MOONSHOT_TIMEOUT_SEC = float(os.environ.get("MOONSHOT_TIMEOUT_SEC", "120"))
+
+# A 429 used to kill an entire agent run on its first turn: raise_for_status
+# fired, the exception propagated out of run_agent, and command_channel wrote the
+# whole command off as failed. Rate limits are transient by definition and are
+# the one error worth waiting out.
+LLM_RETRY_ATTEMPTS = int(os.environ.get("LLM_RETRY_ATTEMPTS", "4"))
+LLM_RETRY_BASE_SEC = float(os.environ.get("LLM_RETRY_BASE_SEC", "2"))
+LLM_RETRY_MAX_SLEEP = float(os.environ.get("LLM_RETRY_MAX_SLEEP", "60"))
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _retry_after_sec(resp) -> float | None:
+    """Honour Retry-After when the provider sends one — guessing a backoff when
+    we have been told the exact wait is how you get rate-limited again."""
+    raw = resp.headers.get("retry-after") or resp.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))          # delta-seconds form
+    except (TypeError, ValueError):
+        pass
+    try:                                     # HTTP-date form
+        from email.utils import parsedate_to_datetime
+        from datetime import datetime, timezone as _tz
+        when = parsedate_to_datetime(raw)
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=_tz.utc)
+        return max(0.0, (when - datetime.now(_tz.utc)).total_seconds())
+    except Exception:
+        return None
+
+
+async def _post_with_retry(client, url: str, *, headers: dict, json: dict,
+                           label: str = "llm"):
+    """POST, retrying transient statuses with exponential backoff.
+
+    Only retries 429 and 5xx. A 400/401/403 is a request or credential problem
+    and retrying it just burns time and quota, so those return immediately and
+    the caller's raise_for_status surfaces them unchanged.
+    """
+    last = None
+    for attempt in range(LLM_RETRY_ATTEMPTS):
+        resp = await client.post(url, headers=headers, json=json)
+        if resp.status_code not in _RETRY_STATUS:
+            return resp
+        last = resp
+        if attempt == LLM_RETRY_ATTEMPTS - 1:
+            break
+        sleep_s = _retry_after_sec(resp)
+        if sleep_s is None:
+            sleep_s = LLM_RETRY_BASE_SEC * (2 ** attempt)
+        sleep_s = min(sleep_s, LLM_RETRY_MAX_SLEEP)
+        print(f"[{label}] HTTP {resp.status_code} — retrying in {sleep_s:.1f}s "
+              f"(attempt {attempt + 1}/{LLM_RETRY_ATTEMPTS})", flush=True)
+        await asyncio.sleep(sleep_s)
+    return last
+
 
 
 # ── data models ───────────────────────────────────────────────────────────────
@@ -328,13 +386,15 @@ class MoonshotProvider(LLMProvider):
 
         # Tool loops with reasoning_effort="max" can exceed the old 60s ceiling.
         async with httpx.AsyncClient(timeout=MOONSHOT_TIMEOUT_SEC) as client:
-            r = await client.post(
+            r = await _post_with_retry(
+                client,
                 self.BASE_URL,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
                 },
                 json=payload,
+                label="moonshot",
             )
             r.raise_for_status()
             data = r.json()
