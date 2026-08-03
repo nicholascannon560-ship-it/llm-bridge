@@ -14,6 +14,7 @@ import os
 import traceback
 from typing import Any, Dict, List
 from urllib.parse import urlparse
+from datetime import datetime, timezone
 
 # Import bridge modules when running inside the bridge
 try:
@@ -253,6 +254,46 @@ TOOL_SCHEMAS = [
                     }
                 },
                 "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_research",
+            "description": (
+                "Use a real browser (Browser Use + Browserbase CDP or local Chromium) to research a topic, "
+                "extract information, or complete limited multi-step web tasks. Prefer after cheaper search "
+                "or http_get tools are insufficient. Supports read_only (default) and elevated modes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "Clear natural language instruction for what to research or extract."
+                    },
+                    "start_url": {
+                        "type": "string",
+                        "description": "Optional starting URL. If omitted the agent may search first."
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["read_only", "elevated"],
+                        "default": "read_only",
+                        "description": "read_only = browse + extract only. elevated = limited interaction (forms/clicks) allowed."
+                    },
+                    "max_steps": {
+                        "type": "integer",
+                        "default": 12,
+                        "description": "Hard limit on browser actions."
+                    },
+                    "timeout_seconds": {
+                        "type": "integer",
+                        "default": 180
+                    }
+                },
+                "required": ["task"]
             }
         }
     },
@@ -511,6 +552,191 @@ async def _tool_http_get(args: Dict) -> Dict:
     }
 
 
+async def _tool_browser_research(args: Dict) -> Dict:
+    """Browser research tool using Browser Use + (Browserbase CDP | local Chromium).
+
+    Returns a structured result suitable for Opportunity Cards / research ledger.
+    Lazy-imports browser_use so the rest of the bridge still works if the
+    dependency is not yet installed.
+    """
+    task = (args.get("task") or "").strip()
+    if not task:
+        return {"success": False, "error": "task is required"}
+
+    start_url = args.get("start_url")
+    mode = args.get("mode", "read_only")
+    max_steps = int(args.get("max_steps") or 12)
+    timeout_seconds = int(args.get("timeout_seconds") or 180)
+
+    if mode not in ("read_only", "elevated"):
+        mode = "read_only"
+
+    started_at = datetime.now(timezone.utc).isoformat()
+
+    # Lazy import so missing dependency does not break the whole tools module
+    try:
+        from browser_use import Agent, Browser
+        from browser_use.browser.browser import BrowserConfig
+    except ImportError as e:
+        return {
+            "success": False,
+            "error": f"browser-use not installed: {e}. Add 'browser-use' to requirements and redeploy.",
+            "mode_used": mode,
+            "started_at": started_at,
+        }
+
+    runtime = os.getenv("BROWSER_RUNTIME", "browserbase").lower()
+    browser = None
+
+    try:
+        if runtime == "browserbase":
+            cdp_url = os.getenv("BROWSERBASE_CDP_URL")
+            if not cdp_url:
+                return {
+                    "success": False,
+                    "error": "BROWSERBASE_CDP_URL env var required when BROWSER_RUNTIME=browserbase",
+                    "mode_used": mode,
+                    "runtime": runtime,
+                    "started_at": started_at,
+                }
+            browser = Browser(cdp_url=cdp_url)
+        else:
+            browser = Browser(config=BrowserConfig(headless=True))
+
+        # Permission constraints injected into the task
+        if mode == "read_only":
+            constraints = (
+                "STRICT RULES — READ ONLY MODE:\n"
+                "- You may navigate, scroll, click links, and extract information.\n"
+                "- You must NOT fill forms, submit anything, log in, create accounts, "
+                "post content, or perform any write/action that changes state.\n"
+                "- If the task requires interaction beyond reading, stop and report what you found."
+            )
+        else:
+            constraints = (
+                "ELEVATED MODE (limited interaction allowed):\n"
+                "- You may click buttons and fill simple forms if necessary.\n"
+                "- You must NOT create accounts, make purchases, post publicly, "
+                "or perform irreversible actions.\n"
+                "- Prefer the least interactive path that still answers the task."
+            )
+
+        full_task = f"{task}\n\n{constraints}"
+        if start_url:
+            full_task = f"Start by going to: {start_url}\n\n{full_task}"
+
+        # We need an LLM for Browser Use. Re-use the bridge router via a thin adapter.
+        # For the first version we call llm_chat style; a proper ChatBrowserUse adapter
+        # can be swapped in later.
+        router = get_router()
+
+        # Minimal adapter so Browser Use can call the bridge LLM
+        class _BridgeLLM:
+            def __init__(self, router):
+                self.router = router
+
+            async def ainvoke(self, messages, **kwargs):
+                # Convert to bridge ChatRequest format
+                chat_messages = []
+                for m in messages:
+                    role = getattr(m, "type", None) or getattr(m, "role", "user")
+                    content = getattr(m, "content", str(m))
+                    if role in ("human", "user"):
+                        chat_messages.append(ChatMessage(role="user", content=content))
+                    elif role in ("ai", "assistant"):
+                        chat_messages.append(ChatMessage(role="assistant", content=content))
+                    else:
+                        chat_messages.append(ChatMessage(role="user", content=content))
+
+                req = ChatRequest(
+                    provider="moonshot",
+                    model="kimi-k3",
+                    messages=chat_messages,
+                    max_tokens=2048,
+                    temperature=1.0,
+                    reasoning_effort="low",
+                )
+                resp = await self.router.chat(req)
+                # Return something Browser Use can consume
+                class _Resp:
+                    content = resp.content
+                return _Resp()
+
+        llm = _BridgeLLM(router)
+
+        agent = Agent(
+            task=full_task,
+            llm=llm,
+            browser=browser,
+            max_actions_per_step=3,
+        )
+
+        import asyncio
+        try:
+            history = await asyncio.wait_for(
+                agent.run(max_steps=max_steps),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "error": f"Timed out after {timeout_seconds}s",
+                "mode_used": mode,
+                "runtime": runtime,
+                "started_at": started_at,
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "task": task,
+                "start_url": start_url,
+            }
+
+        final_result = None
+        if hasattr(history, "final_result"):
+            final_result = history.final_result()
+        if not final_result:
+            final_result = str(history) if history else "No result returned"
+
+        urls_visited = []
+        try:
+            for h in getattr(history, "history", []):
+                state = getattr(h, "state", None)
+                if state and getattr(state, "url", None):
+                    urls_visited.append(state.url)
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "final_result": final_result,
+            "steps_taken": len(getattr(history, "history", [])),
+            "urls_visited": urls_visited,
+            "mode_used": mode,
+            "runtime": runtime,
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "task": task,
+            "start_url": start_url,
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()[-600:],
+            "mode_used": mode,
+            "runtime": runtime,
+            "started_at": started_at,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "task": task,
+            "start_url": start_url,
+        }
+    finally:
+        if browser:
+            try:
+                await browser.close()
+            except Exception:
+                pass
+
+
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
@@ -523,4 +749,5 @@ _TOOL_HANDLERS = {
     "read_memory": _tool_read_memory,
     "github_read_issue": _tool_github_read_issue,
     "http_get": _tool_http_get,
+    "browser_research": _tool_browser_research,
 }
