@@ -1,8 +1,0 @@
-{
-  "action": "agent_run",
-  "task": "Use railway_redeploy to redeploy the bridge service so the new browser-use and browserbase packages from requirements.txt get installed. Confirm the redeploy was triggered.",
-  "max_turns": 3,
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "low"
-}
