@@ -1,0 +1,13 @@
+{
+  "id": "jbsite-05-projectcreate",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "projectCreate": {
+      "id": "cb4a98c2-f856-4a30-a684-e1164a5d1b81",
+      "name": "jason-boyd-site"
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:19:15.558082+00:00"
+}
