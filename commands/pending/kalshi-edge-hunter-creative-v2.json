@@ -1,9 +1,0 @@
-{
-  "action": "agent_run",
-  "task_id": "kalshi-edge-hunter-creative-v2",
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "high",
-  "max_turns": 22,
-  "task": "You are the Kalshi Edge Hunter. CREATIVE cycle v2 — invent strategy ideas, grounded in LIVE data via tools.\n\nCRITICAL: You HAVE the http_get tool. Use it. Do not claim you lack HTTP access. Do not invent numbers when you can pull them.\n\nLive base: https://kalshiml-production.up.railway.app\nPull at least:\n- /api/state\n- /api/scorecard\n- /api/gap_diag\n- /api/spread_decomp\nOptionally: /api/ml/status, /api/cell?cell=..., /api\n\nHard rule: Do NOT just re-rank cells already known positive (NY HIGH/LOW mid, Seattle/Phoenix HIGH mid, hourly D3 far-strike NO). Invent NEW strategy/calibration/structure ideas.\n\nCover at least 3 of these categories with 4–7 distinct ideas total:\nA. Probability calibration (shrinkage, isotonic, city-specific, lead-time, ensemble disagreement)\nB. Ladder / structure betting (multi-strike packages, progressive NO ladders, mid-vs-cheap coupling)\nC. Execution microstructure (maker-only bands, one-sided book avoidance, size by confidence)\nD. Regime filters the current cells miss (forecast age, weather setup, cross-city relative value)\nE. New logging needed to make the above testable\n\nFor each idea: title, mechanism (why +EV), how to test with existing endpoints OR what logging to add, priority, concrete next experiment.\n\nThen: read agents/kalshi-edge-hunter/findings.jsonl, append 4–7 new JSON lines (type action_proposal or edge_hypothesis), github_commit.\nwrite_memory with a short summary.\nFinal answer: ranked NEW ideas only, with any live numbers you actually pulled.\n\nMax 22 turns. Prefer tools over guessing."
-}
