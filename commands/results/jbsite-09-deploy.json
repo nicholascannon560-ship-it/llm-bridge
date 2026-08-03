@@ -1,0 +1,10 @@
+{
+  "id": "jbsite-09-deploy",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "serviceInstanceDeploy": true
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:27:37.387978+00:00"
+}
