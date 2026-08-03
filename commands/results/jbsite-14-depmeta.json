@@ -1,0 +1,70 @@
+{
+  "id": "jbsite-14-depmeta",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "deployment": {
+      "id": "34092b5d-240e-4382-8940-6699db329079",
+      "status": "FAILED",
+      "meta": {
+        "plan": "pro",
+        "repo": "nicholascannon560-ship-it/jason-boyd-site",
+        "branch": "main",
+        "logsV2": true,
+        "reason": "deploy",
+        "runtime": "V2",
+        "buildOnly": false,
+        "commitHash": "e6ceb6174b6d88434ffea41e7e300551163c46e6",
+        "commitAuthor": "nicholascannon560-ship-it",
+        "volumeMounts": [],
+        "commitMessage": "Bundle chunk 22 (final)",
+        "rootDirectory": null,
+        "skipBuildCache": true,
+        "serviceManifest": {
+          "build": {
+            "builder": "DOCKERFILE",
+            "buildCommand": null,
+            "nixpacksPlan": null,
+            "watchPatterns": [],
+            "dockerfilePath": "/Dockerfile",
+            "buildEnvironment": "V3",
+            "nixpacksConfigPath": null
+          },
+          "deploy": {
+            "region": null,
+            "runtime": "V2",
+            "numReplicas": 1,
+            "cronSchedule": null,
+            "startCommand": null,
+            "limitOverride": null,
+            "overlapSeconds": null,
+            "drainingSeconds": null,
+            "healthcheckPath": null,
+            "preDeployCommand": null,
+            "sleepApplication": false,
+            "useLegacyStacker": false,
+            "ipv6EgressEnabled": false,
+            "multiRegionConfig": {
+              "us-east4-eqdc4a": {
+                "numReplicas": 1
+              }
+            },
+            "requiredMountPath": null,
+            "restartPolicyType": "ON_FAILURE",
+            "healthcheckTimeout": null,
+            "registryCredentials": null,
+            "restartPolicyMaxRetries": 10
+          }
+        },
+        "nixpacksProviders": [],
+        "fileServiceManifest": {},
+        "ignoreWatchPatterns": true,
+        "propertyFileMapping": {}
+      },
+      "staticUrl": "web-production-43304b.up.railway.app",
+      "url": null
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:41:31.665453+00:00"
+}
