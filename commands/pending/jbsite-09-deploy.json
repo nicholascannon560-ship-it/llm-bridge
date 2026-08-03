@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "mutation { serviceInstanceDeploy(serviceId: \"70d3bd14-3bd0-4679-be3c-0fb2807595b0\", environmentId: \"cd26ac39-86ab-49e4-a5dc-aa4bbfc383be\") }"}
