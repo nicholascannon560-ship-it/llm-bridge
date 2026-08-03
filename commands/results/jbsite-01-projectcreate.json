@@ -1,0 +1,9 @@
+{
+  "id": "jbsite-01-projectcreate",
+  "status": "error",
+  "action": "railway_gql",
+  "result": null,
+  "error": "400: [{'message': 'You must specify a workspaceId to create a project', 'locations': [{'line': 1, 'column': 55}], 'path': ['projectCreate'], 'extensions': {'code': 'INTERNAL_SERVER_ERROR'}, 'traceId': '8043127659057108300'}]",
+  "processed_at": "2026-08-03T04:11:38.955138+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 333, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd)\n                               ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 215, in _execute\n    return railway_query(query, cmd.get(\"variables\"))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/railway_extension.py\", line 30, in railway_query\n    raise HTTPException(status_code=400, detail=data[\"errors\"])\nfastapi.exceptions.HTTPException: 400: [{'message': 'You must specify a workspaceId to create a project', 'locations': [{'line': 1, 'column': 55}], 'path': ['projectCreate'], 'extensions': {'code': 'INTERNAL_SERVER_ERROR'}, 'traceId': '8043127659057108300'}]\n"
+}
