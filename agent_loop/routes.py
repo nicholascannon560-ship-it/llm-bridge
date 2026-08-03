@@ -11,7 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from .browser import FREE_TIER, browser_read, budget_status, parse_grant
+from .browser import API, FREE_TIER, _client, browser_read, budget_status, parse_grant
 
 agent_router = APIRouter(tags=["agent"])
 
@@ -46,3 +46,29 @@ class BrowserReadRequest(BaseModel):
 @agent_router.post("/agent/browser_read")
 async def post_browser_read(req: BrowserReadRequest):
     return await browser_read({"url": req.url, "max_chars": req.max_chars})
+
+
+@agent_router.get("/agent/browserbase_projects")
+async def get_browserbase_projects():
+    """List Browserbase projects using the container's key.
+
+    Only reason this exists: BROWSERBASE_PROJECT_ID is what lets the budget
+    ledger reconcile after a deploy, and the project id is not printed
+    anywhere the operator can copy without logging into the dashboard. The API
+    key stays inside the container; only ids and names come back.
+    """
+    try:
+        async with _client(30) as client:
+            resp = await client.get(f"{API}/v1/projects")
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+    if resp.status_code != 200:
+        return {"error": f"browserbase returned {resp.status_code}", "detail": resp.text[:200]}
+    projects = resp.json() or []
+    return {
+        "projects": [
+            {"id": p.get("id"), "name": p.get("name"), "createdAt": p.get("createdAt")}
+            for p in projects
+        ],
+        "current_env_value": __import__("os").getenv("BROWSERBASE_PROJECT_ID") or None,
+    }
