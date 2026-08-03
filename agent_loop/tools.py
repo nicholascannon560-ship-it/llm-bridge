@@ -13,8 +13,6 @@ import json
 import os
 import traceback
 from typing import Any, Dict, List
-from urllib.parse import urlparse
-from datetime import datetime, timezone
 
 # Import bridge modules when running inside the bridge
 try:
@@ -35,13 +33,6 @@ except ImportError:
 
 GITHUB_API = "https://api.github.com"
 OWNER = os.getenv("GITHUB_OWNER", "nicholascannon560-ship-it")
-
-# Hard allow-list for http_get. Agents may only reach these hosts.
-HTTP_ALLOW_HOSTS = {
-    "kalshiml-production.up.railway.app",
-}
-
-HTTP_MAX_BYTES = int(os.getenv("AGENT_HTTP_MAX_BYTES", str(1_500_000)))
 
 
 def _github_headers() -> dict:
@@ -200,44 +191,25 @@ TOOL_SCHEMAS = [
                 "required": []
             }
         }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "github_read_issue",
-            "description": "Read comments from a GitHub issue (used for project change-logs).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "owner": {"type": "string", "description": "Repo owner"},
-                    "repo": {"type": "string", "description": "Repo name"},
-                    "issue_number": {"type": "integer", "description": "Issue number"},
-                    "per_page": {"type": "integer", "default": 30}
-                },
-                "required": ["repo", "issue_number"]
-            }
-        }
-    },
+    }
+,
     {
         "type": "function",
         "function": {
             "name": "http_get",
             "description": (
-                "Sandboxed HTTP GET. Currently allow-listed only to the KalshiML production dashboard "
-                "(kalshiml-production.up.railway.app). Use this to read the full live data surface."
+                "Fetch an allowlisted https URL and return its body as text. Allowed hosts come "
+                "from FETCH_ALLOWED_HOSTS and currently cover the KalshiML dashboard, the bridge "
+                "itself, api.elections.kalshi.com, Open-Meteo, IEM (mesonet.agron.iastate.edu) and "
+                "api.weather.gov. A refusal naming FETCH_ALLOWED_HOSTS means that HOST is not "
+                "permitted -- it does NOT mean this tool is unavailable, so do not conclude you "
+                "have no HTTP access and fall back to guessing."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Full URL (must be https://kalshiml-production.up.railway.app/...)"
-                    },
-                    "timeout_sec": {
-                        "type": "integer",
-                        "default": 25,
-                        "description": "Request timeout in seconds (max 60)"
-                    }
+                    "url": {"type": "string", "description": "Full https URL"},
+                    "max_bytes": {"type": "integer", "description": "Response cap", "default": 8000}
                 },
                 "required": ["url"]
             }
@@ -246,53 +218,182 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
-            "name": "browser_research",
+            "name": "kml_data_read",
             "description": (
-                "Use a real browser (Browser Use + Browserbase) to research a topic, extract information, "
-                "or complete limited multi-step web tasks. Creates a fresh Browserbase session on each call. "
-                "Supports read_only (default) and elevated modes."
+                "Read a live state/JSON file from the running KalshiML instance -- CURRENT state, "
+                "not repo content, and the two disagree often. Useful paths: exec_scorecard.json "
+                "(live fill rates, n_graded), exec_backfill_scorecard.json (maker-vs-taker "
+                "backfill), maker_policy_promote.json (promote gates), ml_status.json, "
+                "exec_grade_checkpoint.json."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task": {
-                        "type": "string",
-                        "description": "Clear natural language instruction for what to research or extract."
-                    },
-                    "start_url": {
-                        "type": "string",
-                        "description": "Optional starting URL."
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["read_only", "elevated"],
-                        "default": "read_only",
-                        "description": "read_only = browse + extract only. elevated = limited interaction allowed."
-                    },
-                    "max_steps": {
-                        "type": "integer",
-                        "default": 12
-                    },
-                    "timeout_seconds": {
-                        "type": "integer",
-                        "default": 180
-                    }
+                    "path": {"type": "string", "description": "Filename, e.g. exec_scorecard.json"},
+                    "host": {"type": "string", "description": "Service host to read from. Defaults to the KalshiML dashboard. Any allowlisted host with an /api/file endpoint works."},
+                    "max_bytes": {"type": "integer", "description": "Response cap", "default": 8000}
                 },
-                "required": ["task"]
+                "required": ["path"]
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "kml_app_logs",
+            "description": (
+                "Read the running KalshiML process's in-memory log tail, each line stamped with its "
+                "own UTC time. ALWAYS pass `contains` -- the buffer holds ~8000 lines and an "
+                "unfiltered pull is mostly noise. Useful filters: 'SCAN' (candidate counts and "
+                "reject reasons), '429', '[ENS-GATE]', '[evidence]', '[exec-grade]'. The buffer does "
+                "NOT survive a process restart, so after a deploy it only covers time since restart."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "contains": {"type": "string", "description": "Substring filter"},
+                    "n": {"type": "integer", "description": "Lines to search, max 8000", "default": 2000}
+                },
+                "required": []
+            }
+        }
+    }
+,
+    {
+        "type": "function",
+        "function": {
+            "name": "github_list_repos",
+            "description": (
+                "List every GitHub repo the bridge token can reach, newest-pushed first. Use this "
+                "before github_read when you do not already know the exact repo name -- do not "
+                "guess names, and note a 404 from github_read usually means a wrong name or a "
+                "wrong branch, not a missing file."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max repos", "default": 50}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "railway_list",
+            "description": (
+                "List Railway projects, and the services + environments inside one. Call with no "
+                "arguments to see all projects, then pass project_id for its services. Service and "
+                "project NAMES have been changed before while IDs stayed constant -- always work "
+                "from IDs. Feed the service_id into railway_get_status or railway_get_logs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Omit to list all projects"}
+                },
+                "required": []
+            }
+        }
+    }
+]
+
+# ── Tool sets and the separation rule ────────────────────────────────────────
+#
+# browser_research reads attacker-controllable text into the model's context.
+# It must never share a loop with a tool that writes code, env vars, or the
+# memory file that is replayed into later runs. That is enforced here, not
+# left to the caller's discipline.
+
+try:
+    from .browser import (
+        BROWSER_TOOL_SCHEMAS,
+        browser_read as _tool_browser_read,
+        browser_research as _tool_browser_research,
+    )
+    BROWSER_TOOL_AVAILABLE = True
+except Exception as _browser_import_err:  # pragma: no cover
+    BROWSER_TOOL_AVAILABLE = False
+    print(f"[agent_loop] browser tool unavailable: {_browser_import_err}", flush=True)
+
+WRITE_TOOL_NAMES = {
+    "github_commit",
+    "railway_set_env",
+    "railway_redeploy",
+    "write_memory",
+}
+
+UNTRUSTED_INPUT_TOOL_NAMES = {"browser_research", "browser_read"}
+
+READ_ONLY_TOOL_NAMES = [
+    "github_read",
+    "github_list_repos",
+    "railway_get_status",
+    "railway_get_logs",
+    "railway_list",
+    "llm_chat",
+    "read_memory",
+    "http_get",
+    "kml_data_read",
+    "kml_app_logs",
 ]
 
 
-DEFAULT_TOOLS = TOOL_SCHEMAS
+def _by_name(names) -> list:
+    wanted = set(names)
+    return [t for t in TOOL_SCHEMAS if t["function"]["name"] in wanted]
+
+
+# Everything the bridge can do, minus the browser. This is the default.
+BUILD_TOOLS = list(TOOL_SCHEMAS)
+
+# Read + browse, no writes anywhere. write_memory is deliberately excluded:
+# a page that talks the agent into writing a "lesson" would be planting an
+# instruction for every later run.
+RESEARCH_TOOLS = _by_name(READ_ONLY_TOOL_NAMES) + (
+    list(BROWSER_TOOL_SCHEMAS) if BROWSER_TOOL_AVAILABLE else []
+)
+
+TOOL_SETS = {"build": BUILD_TOOLS, "research": RESEARCH_TOOLS}
+
+
+def assert_tool_set_safe(tools) -> None:
+    """Refuse a tool set that hands a browsing agent write access."""
+    names = {t.get("function", {}).get("name") for t in (tools or [])}
+    untrusted = names & UNTRUSTED_INPUT_TOOL_NAMES
+    writes = names & WRITE_TOOL_NAMES
+    if untrusted and writes:
+        raise ValueError(
+            "unsafe tool set: "
+            f"{sorted(untrusted)} reads untrusted web content and cannot be combined with "
+            f"{sorted(writes)}. Use tool_set='research' to browse, then hand the findings to a "
+            "separate build run."
+        )
+
+
+def resolve_tools(tools=None, tool_set: str = None) -> list:
+    """Pick a tool set by name or validate an explicit list."""
+    if tools:
+        assert_tool_set_safe(tools)
+        return tools
+    chosen = TOOL_SETS.get((tool_set or "build").lower())
+    if chosen is None:
+        raise ValueError(f"unknown tool_set {tool_set!r}; expected one of {sorted(TOOL_SETS)}")
+    assert_tool_set_safe(chosen)
+    return chosen
+
+
+# Convenience alias — unchanged meaning: the full build-capable set, no browser.
+DEFAULT_TOOLS = BUILD_TOOLS
 
 
 # ── Tool Handlers ────────────────────────────────────────────────────────────
 
 async def run_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute a tool by name with the given arguments."""
     if not BRIDGE_MODE:
-        return {"error": "Agent tools require bridge environment"}
+        return {"error": "Agent tools require bridge environment (llm_gateway + railway_extension not importable)"}
 
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -333,7 +434,7 @@ async def _tool_github_read(args: Dict) -> Dict:
         "path": data["path"],
         "sha": data.get("sha"),
         "size": data.get("size"),
-        "content": content[:8000]
+        "content": content[:8000]  # Truncate very large files
     }
 
 
@@ -385,9 +486,28 @@ async def _tool_railway_redeploy(args: Dict) -> Dict:
     return {"redeployed": True, "service_id": sid, "result": result}
 
 
+# Variables the agent must never be able to write. Self-granting browser
+# permissions, rotating the bridge key out from under the operator, or
+# swapping a token are all one set_env away otherwise.
+PROTECTED_ENV_PREFIXES = ("BROWSER_", "BRIDGE_")
+PROTECTED_ENV_SUBSTRINGS = ("TOKEN", "API_KEY", "SECRET", "PASSWORD", "CREDENTIAL")
+
+
+def env_name_is_protected(name: str) -> bool:
+    upper = (name or "").upper()
+    return upper.startswith(PROTECTED_ENV_PREFIXES) or any(
+        s in upper for s in PROTECTED_ENV_SUBSTRINGS
+    )
+
+
 async def _tool_railway_set_env(args: Dict) -> Dict:
     name = args["name"]
     value = args["value"]
+    if env_name_is_protected(name):
+        return {
+            "error": f"{name} is operator-only and cannot be set by an agent",
+            "hint": "permission grants and secrets are changed by hand in the Railway dashboard",
+        }
     sid = args.get("service_id")
     result = set_service_variable(name, value, service_id=sid, environment_name="production")
     return {"set": True, "name": name, "result": result}
@@ -439,288 +559,71 @@ async def _tool_read_memory(args: Dict) -> Dict:
     return {"entries": entries, "count": len(entries)}
 
 
-async def _tool_github_read_issue(args: Dict) -> Dict:
-    import httpx
-    owner = args.get("owner", OWNER)
-    repo = args["repo"]
-    issue_num = args["issue_number"]
-    per_page = args.get("per_page", 30)
+KML_DASHBOARD = os.getenv("KML_DASHBOARD_URL", "https://kalshiml-production.up.railway.app")
 
-    url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{issue_num}/comments"
-    params = {"per_page": per_page}
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.get(url, headers=_github_headers(), params=params)
-
-    if resp.status_code != 200:
-        return {"error": f"GitHub API {resp.status_code}", "detail": resp.text[:300]}
-
-    comments = resp.json()
-    return {
-        "issue_number": issue_num,
-        "count": len(comments),
-        "comments": [
-            {
-                "id": c.get("id"),
-                "author": (c.get("user") or {}).get("login"),
-                "created_at": c.get("created_at"),
-                "body": c.get("body", "")[:500]
-            }
-            for c in comments
-        ]
-    }
+async def _do_fetch(url: str, max_bytes: int = 8000) -> Dict:
+    """Reuse the bridge's own allowlisted fetch path rather than opening a second
+    unchecked egress. Host policy stays in exactly one place (fetch_routes)."""
+    from fetch_routes import FetchRequest, fetch
+    try:
+        resp = await fetch(FetchRequest(url=url, max_bytes=max_bytes))
+    except Exception as e:
+        detail = getattr(e, "detail", None) or str(e)
+        return {"error": str(detail),
+                "hint": ("If this names FETCH_ALLOWED_HOSTS, the HOST is not permitted. "
+                         "The tool works -- pick an allowlisted host.")}
+    return resp.model_dump() if hasattr(resp, "model_dump") else resp.dict()
 
 
 async def _tool_http_get(args: Dict) -> Dict:
-    import httpx
-
     url = (args.get("url") or "").strip()
     if not url:
         return {"error": "url is required"}
-
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        return {"error": "invalid url"}
-
-    if parsed.scheme != "https":
-        return {"error": "only https is allowed"}
-    host = (parsed.hostname or "").lower()
-    if host not in HTTP_ALLOW_HOSTS:
-        return {
-            "error": f"host '{host}' is not allow-listed",
-            "allowed": sorted(HTTP_ALLOW_HOSTS),
-        }
-
-    timeout = min(max(int(args.get("timeout_sec") or 25), 5), 60)
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
-            resp = await client.get(url)
-    except httpx.TimeoutException:
-        return {"error": f"request timed out after {timeout}s", "url": url}
-    except Exception as e:
-        return {"error": f"{type(e).__name__}: {e}", "url": url}
-
-    content_type = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
-    raw = resp.content or b""
-    truncated = False
-    if len(raw) > HTTP_MAX_BYTES:
-        raw = raw[:HTTP_MAX_BYTES]
-        truncated = True
-
-    text = raw.decode("utf-8", errors="replace")
-
-    body: Any = text
-    if "json" in content_type or text.lstrip().startswith(("{", "[")):
-        try:
-            body = json.loads(text)
-        except Exception:
-            body = text
-
-    return {
-        "ok": 200 <= resp.status_code < 300,
-        "status_code": resp.status_code,
-        "url": str(resp.url),
-        "content_type": content_type,
-        "bytes": len(raw),
-        "truncated": truncated,
-        "body": body,
-    }
+    return await _do_fetch(url, int(args.get("max_bytes") or 8000))
 
 
-async def _tool_browser_research(args: Dict) -> Dict:
-    """Browser research using Browser Use + Browserbase.
+async def _tool_kml_data_read(args: Dict) -> Dict:
+    from urllib.parse import quote
+    path = (args.get("path") or "").strip().lstrip("/")
+    if not path:
+        return {"error": "path is required"}
+    host = (args.get("host") or "").strip().rstrip("/")
+    base = host if host.startswith("https://") else (f"https://{host}" if host else KML_DASHBOARD)
+    return await _do_fetch(f"{base}/api/file?path={quote(path)}",
+                           int(args.get("max_bytes") or 8000))
 
-    Creates a fresh Browserbase session on every call using BROWSERBASE_API_KEY.
-    Falls back to local Chromium if no API key is set.
-    """
-    task = (args.get("task") or "").strip()
-    if not task:
-        return {"success": False, "error": "task is required"}
 
-    start_url = args.get("start_url")
-    mode = args.get("mode", "read_only")
-    max_steps = int(args.get("max_steps") or 12)
-    timeout_seconds = int(args.get("timeout_seconds") or 180)
+async def _tool_kml_app_logs(args: Dict) -> Dict:
+    from urllib.parse import quote
+    n = max(1, min(int(args.get("n") or 2000), 8000))
+    url = f"{KML_DASHBOARD}/api/logs?n={n}"
+    contains = (args.get("contains") or "").strip()
+    if contains:
+        url += f"&contains={quote(contains)}"
+    return await _do_fetch(url, 16000)
 
-    if mode not in ("read_only", "elevated"):
-        mode = "read_only"
 
-    started_at = datetime.now(timezone.utc).isoformat()
-    session_id = None
+async def _tool_github_list_repos(args: Dict) -> Dict:
+    import httpx
+    limit = max(1, min(int(args.get("limit") or 50), 100))
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(f"{GITHUB_API}/user/repos",
+                                headers=_github_headers(),
+                                params={"per_page": limit, "sort": "pushed"})
+    if resp.status_code != 200:
+        return {"error": f"GitHub API {resp.status_code}", "detail": resp.text[:300]}
+    return {"repos": [{"full_name": r["full_name"],
+                       "default_branch": r.get("default_branch"),
+                       "private": r.get("private"),
+                       "pushed_at": r.get("pushed_at")} for r in resp.json()]}
 
-    # Lazy imports
-    try:
-        from browser_use import Agent, Browser
-        from browser_use.browser.browser import BrowserConfig
-    except ImportError as e:
-        return {
-            "success": False,
-            "error": f"browser-use not installed: {e}",
-            "mode_used": mode,
-            "started_at": started_at,
-        }
 
-    browser = None
-    runtime = "local"
-
-    try:
-        api_key = os.getenv("BROWSERBASE_API_KEY")
-
-        if api_key:
-            try:
-                from browserbase import Browserbase
-                bb = Browserbase(api_key=api_key)
-                session = bb.sessions.create()
-                session_id = session.id
-                cdp_url = session.connect_url
-                browser = Browser(cdp_url=cdp_url)
-                runtime = "browserbase"
-            except Exception as e:
-                return {
-                    "success": False,
-                    "error": f"Failed to create Browserbase session: {e}",
-                    "mode_used": mode,
-                    "started_at": started_at,
-                }
-        else:
-            # Fallback to local Chromium
-            browser = Browser(config=BrowserConfig(headless=True))
-            runtime = "local"
-
-        # Permission constraints
-        if mode == "read_only":
-            constraints = (
-                "STRICT RULES — READ ONLY MODE:\n"
-                "- You may navigate, scroll, click links, and extract information.\n"
-                "- You must NOT fill forms, submit anything, log in, create accounts, "
-                "post content, or perform any write/action that changes state.\n"
-                "- If the task requires interaction beyond reading, stop and report what you found."
-            )
-        else:
-            constraints = (
-                "ELEVATED MODE (limited interaction allowed):\n"
-                "- You may click buttons and fill simple forms if necessary.\n"
-                "- You must NOT create accounts, make purchases, post publicly, "
-                "or perform irreversible actions.\n"
-                "- Prefer the least interactive path that still answers the task."
-            )
-
-        full_task = f"{task}\n\n{constraints}"
-        if start_url:
-            full_task = f"Start by going to: {start_url}\n\n{full_task}"
-
-        router = get_router()
-
-        class _BridgeLLM:
-            def __init__(self, router):
-                self.router = router
-
-            async def ainvoke(self, messages, **kwargs):
-                chat_messages = []
-                for m in messages:
-                    role = getattr(m, "type", None) or getattr(m, "role", "user")
-                    content = getattr(m, "content", str(m))
-                    if role in ("human", "user"):
-                        chat_messages.append(ChatMessage(role="user", content=content))
-                    elif role in ("ai", "assistant"):
-                        chat_messages.append(ChatMessage(role="assistant", content=content))
-                    else:
-                        chat_messages.append(ChatMessage(role="user", content=content))
-
-                req = ChatRequest(
-                    provider="moonshot",
-                    model="kimi-k3",
-                    messages=chat_messages,
-                    max_tokens=2048,
-                    temperature=1.0,
-                    reasoning_effort="low",
-                )
-                resp = await self.router.chat(req)
-                class _Resp:
-                    content = resp.content
-                return _Resp()
-
-        llm = _BridgeLLM(router)
-
-        agent = Agent(
-            task=full_task,
-            llm=llm,
-            browser=browser,
-            max_actions_per_step=3,
-        )
-
-        import asyncio
-        try:
-            history = await asyncio.wait_for(
-                agent.run(max_steps=max_steps),
-                timeout=timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            return {
-                "success": False,
-                "error": f"Timed out after {timeout_seconds}s",
-                "mode_used": mode,
-                "runtime": runtime,
-                "session_id": session_id,
-                "started_at": started_at,
-                "finished_at": datetime.now(timezone.utc).isoformat(),
-                "task": task,
-                "start_url": start_url,
-            }
-
-        final_result = None
-        if hasattr(history, "final_result"):
-            final_result = history.final_result()
-        if not final_result:
-            final_result = str(history) if history else "No result returned"
-
-        urls_visited = []
-        try:
-            for h in getattr(history, "history", []):
-                state = getattr(h, "state", None)
-                if state and getattr(state, "url", None):
-                    urls_visited.append(state.url)
-        except Exception:
-            pass
-
-        result = {
-            "success": True,
-            "final_result": final_result,
-            "steps_taken": len(getattr(history, "history", [])),
-            "urls_visited": urls_visited,
-            "mode_used": mode,
-            "runtime": runtime,
-            "session_id": session_id,
-            "started_at": started_at,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "task": task,
-            "start_url": start_url,
-        }
-        if session_id:
-            result["replay_url"] = f"https://www.browserbase.com/sessions/{session_id}"
-        return result
-
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()[-600:],
-            "mode_used": mode,
-            "runtime": runtime,
-            "session_id": session_id,
-            "started_at": started_at,
-            "finished_at": datetime.now(timezone.utc).isoformat(),
-            "task": task,
-            "start_url": start_url,
-        }
-    finally:
-        if browser:
-            try:
-                await browser.close()
-            except Exception:
-                pass
+async def _tool_railway_list(args: Dict) -> Dict:
+    pid = (args.get("project_id") or "").strip()
+    if pid:
+        return {"project_id": pid, "services": await list_services(pid)}
+    return {"projects": await list_projects()}
 
 
 _TOOL_HANDLERS = {
@@ -733,7 +636,13 @@ _TOOL_HANDLERS = {
     "llm_chat": _tool_llm_chat,
     "write_memory": _tool_write_memory,
     "read_memory": _tool_read_memory,
-    "github_read_issue": _tool_github_read_issue,
     "http_get": _tool_http_get,
-    "browser_research": _tool_browser_research,
+    "kml_data_read": _tool_kml_data_read,
+    "kml_app_logs": _tool_kml_app_logs,
+    "github_list_repos": _tool_github_list_repos,
+    "railway_list": _tool_railway_list,
 }
+
+if BROWSER_TOOL_AVAILABLE:
+    _TOOL_HANDLERS["browser_read"] = _tool_browser_read
+    _TOOL_HANDLERS["browser_research"] = _tool_browser_research

@@ -37,6 +37,7 @@ Known limits (documented rather than hidden):
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -84,6 +85,16 @@ TREND_WINDOW_SEC     = _f("WATCHDOG_TREND_WINDOW_SEC", 6 * 3600.0)
 TREND_MIN_SAMPLES    = int(_f("WATCHDOG_TREND_MIN_SAMPLES", 12))
 TREND_WORSE_FRAC     = _f("WATCHDOG_TREND_WORSE_FRAC", 0.5)
 
+# Disk + evidence-rotation checks. These exist because every one of them was
+# something a human was otherwise going to be told to "go check tomorrow".
+DISK_TOTAL_MB        = _f("WATCHDOG_DISK_TOTAL_MB", 1024.0)
+DISK_WARN_FRAC       = _f("WATCHDOG_DISK_WARN_FRAC", 0.85)
+DISK_POLL_SEC        = _f("WATCHDOG_DISK_POLL_SEC", 3600.0)
+CORPUS_DROP_FRAC     = _f("WATCHDOG_CORPUS_DROP_FRAC", 0.10)
+VERIFY_ONLY_MAX_DAYS = _f("WATCHDOG_VERIFY_ONLY_MAX_DAYS", 3.0)
+GRADE_LAG_MAX_DAYS   = _f("WATCHDOG_GRADE_LAG_MAX_DAYS", 3.0)
+GRADE_STALL_HOURS    = _f("WATCHDOG_GRADE_STALL_HOURS", 26.0)
+
 # --------------------------------------------------------------------------- #
 # Log parsing
 # --------------------------------------------------------------------------- #
@@ -91,6 +102,27 @@ _RE_CANDIDATES = re.compile(r"\[SCAN\]\s+(\d+)\s+candidates this cycle")
 _RE_DRYRUN     = re.compile(r"DRY_RUN=(\w+)\s+PLACE_REAL_ORDERS=(\w+)")
 _RE_CASH       = re.compile(r"live_cash=\$([0-9.]+)")
 _RE_IEM_BACKOFF= re.compile(r"iem asos: HTTP (\d+) -- backing off ([0-9.]+)s")
+# Nightly-cadence lines. These are why the sampler makes targeted `contains`
+# fetches instead of relying on the raw tail: they appear once a day and would
+# scroll out of any tail short enough to be cheap.
+_RE_LEARN_CORPUS = re.compile(
+    r"\[LEARN\] evidence: (\d+) rows -> (\d+) independent")
+_RE_EVIDENCE_SUM = re.compile(
+    r"\[evidence\] (\S+): ok=(\w+) hot=(\d+) cold=(\d+) undated=(\d+) bad=(\d+) "
+    r"freed=([0-9.]+)MB \((.*)\)")
+
+
+def _parse_log_ts(v: Any) -> Optional[float]:
+    """/api/logs stamps each line with an ISO-8601 UTC time. Returns epoch
+    seconds, or None if absent/unparseable — callers fall back to sample time."""
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
 
 
 def _is_openmeteo_429(line: str) -> bool:
@@ -105,17 +137,54 @@ def _is_openmeteo_429(line: str) -> bool:
     return "open-meteo" in low or "openmeteo" in low or "api.open-meteo.com" in low
 
 
-def parse_log_lines(lines: list[str]) -> dict[str, Any]:
+def parse_nightly(lines: list[str]) -> dict[str, Any]:
+    """Facts from the once-a-day lines: learning corpus size and the evidence
+    rotation summary. Last occurrence wins."""
+    out: dict[str, Any] = {}
+    for ln in lines:
+        m = _RE_LEARN_CORPUS.search(ln)
+        if m:
+            out["corpus_rows"] = int(m.group(1))
+            out["corpus_independent"] = int(m.group(2))
+        m = _RE_EVIDENCE_SUM.search(ln)
+        if m:
+            rot = out.setdefault("rotation", {})
+            rot[m.group(1)] = {
+                "ok": m.group(2).lower() == "true",
+                "hot": int(m.group(3)), "cold": int(m.group(4)),
+                "undated": int(m.group(5)), "bad": int(m.group(6)),
+                "freed_mb": float(m.group(7)), "note": m.group(8),
+            }
+    return out
+
+
+def parse_log_lines(lines: list[Any]) -> dict[str, Any]:
     """Derive per-cycle facts from a dashboard log tail. Pure — unit-testable
-    without network."""
+    without network.
+
+    Accepts either bare strings or {"line", "t"} dicts as /api/logs returns.
+    When timestamps are present, Open-Meteo 429s carry their OWN time out of
+    here. They must: the tail is a ring buffer spanning hours, so a 429 from
+    last night is still sitting in it after the UTC rollover. Stamping those
+    with the sample time is what made the cap look like it was hit one minute
+    after midnight, every night.
+    """
     candidates: list[int] = []
     dry_run: Optional[bool] = None
     real_orders: Optional[bool] = None
     cash: Optional[float] = None
     om_429 = 0
+    om_429_ts: list[float] = []
     iem_backoff_max = 0.0
 
-    for ln in lines:
+    for item in lines:
+        if isinstance(item, dict):
+            ln = item.get("line") or ""
+            ts = _parse_log_ts(item.get("t"))
+        else:
+            ln, ts = str(item), None
+        if not ln:
+            continue
         m = _RE_CANDIDATES.search(ln)
         if m:
             candidates.append(int(m.group(1)))
@@ -131,6 +200,8 @@ def parse_log_lines(lines: list[str]) -> dict[str, Any]:
                 pass
         if _is_openmeteo_429(ln):
             om_429 += 1
+            if ts is not None:
+                om_429_ts.append(ts)
         m = _RE_IEM_BACKOFF.search(ln)
         if m:
             try:
@@ -146,6 +217,7 @@ def parse_log_lines(lines: list[str]) -> dict[str, Any]:
         "place_real_orders": real_orders,
         "live_cash": cash,
         "openmeteo_429": om_429,
+        "openmeteo_429_ts": sorted(om_429_ts),
         "iem_backoff_max_sec": iem_backoff_max,
     }
 
@@ -164,6 +236,15 @@ _STATE: dict[str, Any] = {
     "emails_sent": 0,
     "emails_suppressed": 0,
     "last_email_at": None,
+    "corpus_peak": 0,
+    "verify_only_since": None,
+    "last_disk_poll": 0.0,
+    "last_disk_mb": None,
+    "last_disk_largest": None,
+    "last_grade_cum": None,
+    "last_grade_ckpt": None,
+    "last_grade_nkey": None,
+    "last_grade_progress_at": None,
 }
 _SAMPLES: deque = deque(maxlen=1200)     # rolling trend window
 _PROC_STARTS: deque = deque(maxlen=50)   # (epoch_seen, proc_started_string)
@@ -274,6 +355,129 @@ def _chk_degradation(s: dict, now: float) -> tuple[bool, str]:
     return False, "trends stable"
 
 
+def _chk_disk(s: dict, now: float) -> tuple[bool, str]:
+    """Volume headroom. Sampled hourly, not per-cycle — /api/files walks the
+    whole tree and there is no point paying for that every 5 minutes."""
+    # Read through to the last poll rather than the current sample. Disk is
+    # sampled hourly; without this the check would go bad on a poll cycle and
+    # "recover" on the very next one, emailing a problem-then-recovered pair
+    # every hour. A stale-but-known value is the correct state between polls.
+    mb = s.get("disk_mb")
+    if mb is None:
+        mb = _STATE.get("last_disk_mb")
+    else:
+        _STATE["last_disk_mb"] = mb
+        _STATE["last_disk_largest"] = s.get("disk_largest")
+    if mb is None:
+        return False, "disk not sampled yet"
+    frac = mb / DISK_TOTAL_MB if DISK_TOTAL_MB > 0 else 0.0
+    if frac >= DISK_WARN_FRAC:
+        big = s.get("disk_largest") or _STATE.get("last_disk_largest") or ""
+        return True, (f"volume at {mb:.0f} MB of {DISK_TOTAL_MB:.0f} "
+                      f"({frac*100:.0f}%) — largest: {big}")
+    return False, f"{mb:.0f} MB ({frac*100:.0f}%)"
+
+
+def _chk_corpus(s: dict, now: float) -> tuple[bool, str]:
+    """Guards the learning corpus against silent shrinkage.
+
+    This is the check that makes evidence rotation safe to leave running. If a
+    rotation bug drops rows, the independent-observation count falls and this
+    fires — instead of a human noticing weeks later that cell states drifted.
+    Compares against the high-water mark, since the count should only ever grow.
+    """
+    n = s.get("corpus_independent")
+    if n is None:
+        return False, "no recompute line in buffer yet"
+    peak = _STATE.get("corpus_peak") or 0
+    if n > peak:
+        _STATE["corpus_peak"] = n
+        return False, f"{n} independent observations (new high)"
+    if peak and n < peak * (1 - CORPUS_DROP_FRAC):
+        return True, (f"independent observations fell {peak} -> {n} "
+                      f"({100*(peak-n)/peak:.0f}%) — evidence rotation may be "
+                      f"dropping rows; set EVIDENCE_ROTATE_VERIFY_ONLY=1")
+    return False, f"{n} independent observations (peak {peak})"
+
+
+def _chk_rotation(s: dict, now: float) -> tuple[bool, str]:
+    """Watches the nightly evidence rotation: failures, and parking in
+    verify-only. Verify-only doubles the corpus on disk (chunks written, live
+    file still full), so it is safe but must not become permanent."""
+    rot = s.get("rotation") or {}
+    if not rot:
+        return False, "no rotation summary in buffer yet"
+    failed = [f"{k}: {v['note']}" for k, v in rot.items() if not v["ok"]]
+    if failed:
+        return True, "rotation failed — " + "; ".join(failed)
+    verify = [k for k, v in rot.items() if "verify-only" in (v["note"] or "")]
+    if verify:
+        since = _STATE.get("verify_only_since")
+        if since is None:
+            _STATE["verify_only_since"] = now
+            since = now
+        days = (now - since) / 86400.0
+        if days >= VERIFY_ONLY_MAX_DAYS:
+            return True, (f"evidence rotation parked in verify-only for "
+                          f"{days:.1f}d ({', '.join(verify)}) — chunks are being "
+                          f"written but nothing is truncated, so disk is growing "
+                          f"on both sides")
+        return False, f"verify-only for {days:.1f}d ({', '.join(verify)})"
+    _STATE["verify_only_since"] = None
+    freed = sum(v["freed_mb"] for v in rot.values())
+    bad = sum(v["bad"] for v in rot.values())
+    return False, f"rotated ok, {freed:.1f} MB freed, {bad} unparseable rows kept"
+
+
+def _chk_grading(s: dict, now: float) -> tuple[bool, str]:
+    """Watches the exec-grading backlog drain.
+
+    Two failure modes, both silent otherwise: the drain stalls (cumulative
+    count stops rising while the checkpoint is still far behind), and the
+    `n_graded` key going missing from the scorecard, which drops
+    maker_policy's live evidence count to 0 and quietly downgrades the
+    promote gate from offline+live to the weaker offline_only.
+    """
+    cum = s.get("grade_cumulative")
+    if cum is None:
+        cum = _STATE.get("last_grade_cum")
+        ck = _STATE.get("last_grade_ckpt")
+        nkey = _STATE.get("last_grade_nkey")
+    else:
+        ck = s.get("grade_checkpoint_ms")
+        nkey = s.get("grade_n_graded_key")
+        prev = _STATE.get("last_grade_cum")
+        if prev is None or cum > prev:
+            _STATE["last_grade_progress_at"] = now
+        _STATE["last_grade_cum"] = cum
+        _STATE["last_grade_ckpt"] = ck
+        _STATE["last_grade_nkey"] = nkey
+    if cum is None:
+        return False, "no exec scorecard sampled yet"
+
+    if nkey is None:
+        return True, (f"exec_scorecard is missing the `n_graded` key — "
+                      f"maker_policy will read live_n=0 and fall back to the "
+                      f"weaker offline_only promote gate (cumulative={cum})")
+
+    lag_days = None
+    if ck:
+        try:
+            lag_days = (now - float(ck) / 1000.0) / 86400.0
+        except (TypeError, ValueError):
+            lag_days = None
+
+    since = _STATE.get("last_grade_progress_at") or now
+    stalled_h = (now - since) / 3600.0
+    if (lag_days is not None and lag_days > GRADE_LAG_MAX_DAYS
+            and stalled_h > GRADE_STALL_HOURS):
+        return True, (f"grading backlog stalled: checkpoint {lag_days:.1f}d "
+                      f"behind and cumulative stuck at {cum} for "
+                      f"{stalled_h:.0f}h")
+    lag_s = "unknown" if lag_days is None else f"{lag_days:.1f}d behind"
+    return False, f"{cum} graded, checkpoint {lag_s}"
+
+
 CHECKS = {
     "dashboard_unreachable": _chk_unreachable,
     "restart_loop":          _chk_restart_loop,
@@ -282,10 +486,28 @@ CHECKS = {
     "openmeteo_cap_early":   _chk_openmeteo_cap,
     "iem_backoff_pinned":    _chk_iem_pinned,
     "degradation":           _chk_degradation,
+    "disk_usage":            _chk_disk,
+    "learning_corpus":       _chk_corpus,
+    "evidence_rotation":     _chk_rotation,
+    "exec_grading":          _chk_grading,
 }
 
 # Checks that only make sense when we actually reached the dashboard.
 _NEEDS_REACHABLE = set(CHECKS) - {"dashboard_unreachable"}
+
+# Downstream symptom -> upstream cause. Same intent as _NEEDS_REACHABLE: one
+# fault should send one email, not two. While the upstream check is bad, the
+# downstream check is evaluated but never allowed to alert, and its state is
+# held at ok so that it RE-ARMS: if the symptom is still present after the
+# upstream cause clears, it transitions ok -> bad and mails then. Suppressed
+# firings are counted in emails_suppressed and the reason is visible in the
+# check's msg, so nothing goes silent — it just stops double-reporting.
+_DEPENDS_ON = {
+    # No candidates is what a starved forecast recorder looks like from the
+    # outside. If Open-Meteo tripped its daily cap early, that is the fault
+    # worth an email; the zero-candidate stretch is its shadow.
+    "no_candidates": "openmeteo_cap_early",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -311,11 +533,79 @@ async def sample_once(client: httpx.AsyncClient) -> dict[str, Any]:
         lr.raise_for_status()
         payload = lr.json()
         raw = payload.get("lines") or []
-        lines = [(x.get("line") if isinstance(x, dict) else str(x)) for x in raw]
-        out.update(parse_log_lines([l for l in lines if l]))
+        # Pass the entries through whole: parse_log_lines needs each line's own
+        # timestamp to date an Open-Meteo 429 correctly.
+        out.update(parse_log_lines(raw))
     except Exception as e:
         # Version worked, logs did not: still "reachable", just thinner data.
         out["log_error"] = f"{type(e).__name__}: {e}"
+
+    # Targeted fetches for the once-a-day lines. `contains` searches the whole
+    # buffer, so these survive scrolling out of the cheap tail above.
+    for needle in ("[LEARN] evidence:", "[evidence]"):
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/logs",
+                                 params={"n": 8000, "contains": needle},
+                                 timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            raw = (r.json() or {}).get("lines") or []
+            got = [(x.get("line") if isinstance(x, dict) else str(x)) for x in raw]
+            out.update(parse_nightly([g for g in got if g]))
+        except Exception as e:
+            out.setdefault("nightly_errors", []).append(
+                f"{needle}: {type(e).__name__}")
+
+    # Disk is polled on its own slower clock: /api/files walks the whole tree.
+    if now - (_STATE.get("last_disk_poll") or 0.0) >= DISK_POLL_SEC:
+        # market_layers.db is NOT in /api/files — that endpoint only lists data
+        # extensions, and .db is excluded. It is 7.6 GB, roughly 92% of the
+        # volume, so a disk check built on /api/files alone measures the wrong
+        # 8% and would have reported "66% used" on a volume that was nearly
+        # full. ml_status.json carries db_bytes; both are summed below.
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/file",
+                                 params={"path": "exec_scorecard.json"},
+                                 timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            sc = json.loads(r.text)
+            out["grade_cumulative"] = sc.get("n_graded_cumulative")
+            out["grade_checkpoint_ms"] = sc.get("checkpoint_ts_ms")
+            out["grade_fill_pess"] = sc.get("fill_rate_pessimistic")
+            # maker_policy reads `n_graded`; if it goes missing the promote
+            # gate silently weakens to offline_only. Worth watching directly.
+            out["grade_n_graded_key"] = sc.get("n_graded")
+        except Exception as e:
+            out["grade_error"] = f"{type(e).__name__}: {e}"
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/file",
+                                 params={"path": "ml_status.json"},
+                                 timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            ml = json.loads(r.text)
+            out["db_mb"] = float(ml.get("db_bytes") or 0) / 1_048_576
+            out["db_snapshots"] = ((ml.get("counts") or {}).get("book_snapshots"))
+            out["db_trades"] = ((ml.get("counts") or {}).get("trades"))
+        except Exception as e:
+            out["db_error"] = f"{type(e).__name__}: {e}"
+        try:
+            r = await client.get(f"{TARGET_BASE}/api/files", timeout=HTTP_TIMEOUT)
+            r.raise_for_status()
+            payload = r.json()
+            files = payload if isinstance(payload, list) else (
+                payload.get("files") or payload.get("entries") or [])
+            total = sum((f.get("bytes") or 0) for f in files if isinstance(f, dict))
+            out["disk_mb"] = total / 1_048_576 + (out.get("db_mb") or 0.0)
+            out["files_mb"] = total / 1_048_576
+            out["disk_files"] = len(files)
+            biggest = sorted(((f.get("bytes") or 0), f.get("path") or "")
+                             for f in files if isinstance(f, dict))[-3:]
+            parts = [f"{p} {b/1_048_576:.0f}MB" for b, p in reversed(biggest)]
+            if out.get("db_mb"):
+                parts.insert(0, f"market_layers.db {out['db_mb']:.0f}MB")
+            out["disk_largest"] = ", ".join(parts)
+            _STATE["last_disk_poll"] = now
+        except Exception as e:
+            out["disk_error"] = f"{type(e).__name__}: {e}"
     return out
 
 
@@ -326,8 +616,21 @@ def record_sample(s: dict[str, Any]) -> None:
         if not _PROC_STARTS or _PROC_STARTS[-1][1] != s["proc_started"]:
             _PROC_STARTS.append((now, s["proc_started"]))
     if (s.get("openmeteo_429") or 0) > 0:
-        day = _utc_day(now)
-        _FIRST_OM429_BY_DAY.setdefault(day, _utc_hour(now))
+        # Attribute each 429 to the day it actually happened on, taking the
+        # EARLIEST time seen for that day. Stamping the sample time instead
+        # made every 429 still lingering in the ring buffer look like it had
+        # just occurred, so the day always opened with a 00:0Xh "first 429".
+        stamps = s.get("openmeteo_429_ts") or []
+        if stamps:
+            for ts in stamps:
+                day, hour = _utc_day(ts), _utc_hour(ts)
+                prev = _FIRST_OM429_BY_DAY.get(day)
+                if prev is None or hour < prev:
+                    _FIRST_OM429_BY_DAY[day] = hour
+        else:
+            # No usable timestamps (older dashboard payload): fall back to the
+            # old behaviour rather than dropping the signal entirely.
+            _FIRST_OM429_BY_DAY.setdefault(_utc_day(now), _utc_hour(now))
         for k in list(_FIRST_OM429_BY_DAY):
             if k < _utc_day(now - 7 * 86400):
                 _FIRST_OM429_BY_DAY.pop(k, None)
@@ -337,13 +640,25 @@ def evaluate(s: dict[str, Any], now: Optional[float] = None) -> list[dict[str, A
     """Run checks, update state, return the list of TRANSITIONS to report."""
     now = now if now is not None else time.time()
     transitions = []
-    for name, fn in CHECKS.items():
+    # Upstream causes first, so a symptom is judged against this cycle's cause
+    # rather than last cycle's.
+    order = sorted(CHECKS, key=lambda n: n in _DEPENDS_ON)
+    for name in order:
+        fn = CHECKS[name]
         if not s.get("reachable") and name in _NEEDS_REACHABLE:
             continue   # don't cascade: one outage should not fire six alerts
         try:
             bad, msg = fn(s, now)
         except Exception as e:
             bad, msg = False, f"check error: {type(e).__name__}: {e}"
+        dep = _DEPENDS_ON.get(name)
+        if bad and dep and (_STATE["checks"].get(dep) or {}).get("bad"):
+            # Symptom of a cause that is already being reported. Hold at ok so
+            # it re-arms and speaks up if it outlives the cause.
+            _STATE["emails_suppressed"] += 1
+            _STATE["checks"][name] = {"bad": False, "since": now,
+                                      "msg": f"{msg} [suppressed: downstream of {dep}]"}
+            continue
         prev = _STATE["checks"].get(name) or {"bad": False, "since": now, "msg": ""}
         if bad != prev["bad"]:
             _STATE["checks"][name] = {"bad": bad, "since": now, "msg": msg}

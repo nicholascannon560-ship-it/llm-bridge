@@ -115,6 +115,14 @@ app.include_router(fetch_router)
 # Watchdog status / manual-trigger routes (auth-gated like everything else).
 app.include_router(watchdog_router)
 
+# Operator views of the browser tool: budget, current grant, one-shot page read.
+# Optional — the bridge must still boot if agent_loop is broken.
+try:
+    from agent_loop.routes import agent_router
+    app.include_router(agent_router)
+except Exception as _agent_routes_err:  # pragma: no cover
+    print(f"[agent_loop] routes not mounted: {_agent_routes_err}", flush=True)
+
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
