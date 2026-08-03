@@ -80,6 +80,10 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-03 | Browser tool via Browserbase REST (no browser-use: pydantic pin clash); free-tier budgets | files: agent_loop/browser.py
+- 2026-08-03 | Tool-set split: browsing never shares a loop with commit/set_env/write_memory | files: agent_loop/tools.py, harness.py
+- 2026-08-03 | agent_run now runs off the health probe on a background thread; AGENT_LOOP_ENABLED kill switch | files: command_channel.py
+- 2026-08-03 | Added /agent/browser_budget and /agent/browser_read (operator-only) | files: agent_loop/routes.py, main.py
 - 2026-08-02 | kml_watchdog.py: external KalshiML monitor, own asyncio task, Resend alerts on transitions, off by default | files: kml_watchdog.py, main.py
 - 2026-08-02 | DEPLOY BRANCH IS Agent-loop, not main — commits to main never reach service 509d2aef | files: main.py
 <!-- Agents: append one-line deltas here, MAX 120 CHARS.

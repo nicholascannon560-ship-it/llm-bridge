@@ -23,75 +23,78 @@ Autonomous agent harness that runs multi-turn tool-calling loops via Kimi (or an
 
 ## Tools Available
 
+Tools come in **sets**, and the split is the point.
+
+| Set | Tools | Can write? | Sees untrusted web text? |
+|-----|-------|-----------|--------------------------|
+| `build` (default) | github_read, github_commit, railway_* , llm_chat, read/write_memory, http_get, kml_* | yes | no browser |
+| `research` | github_read, railway_get_*, llm_chat, read_memory, http_get, kml_*, **browser_read**, **browser_research** | no | yes |
+
+`resolve_tools()` / `assert_tool_set_safe()` refuse any set that puts a
+browsing tool next to `github_commit`, `railway_set_env`, `railway_redeploy`
+or `write_memory`. A web page must not be able to cause a commit, change an
+env var, or plant a "lesson" that gets replayed into later runs. Browse in one
+run, act in a second one.
+
 | Tool | What it does |
 |------|-------------|
-| `github_read` | Read files / list dirs from any repo |
-| `github_commit` | Commit a single file to any repo |
-| `railway_redeploy` | Redeploy a Railway service |
-| `railway_set_env` | Set/update a Railway env var |
-| `railway_get_status` | Get latest deployment status |
-| `railway_get_logs` | Fetch logs for a deployment |
-| `llm_chat` | Recursive LLM call for sub-analysis |
-| `write_memory` | Append a reflection to `agent_memory.jsonl` |
-| `read_memory` | Read recent reflections |
+| `browser_read` | One page via Browserbase Fetch → markdown. Handles JS. Cheap: 1 of 1,000 monthly calls, no browser time. |
+| `browser_research` | A real browser agent run (Browserbase Agents API) for multi-step tasks. **3 per month on the free plan.** |
+| `github_read` / `github_commit` | Read / commit repo files |
+| `railway_*` | Status, logs, redeploy, set_env (protected names refused) |
+| `llm_chat` | Sub-question to another model |
+| `read_memory` / `write_memory` | JSONL reflections (`write_memory` is build-only) |
+| `http_get`, `kml_data_read`, `kml_app_logs` | Allowlisted fetch through `fetch_routes` |
+
+## Browsing: limits and permission
+
+No browser-use, no playwright, no chromium in the container — browser-use
+0.13.7 pins `pydantic==2.12.5` against the bridge's 2.10.4, and a browser
+running *inside* this container could reach Railway's private network.
+Everything goes over HTTPS to `api.browserbase.com`.
+
+Free-tier ceilings, and what we set under them:
+
+| | Free plan | Our default |
+|---|---|---|
+| Agent runs | 3 / month | 3 (1 per agent run) |
+| Fetch calls | 1,000 / month | 900 (6 per agent run) |
+| Browser time | 1 hour / month | 3,300 s |
+| Concurrency | 3 | 1 |
+| Session length | 15 min | 840 s |
+| Proxy | 0 GB | never requested |
+
+`GET /agent/browser_budget` shows current usage and the active grant. The
+ledger is container-local and a deploy wipes it; set `BROWSERBASE_PROJECT_ID`
+so it reconciles against Browserbase's own session list.
+
+### Logging in — operator's order only
+
+`mode="interactive"` is refused unless a grant is present:
+
+```
+BROWSER_INTERACTIVE_GRANT = domains=portal.acme.com;creds=ACME;until=2026-08-04T18:00Z
+BROWSER_CRED_ACME_USERNAME = ...
+BROWSER_CRED_ACME_PASSWORD = ...
+```
+
+Set it by hand in Railway. It is deliberately not a tool argument and not a
+field in the command file — command files are committed to this repo, so a
+secret there would live in git history. `railway_set_env` refuses to write any
+`BROWSER_*` variable, so an agent cannot grant itself. Expiry is required;
+keep it to hours. Credentials reach Browserbase as run `variables` and the
+agent uses `%acme_password%` — our model never sees the values.
 
 ## Integration
 
-### Option A: Patch command_channel.py (recommended)
-
-Run the patch script after reviewing it:
-
-```bash
-python agent_loop/PATCH_command_channel.py
-```
-
-This adds:
-- `agent_run` action to the command channel
-- Tool-aware `llm_chat` (forwards `tools`/`tool_choice`)
-
-Then redeploy the bridge.
-
-### Option B: Standalone FastAPI route (future)
-
-Mount `agent_router` in `main.py` to expose `POST /agent/run`.
-
-## Usage via Command Channel
-
-Drop a JSON command into `commands/pending/`:
+`agent_run` through the command channel:
 
 ```json
-{
-  "action": "agent_run",
-  "task": "Read KalshiML/MAP.md, check for stale slices, commit fixes if any",
-  "max_turns": 8,
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "low"
-}
+{"action": "agent_run", "task": "...", "tool_set": "research", "max_turns": 8}
 ```
 
-The bridge processes it on the next health tick and writes the full transcript to `commands/results/<id>.json`.
-
-## Self-Learning Loop
-
-The agent automatically writes a memory entry after every run summarizing:
-- Task description
-- Final status (complete / max_turns_reached / error)
-- Turns used
-- Total cost
-
-Future agent runs load the 5 most recent memories into the system prompt, so the agent learns from its own history.
-
-## Cost Control
-
-- `max_turns` caps the loop (default 10)
-- `reasoning_effort="low"` keeps Kimi fast and cheap for mechanical steps
-- Each turn's cost is tracked in the transcript
-- Total cost is returned in the result
-
-## Safety
-
-- All file commits go through GitHub API (no local filesystem writes outside the container)
-- Railway operations use the bridge's existing token (no new secrets)
-- Memory is append-only JSONL (no destructive updates)
-- Agent cannot delete repos, branches, or files — only read and commit
+It returns immediately with `status: "started"`. The run happens on a
+background thread — `_execute` is called from `GET /health`, which is
+Railway's liveness probe, so a multi-minute run there means failed probes and
+a restarted container. The result file is overwritten when the run finishes.
+One run at a time; `AGENT_LOOP_ENABLED=0` stops all of them without a deploy.
