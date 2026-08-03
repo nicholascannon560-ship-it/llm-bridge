@@ -1,0 +1,1 @@
+{"action": "railway_gql", "query": "mutation serviceCreate($input: ServiceCreateInput!) { serviceCreate(input: $input) { id name } }", "variables": {"input": {"projectId": "cb4a98c2-f856-4a30-a684-e1164a5d1b81", "name": "web", "branch": "main", "source": {"repo": "nicholascannon560-ship-it/jason-boyd-site"}}}}
