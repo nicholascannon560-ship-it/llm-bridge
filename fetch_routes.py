@@ -57,6 +57,30 @@ def allowed_hosts() -> set[str]:
     return {h.strip().lower() for h in raw.split(",") if h.strip()}
 
 
+def _host_allowed(host: str, allowed: set[str]) -> bool:
+    """Exact match, plus a leading-wildcard form: "*.up.railway.app" matches any
+    subdomain of up.railway.app but NOT the bare apex.
+
+    The wildcard is a genuine widening -- *.up.railway.app covers every app on
+    that PaaS, not only ours -- so it is opt-in via env and deliberately cannot
+    express "*" or a bare TLD. The private/loopback/link-local IP check in
+    _check_url still runs on whatever the host resolves to, so this does not
+    open a path to internal addresses.
+    """
+    if host in allowed:
+        return True
+    for pat in allowed:
+        if not pat.startswith("*."):
+            continue
+        suffix = pat[1:]                      # ".up.railway.app"
+        base = pat[2:]                        # "up.railway.app"
+        if not base or base.count(".") < 1:   # refuse "*.com" and "*"
+            continue
+        if host.endswith(suffix) and len(host) > len(suffix):
+            return True
+    return False
+
+
 def _check_url(url: str) -> str:
     """Validate scheme, host allowlist and resolved IPs. Returns the hostname."""
     parts = urlsplit(url)
@@ -66,7 +90,7 @@ def _check_url(url: str) -> str:
     if not host:
         raise HTTPException(400, "no host in url")
     allowed = allowed_hosts()
-    if host not in allowed:
+    if not _host_allowed(host, allowed):
         raise HTTPException(
             403,
             f"host {host!r} is not in FETCH_ALLOWED_HOSTS. Allowed: {sorted(allowed)}",

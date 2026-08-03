@@ -230,6 +230,7 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Filename, e.g. exec_scorecard.json"},
+                    "host": {"type": "string", "description": "Service host to read from. Defaults to the KalshiML dashboard. Any allowlisted host with an /api/file endpoint works."},
                     "max_bytes": {"type": "integer", "description": "Response cap", "default": 8000}
                 },
                 "required": ["path"]
@@ -252,6 +253,45 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "contains": {"type": "string", "description": "Substring filter"},
                     "n": {"type": "integer", "description": "Lines to search, max 8000", "default": 2000}
+                },
+                "required": []
+            }
+        }
+    }
+,
+    {
+        "type": "function",
+        "function": {
+            "name": "github_list_repos",
+            "description": (
+                "List every GitHub repo the bridge token can reach, newest-pushed first. Use this "
+                "before github_read when you do not already know the exact repo name -- do not "
+                "guess names, and note a 404 from github_read usually means a wrong name or a "
+                "wrong branch, not a missing file."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Max repos", "default": 50}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "railway_list",
+            "description": (
+                "List Railway projects, and the services + environments inside one. Call with no "
+                "arguments to see all projects, then pass project_id for its services. Service and "
+                "project NAMES have been changed before while IDs stayed constant -- always work "
+                "from IDs. Feed the service_id into railway_get_status or railway_get_logs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "Omit to list all projects"}
                 },
                 "required": []
             }
@@ -444,7 +484,9 @@ async def _tool_kml_data_read(args: Dict) -> Dict:
     path = (args.get("path") or "").strip().lstrip("/")
     if not path:
         return {"error": "path is required"}
-    return await _do_fetch(f"{KML_DASHBOARD}/api/file?path={quote(path)}",
+    host = (args.get("host") or "").strip().rstrip("/")
+    base = host if host.startswith("https://") else (f"https://{host}" if host else KML_DASHBOARD)
+    return await _do_fetch(f"{base}/api/file?path={quote(path)}",
                            int(args.get("max_bytes") or 8000))
 
 
@@ -456,6 +498,28 @@ async def _tool_kml_app_logs(args: Dict) -> Dict:
     if contains:
         url += f"&contains={quote(contains)}"
     return await _do_fetch(url, 16000)
+
+
+async def _tool_github_list_repos(args: Dict) -> Dict:
+    import httpx
+    limit = max(1, min(int(args.get("limit") or 50), 100))
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(f"{GITHUB_API}/user/repos",
+                                headers=_github_headers(),
+                                params={"per_page": limit, "sort": "pushed"})
+    if resp.status_code != 200:
+        return {"error": f"GitHub API {resp.status_code}", "detail": resp.text[:300]}
+    return {"repos": [{"full_name": r["full_name"],
+                       "default_branch": r.get("default_branch"),
+                       "private": r.get("private"),
+                       "pushed_at": r.get("pushed_at")} for r in resp.json()]}
+
+
+async def _tool_railway_list(args: Dict) -> Dict:
+    pid = (args.get("project_id") or "").strip()
+    if pid:
+        return {"project_id": pid, "services": await list_services(pid)}
+    return {"projects": await list_projects()}
 
 
 _TOOL_HANDLERS = {
@@ -471,4 +535,6 @@ _TOOL_HANDLERS = {
     "http_get": _tool_http_get,
     "kml_data_read": _tool_kml_data_read,
     "kml_app_logs": _tool_kml_app_logs,
+    "github_list_repos": _tool_github_list_repos,
+    "railway_list": _tool_railway_list,
 }
