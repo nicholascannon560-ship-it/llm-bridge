@@ -1,0 +1,9 @@
+{
+  "id": "maker-audit-grounded-1",
+  "status": "error",
+  "action": "agent_run",
+  "result": null,
+  "error": "Client error '429 Too Many Requests' for url 'https://api.moonshot.ai/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429",
+  "processed_at": "2026-08-03T03:12:57.546206+00:00",
+  "traceback": "                       ^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 282, in _execute\n    return asyncio.run(run_agent(\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/.nix-profile/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/root/.nix-profile/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"uvloop/loop.pyx\", line 1518, in uvloop.loop.Loop.run_until_complete\n  File \"/app/agent_loop/harness.py\", line 262, in run_agent\n    return await harness.run()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/app/agent_loop/harness.py\", line 115, in run\n    llm_result = await self._call_llm()\n                 ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/agent_loop/harness.py\", line 202, in _call_llm\n    resp = await router.chat(chat_req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/llm_gateway.py\", line 544, in chat\n    resp = await provider.chat(req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/llm_gateway.py\", line 339, in chat\n    r.raise_for_status()\n  File \"/opt/venv/lib/python3.12/site-packages/httpx/_models.py\", line 829, in raise_for_status\n    raise HTTPStatusError(message, request=request, response=self)\nhttpx.HTTPStatusError: Client error '429 Too Many Requests' for url 'https://api.moonshot.ai/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429\n"
+}
