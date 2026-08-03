@@ -1,0 +1,1 @@
+{"action": "railway_gql", "query": "mutation projectCreate($input: ProjectCreateInput!) { projectCreate(input: $input) { id name } }", "variables": {"input": {"name": "jason-boyd-site"}}}
