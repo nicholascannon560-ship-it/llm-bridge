@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Use the browser_research tool to research current opportunities in prediction markets (especially Kalshi and similar platforms) related to weather, temperature, or short-term economic indicators. Look for contracts that appear mispriced, have low liquidity but clear data edges, or where public weather forecasts / economic data could give an advantage. Extract any specific contract names, current prices, volumes, and note any apparent edges or inefficiencies. Stay in read_only mode. After the browser research, summarize the most promising findings clearly.",
+  "max_turns": 8,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
