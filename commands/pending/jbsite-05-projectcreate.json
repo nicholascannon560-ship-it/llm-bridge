@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "mutation projectCreate($input: ProjectCreateInput!) { projectCreate(input: $input) { id name } }", "variables": {"input": {"name": "jason-boyd-site", "workspaceId": "aadf39b5-5691-4d05-bc7f-d85a5155ffb1"}}}
