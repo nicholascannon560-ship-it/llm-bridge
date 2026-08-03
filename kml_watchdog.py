@@ -463,6 +463,20 @@ CHECKS = {
 # Checks that only make sense when we actually reached the dashboard.
 _NEEDS_REACHABLE = set(CHECKS) - {"dashboard_unreachable"}
 
+# Downstream symptom -> upstream cause. Same intent as _NEEDS_REACHABLE: one
+# fault should send one email, not two. While the upstream check is bad, the
+# downstream check is evaluated but never allowed to alert, and its state is
+# held at ok so that it RE-ARMS: if the symptom is still present after the
+# upstream cause clears, it transitions ok -> bad and mails then. Suppressed
+# firings are counted in emails_suppressed and the reason is visible in the
+# check's msg, so nothing goes silent — it just stops double-reporting.
+_DEPENDS_ON = {
+    # No candidates is what a starved forecast recorder looks like from the
+    # outside. If Open-Meteo tripped its daily cap early, that is the fault
+    # worth an email; the zero-candidate stretch is its shadow.
+    "no_candidates": "openmeteo_cap_early",
+}
+
 
 # --------------------------------------------------------------------------- #
 # Sampling
@@ -580,13 +594,25 @@ def evaluate(s: dict[str, Any], now: Optional[float] = None) -> list[dict[str, A
     """Run checks, update state, return the list of TRANSITIONS to report."""
     now = now if now is not None else time.time()
     transitions = []
-    for name, fn in CHECKS.items():
+    # Upstream causes first, so a symptom is judged against this cycle's cause
+    # rather than last cycle's.
+    order = sorted(CHECKS, key=lambda n: n in _DEPENDS_ON)
+    for name in order:
+        fn = CHECKS[name]
         if not s.get("reachable") and name in _NEEDS_REACHABLE:
             continue   # don't cascade: one outage should not fire six alerts
         try:
             bad, msg = fn(s, now)
         except Exception as e:
             bad, msg = False, f"check error: {type(e).__name__}: {e}"
+        dep = _DEPENDS_ON.get(name)
+        if bad and dep and (_STATE["checks"].get(dep) or {}).get("bad"):
+            # Symptom of a cause that is already being reported. Hold at ok so
+            # it re-arms and speaks up if it outlives the cause.
+            _STATE["emails_suppressed"] += 1
+            _STATE["checks"][name] = {"bad": False, "since": now,
+                                      "msg": f"{msg} [suppressed: downstream of {dep}]"}
+            continue
         prev = _STATE["checks"].get(name) or {"bad": False, "since": now, "msg": ""}
         if bad != prev["bad"]:
             _STATE["checks"][name] = {"bad": bad, "since": now, "msg": msg}
