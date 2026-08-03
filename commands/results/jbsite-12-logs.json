@@ -1,0 +1,10 @@
+{
+  "id": "jbsite-12-logs",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": []
+  },
+  "error": null,
+  "processed_at": "2026-08-03T04:37:41.445113+00:00"
+}
