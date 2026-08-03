@@ -192,6 +192,71 @@ TOOL_SCHEMAS = [
             }
         }
     }
+,
+    {
+        "type": "function",
+        "function": {
+            "name": "http_get",
+            "description": (
+                "Fetch an allowlisted https URL and return its body as text. Allowed hosts come "
+                "from FETCH_ALLOWED_HOSTS and currently cover the KalshiML dashboard, the bridge "
+                "itself, api.elections.kalshi.com, Open-Meteo, IEM (mesonet.agron.iastate.edu) and "
+                "api.weather.gov. A refusal naming FETCH_ALLOWED_HOSTS means that HOST is not "
+                "permitted -- it does NOT mean this tool is unavailable, so do not conclude you "
+                "have no HTTP access and fall back to guessing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Full https URL"},
+                    "max_bytes": {"type": "integer", "description": "Response cap", "default": 8000}
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kml_data_read",
+            "description": (
+                "Read a live state/JSON file from the running KalshiML instance -- CURRENT state, "
+                "not repo content, and the two disagree often. Useful paths: exec_scorecard.json "
+                "(live fill rates, n_graded), exec_backfill_scorecard.json (maker-vs-taker "
+                "backfill), maker_policy_promote.json (promote gates), ml_status.json, "
+                "exec_grade_checkpoint.json."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Filename, e.g. exec_scorecard.json"},
+                    "max_bytes": {"type": "integer", "description": "Response cap", "default": 8000}
+                },
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "kml_app_logs",
+            "description": (
+                "Read the running KalshiML process's in-memory log tail, each line stamped with its "
+                "own UTC time. ALWAYS pass `contains` -- the buffer holds ~8000 lines and an "
+                "unfiltered pull is mostly noise. Useful filters: 'SCAN' (candidate counts and "
+                "reject reasons), '429', '[ENS-GATE]', '[evidence]', '[exec-grade]'. The buffer does "
+                "NOT survive a process restart, so after a deploy it only covers time since restart."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "contains": {"type": "string", "description": "Substring filter"},
+                    "n": {"type": "integer", "description": "Lines to search, max 8000", "default": 2000}
+                },
+                "required": []
+            }
+        }
+    }
 ]
 
 # Convenience alias
@@ -350,6 +415,49 @@ async def _tool_read_memory(args: Dict) -> Dict:
     return {"entries": entries, "count": len(entries)}
 
 
+KML_DASHBOARD = os.getenv("KML_DASHBOARD_URL", "https://kalshiml-production.up.railway.app")
+
+
+async def _do_fetch(url: str, max_bytes: int = 8000) -> Dict:
+    """Reuse the bridge's own allowlisted fetch path rather than opening a second
+    unchecked egress. Host policy stays in exactly one place (fetch_routes)."""
+    from fetch_routes import FetchRequest, fetch
+    try:
+        resp = await fetch(FetchRequest(url=url, max_bytes=max_bytes))
+    except Exception as e:
+        detail = getattr(e, "detail", None) or str(e)
+        return {"error": str(detail),
+                "hint": ("If this names FETCH_ALLOWED_HOSTS, the HOST is not permitted. "
+                         "The tool works -- pick an allowlisted host.")}
+    return resp.model_dump() if hasattr(resp, "model_dump") else resp.dict()
+
+
+async def _tool_http_get(args: Dict) -> Dict:
+    url = (args.get("url") or "").strip()
+    if not url:
+        return {"error": "url is required"}
+    return await _do_fetch(url, int(args.get("max_bytes") or 8000))
+
+
+async def _tool_kml_data_read(args: Dict) -> Dict:
+    from urllib.parse import quote
+    path = (args.get("path") or "").strip().lstrip("/")
+    if not path:
+        return {"error": "path is required"}
+    return await _do_fetch(f"{KML_DASHBOARD}/api/file?path={quote(path)}",
+                           int(args.get("max_bytes") or 8000))
+
+
+async def _tool_kml_app_logs(args: Dict) -> Dict:
+    from urllib.parse import quote
+    n = max(1, min(int(args.get("n") or 2000), 8000))
+    url = f"{KML_DASHBOARD}/api/logs?n={n}"
+    contains = (args.get("contains") or "").strip()
+    if contains:
+        url += f"&contains={quote(contains)}"
+    return await _do_fetch(url, 16000)
+
+
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
@@ -360,4 +468,7 @@ _TOOL_HANDLERS = {
     "llm_chat": _tool_llm_chat,
     "write_memory": _tool_write_memory,
     "read_memory": _tool_read_memory,
+    "http_get": _tool_http_get,
+    "kml_data_read": _tool_kml_data_read,
+    "kml_app_logs": _tool_kml_app_logs,
 }
