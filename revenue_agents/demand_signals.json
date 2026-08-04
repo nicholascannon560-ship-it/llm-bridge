@@ -1,0 +1,75 @@
+{
+  "run_at": "2026-08-04T02:30:00Z",
+  "gathered_by": "claude-opus-5 (manual stand-in — the research tool_set hangs; see change-log issue #2)",
+  "signals": [
+    {
+      "id": "sig_polymarket_daily_temp",
+      "area": "markets",
+      "observation": "Polymarket runs a large book of daily temperature markets — the same contract shape KalshiML already models. Subcategory counts seen: 126-164 daily-temperature markets inside a Weather/Climate category listing 369-434 markets.",
+      "evidence_quote": "Category pages list Daily Temperature at 126 and Weather at 164, with per-market 24h volume shown.",
+      "numbers": "Weather category aggregate volume cited around $2.2M; Global Temp around $4.6M. Individual daily markets are much smaller.",
+      "source_url": "https://polymarket.com/climate-science/temperature",
+      "observed_at": "2026-05-18",
+      "strength": "strong",
+      "why_it_might_be_nothing": "The heavily traded names are Hong Kong, London and Shanghai — cities KML has no model for, and Open-Meteo quota is already the binding constraint on adding cities. Per-market depth on any single day may be too thin to absorb size, and it is a crypto-funded venue with different resolution sources and settlement mechanics than Kalshi."
+    },
+    {
+      "id": "sig_1099_threshold_2026",
+      "area": "payments",
+      "observation": "The 1099-NEC reporting threshold rose to $2,000 for 2026, up from $600. Every small contractor who paid subs between those figures has a filing obligation that just changed, and most learn about it from their bookkeeper in January.",
+      "evidence_quote": "Paychex states the 1099-NEC threshold is $2,000 effective 2026, up from $600 in 2025.",
+      "numbers": "$600 -> $2,000 threshold; 1099-NEC due to contractor and IRS by January 31.",
+      "source_url": "https://www.paychex.com/articles/payroll/how-to-pay-1099-workers",
+      "observed_at": "2026-04-09",
+      "strength": "medium",
+      "why_it_might_be_nothing": "A threshold change is a compliance fact, not demand. It raises the threshold, which means FEWER forms — it may reduce the pain rather than increase it."
+    },
+    {
+      "id": "sig_contractor_payment_pain",
+      "area": "payments",
+      "observation": "Vendors selling into contractor payments describe the same recurring failure modes: missed payment deadlines, TIN errors, and inconsistent pay schedules across a roster of subs.",
+      "evidence_quote": "Routable describes missed deadlines, TIN errors and inconsistent pay schedules as the core pain.",
+      "numbers": "Vendor marketing, not measured demand. No prices observed on the page.",
+      "source_url": "https://www.routable.com/resources/best-way-to-pay-1099-contractors/",
+      "observed_at": "2026-07-27",
+      "strength": "weak",
+      "why_it_might_be_nothing": "This is a competitor's landing page describing pain it claims to solve. It is evidence that a market exists and is contested, not that anyone is unserved. Treat as competitive intelligence, not demand."
+    },
+    {
+      "id": "sig_astro_pdf_pricing",
+      "area": "astro",
+      "observation": "Software-generated natal chart PDFs are an established paid product on Etsy, sold as instant or same-day digital delivery. Sellers advertise the automation openly rather than hiding it.",
+      "evidence_quote": "Listings advertise software-generated in-depth natal reports delivered within 1-24 hours of purchase.",
+      "numbers": "Observed price points: roughly $17-25 for a one-year forecast add-on; around $59 for a chart-plus-report bundle discounted from $108. Some listings show 300+ favorites.",
+      "source_url": "https://www.etsy.com/listing/1356956726/in-depth-astrology-birth-chart-reading",
+      "observed_at": "2026-04-23",
+      "strength": "strong",
+      "why_it_might_be_nothing": "Etsy digital-goods search is saturated and fee-heavy, favorites are not sales, and a new shop with no reviews starts invisible. Also: this is a marketplace audience, which may collide with the operator's hard-no if it counts as an audience he doesn't have."
+    },
+    {
+      "id": "sig_astro_generic_complaint",
+      "area": "astro",
+      "observation": "Buyer reviews on these automated reports repeatedly flag the same defect: the output reads as repetitive and padded. The complaint is about generic template prose, not about astrology.",
+      "evidence_quote": "A buyer review describes an otherwise helpful reading as somewhat repetitive.",
+      "numbers": "Qualitative. Single review observed on a marketplace category page.",
+      "source_url": "https://www.etsy.com/market/astrology_charts_readings",
+      "observed_at": "2026-08-03",
+      "strength": "medium",
+      "why_it_might_be_nothing": "One review is not a pattern, and buyers who leave positive reviews with a small caveat are still buying. Quality may not be the purchase driver at this price point — speed and novelty may be."
+    }
+  ],
+  "dead_ends": [
+    {
+      "area": "trades",
+      "searched_for": "selling carpentry jigs, templates, plans or shop drawings as digital downloads",
+      "result": "no_signal_found",
+      "detail": "Every result was free plans — Fine Woodworking, Wood Magazine, LumberJocks, CAD template libraries — or generic listicles about selling wood crafts. No observed price point for a paid plan or jig template, and no complaint thread describing an unmet need. The free tier appears to be the market."
+    },
+    {
+      "area": "trades",
+      "searched_for": "paid tools or services aimed at finish carpenters specifically",
+      "result": "no_signal_found",
+      "detail": "Searches returned contractor-facing SaaS aimed at general contractors and estimators, nothing scoped to the finish trades."
+    }
+  ]
+}
