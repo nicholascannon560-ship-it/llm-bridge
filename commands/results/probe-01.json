@@ -10,14 +10,14 @@
     "transcript": [
       {
         "turn": 1,
-        "timestamp": "2026-08-04T02:17:02.401306+00:00",
+        "timestamp": "2026-08-04T02:17:01.958158+00:00",
         "llm": {
           "content_preview": "PROBE",
           "tool_calls_count": 0,
-          "cost_cents": 0.8256,
+          "cost_cents": 0.8150999999999999,
           "usage": {
             "prompt_tokens": 2497,
-            "completion_tokens": 51,
+            "completion_tokens": 44,
             "cached_tokens": 0
           },
           "finish_reason": "stop"
@@ -28,15 +28,15 @@
     ],
     "turns_used": 1,
     "max_turns": 2,
-    "total_cost_cents": 0.8256,
+    "total_cost_cents": 0.8151,
     "total_tokens": {
       "prompt": 2497,
-      "completion": 51
+      "completion": 44
     },
     "provider": "moonshot",
     "model": "kimi-k3",
     "tool_set": "build"
   },
   "error": null,
-  "processed_at": "2026-08-04T02:17:06.027600+00:00"
+  "processed_at": "2026-08-04T02:17:07.922425+00:00"
 }
