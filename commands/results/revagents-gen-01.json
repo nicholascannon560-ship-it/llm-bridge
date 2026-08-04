@@ -1,0 +1,13 @@
+{
+  "id": "revagents-gen-01",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "started",
+    "task_id": "revagents-gen-01",
+    "note": "running in the background; this result file is overwritten on completion",
+    "started_at": "2026-08-04T02:25:39.927057+00:00"
+  },
+  "error": null,
+  "processed_at": "2026-08-04T02:25:39.926101+00:00"
+}
