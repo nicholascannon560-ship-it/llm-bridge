@@ -80,6 +80,7 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-03 | revenue_agents/: prompt-only idea pipeline (scout/generator/redteam/ranker), no code wired | files: revenue_agents/
 - 2026-08-03 | Browser tool via Browserbase REST (no browser-use: pydantic pin clash); free-tier budgets | files: agent_loop/browser.py
 - 2026-08-03 | Tool-set split: browsing never shares a loop with commit/set_env/write_memory | files: agent_loop/tools.py, harness.py
 - 2026-08-03 | agent_run now runs off the health probe on a background thread; AGENT_LOOP_ENABLED kill switch | files: command_channel.py
