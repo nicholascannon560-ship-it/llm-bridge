@@ -1,0 +1,6 @@
+{
+  "action": "agent_run",
+  "tool_set": "research",
+  "max_turns": 14,
+  "task": "Read revenue_agents/prompts/01_scout.md and revenue_agents/assets.json from repo llm-bridge, branch Agent-loop, using github_read. Then execute 01_scout.md exactly as written: gather demand signals with browser_read and http_get. Do NOT use browser_research (budget is 3/month). Your final message must be the complete demand_signals.json document and nothing else \u2014 no prose, no markdown fences."
+}
