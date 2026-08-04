@@ -1,0 +1,13 @@
+{
+  "id": "revagents-scout-02",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "started",
+    "task_id": "revagents-scout-02",
+    "note": "running in the background; this result file is overwritten on completion",
+    "started_at": "2026-08-04T02:01:47.214061+00:00"
+  },
+  "error": null,
+  "processed_at": "2026-08-04T02:01:47.213210+00:00"
+}
