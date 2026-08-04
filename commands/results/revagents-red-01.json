@@ -1,13 +1,7 @@
 {
   "id": "revagents-red-01",
-  "status": "ok",
-  "action": "agent_run",
-  "result": {
-    "status": "started",
-    "task_id": "revagents-red-01",
-    "note": "running in the background; this result file is overwritten on completion",
-    "started_at": "2026-08-04T02:27:43.984808+00:00"
-  },
-  "error": null,
-  "processed_at": "2026-08-04T02:27:43.983933+00:00"
+  "status": "error",
+  "error": "write commands/results/revagents-red-01.json failed: 409 {\"message\":\"is at 0a0b41c032b8a6aab44c96bab12ddcabb4eeb56b but expected 816b175560e78a857b779adaef2f9c52a0207a3f\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "attempts": 1,
+  "processed_at": "2026-08-04T02:27:45.553791+00:00"
 }
