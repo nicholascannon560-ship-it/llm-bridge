@@ -1,0 +1,6 @@
+{
+  "action": "agent_run",
+  "tool_set": "build",
+  "max_turns": 12,
+  "task": "You are the RED TEAM stage. With github_read on repo llm-bridge: read revenue_agents/prompts/03_redteam.md, revenue_agents/assets.json and revenue_agents/demand_signals.json from branch Agent-loop, and revenue_agents/pitches_raw.json from branch main. Execute 03_redteam.md. DEVIATION YOU MUST HONOUR: you have NO web access this run (the research tool set is broken). So SKIP step 3, the competitor check, and do NOT claim to have searched for competitors or cite any price you did not read in the input files. Where a competitor check would have decided the verdict, say so in 'cheapest_check' and mark the pitch WOUNDED rather than guessing. Do steps 1, 2, 4 and 5 fully \u2014 schema check, signal check, mechanism attack, test audit. You are not scored on how many you kill. Commit the result with github_commit to branch 'main' at revenue_agents/pitches_judged.json \u2014 that one file only, and NOT to Agent-loop. Then stop."
+}
