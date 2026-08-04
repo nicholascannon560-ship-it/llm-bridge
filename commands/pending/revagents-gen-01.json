@@ -1,0 +1,6 @@
+{
+  "action": "agent_run",
+  "tool_set": "build",
+  "max_turns": 12,
+  "task": "You are the GENERATOR stage. Using github_read on repo llm-bridge branch Agent-loop, read these four files: revenue_agents/prompts/02_generator.md, revenue_agents/assets.json, revenue_agents/demand_signals.json, revenue_agents/pitch.schema.json. Then execute 02_generator.md exactly as written against those inputs. IMPORTANT DEVIATION: demand_signals.json already exists in the repo, so do NOT try to read a scout result file and do NOT re-commit demand_signals.json. IMPORTANT: commit your output with github_commit to branch 'main' (NOT Agent-loop \u2014 committing to Agent-loop redeploys the live bridge and would kill this run). Path: revenue_agents/pitches_raw.json. Commit exactly that one file and nothing else. Then stop and give a one-line summary."
+}
