@@ -1,0 +1,13 @@
+{
+  "id": "probe-01",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "started",
+    "task_id": "probe-01",
+    "note": "running in the background; this result file is overwritten on completion",
+    "started_at": "2026-08-04T02:17:01.958647+00:00"
+  },
+  "error": null,
+  "processed_at": "2026-08-04T02:17:01.943104+00:00"
+}
