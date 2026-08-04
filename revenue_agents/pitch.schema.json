@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pitch",
+  "type": "object",
+  "required": [
+    "id", "thesis", "assets_used", "signal_ids", "customer", "price",
+    "why_now", "first_dollar_test", "time_to_first_dollar_days",
+    "cash_required_usd", "hours_per_week_ongoing", "kill_criteria",
+    "why_not_already_done", "biggest_unknown", "confidence"
+  ],
+  "properties": {
+    "id": { "type": "string", "description": "slug, stable across runs" },
+    "thesis": { "type": "string", "maxLength": 200, "description": "ONE sentence. Who pays whom for what." },
+    "assets_used": {
+      "type": "array", "minItems": 2, "items": { "type": "string" },
+      "description": "ids from assets.json. Fewer than 2 = auto-reject."
+    },
+    "signal_ids": {
+      "type": "array", "minItems": 1, "items": { "type": "string" },
+      "description": "ids from demand_signals.json. Zero = auto-reject."
+    },
+    "customer": { "type": "string", "description": "Specific enough to name three real ones." },
+    "price": { "type": "string", "description": "Amount and unit, e.g. '$40/mo' or '$900 one-time'." },
+    "why_now": { "type": "string", "description": "What changed. 'It's a big market' is not an answer." },
+    "first_dollar_test": {
+      "type": "string",
+      "description": "Cheapest experiment producing a real dollar or a real no. Must be doable in one week."
+    },
+    "time_to_first_dollar_days": { "type": "integer" },
+    "cash_required_usd": { "type": "number", "description": "For the test, not the business." },
+    "hours_per_week_ongoing": { "type": "number" },
+    "kill_criteria": {
+      "type": "string",
+      "description": "The observable result that ends this. Must be falsifiable."
+    },
+    "why_not_already_done": { "type": "string" },
+    "biggest_unknown": { "type": "string" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "boring_slot": { "type": "boolean", "description": "true if submitted for the mandatory unsexy slot" }
+  }
+}

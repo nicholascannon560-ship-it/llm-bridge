@@ -1,0 +1,84 @@
+{
+  "_comment": "The constraint file. Every pitch must cite >=2 asset ids. Edit the TODOs before first run - the whole system is only as good as this file.",
+  "version": 1,
+  "operator": {
+    "hours_per_week_available": "TODO: real number, be honest",
+    "hours_per_week_max_sustained": "TODO: what you can hold for 6 months without dropping something",
+    "cash_ceiling_first_test_usd": "TODO: most you'll spend to learn if an idea is real",
+    "cash_ceiling_total_usd": "TODO: most you'd put in before it must pay for itself",
+    "risk_tolerance": "TODO: one sentence in your own words",
+    "hard_nos": [
+      "Anything requiring continuous live attention during work hours",
+      "Anything that needs a second person hired before first revenue",
+      "TODO: add your own"
+    ]
+  },
+  "assets": [
+    {
+      "id": "trade_skill",
+      "kind": "skill",
+      "desc": "Finish carpentry at professional level; job-site judgment; tool ownership",
+      "leverage": "Can produce physical goods, evaluate builds, teach, or spec work others can't"
+    },
+    {
+      "id": "trade_network",
+      "kind": "network",
+      "desc": "Hudson Valley contractor/trade network (Saugerties-Rhinebeck-Kingston corridor)",
+      "leverage": "Warm distribution to small contractors - a real, hard-to-buy channel"
+    },
+    {
+      "id": "astro_brand",
+      "kind": "brand",
+      "desc": "Helm & Fortune - traditional Hellenistic astrology practice; natal readings, horary, lunation/daily subscription tiers",
+      "leverage": "Existing audience, existing paying subscribers, existing content pipeline"
+    },
+    {
+      "id": "astro_pipeline",
+      "kind": "software",
+      "desc": "Multi-skill automated reading pipeline (engine -> portraits -> verdict blocks -> prose -> PDF)",
+      "leverage": "Marginal cost per report near zero; capacity is not the bottleneck"
+    },
+    {
+      "id": "quant_infra",
+      "kind": "software",
+      "desc": "KalshiML - live prediction-market ML system, evidence/gating engine, calibration, execution layer",
+      "leverage": "Working forecasting + calibration machinery, transferable beyond weather markets"
+    },
+    {
+      "id": "payments_stack",
+      "kind": "software",
+      "desc": "SplitRail - multi-tenant Stripe Connect batch payouts for contractors paying 1099 workers",
+      "leverage": "Payment rails already built; a second product could ride them"
+    },
+    {
+      "id": "agent_bridge",
+      "kind": "software",
+      "desc": "Railway/GitHub bridge with agent_loop, tool layer, allowlisted fetch, watchdog, Resend email",
+      "leverage": "Can build and ship small services fast and unattended"
+    },
+    {
+      "id": "deploy_ability",
+      "kind": "skill",
+      "desc": "Ship and operate production services on Railway/GitHub solo",
+      "leverage": "Idea-to-live in days, not months"
+    },
+    {
+      "id": "mechanical",
+      "kind": "skill",
+      "desc": "Mechanically inclined; strong used-car evaluation knowledge",
+      "leverage": "Arbitrage/appraisal/content angles in a market with real money and bad information"
+    }
+  ],
+  "existing_revenue": [
+    { "id": "wages", "desc": "Finish carpentry wages", "stability": "high", "ceiling": "capped by hours" },
+    { "id": "astro_rev", "desc": "Helm & Fortune readings + subscriptions", "stability": "medium", "ceiling": "unclear - untested" },
+    { "id": "doordash", "desc": "DoorDash delivery", "stability": "high", "ceiling": "capped by hours, low rate" },
+    { "id": "kalshi", "desc": "KalshiML - paper mode, not yet trading real size", "stability": "none yet", "ceiling": "unknown" }
+  ],
+  "explicitly_in_scope": [
+    "Polymarket / other prediction markets",
+    "Equities or other markets",
+    "Physical or digital products",
+    "Creator/influencer businesses (own or as an operator for others)"
+  ]
+}
