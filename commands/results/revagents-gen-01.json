@@ -1,13 +1,150 @@
 {
   "id": "revagents-gen-01",
-  "status": "ok",
   "action": "agent_run",
+  "status": "ok",
   "result": {
-    "status": "started",
+    "status": "complete",
     "task_id": "revagents-gen-01",
-    "note": "running in the background; this result file is overwritten on completion",
-    "started_at": "2026-08-04T02:25:39.927057+00:00"
+    "task": "You are the GENERATOR stage. Using github_read on repo llm-bridge branch Agent-loop, read these four files: revenue_agents/prompts/02_generator.md, revenue_agents/assets.json, revenue_agents/demand_signals.json, revenue_agents/pitch.schema.json. Then execute 02_generator.md exactly as written against those inputs. IMPORTANT DEVIATION: demand_signals.json already exists in the repo, so do NOT try to read a scout result file and do NOT re-commit demand_signals.json. IMPORTANT: commit your output with github_commit to branch 'main' (NOT Agent-loop \u2014 committing to Agent-loop redeploys the live bridge and would kill this run). Path: revenue_agents/pitches_raw.json. Commit exactly that one file and nothing else. Then stop and give a one-line summary.",
+    "final_answer": "Generator stage complete: 6 schema-conforming pitches (each citing \u22652 asset ids and \u22651 signal id, boring slot = contractor 1099-season service) committed as revenue_agents/pitches_raw.json to branch main (commit 9bdee0f), nothing else touched.",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-04T02:25:39.927600+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 4,
+          "cost_cents": 1.263,
+          "usage": {
+            "prompt_tokens": 2650,
+            "completion_tokens": 312,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_read",
+            "args_preview": "{\"branch\":\"Agent-loop\",\"path\":\"revenue_agents/prompts/02_generator.md\",\"repo\":\"llm-bridge\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"branch\":\"Agent-loop\",\"path\":\"revenue_agents/assets.json\",\"repo\":\"llm-bridge\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"branch\":\"Agent-loop\",\"path\":\"revenue_agents/demand_signals.json\",\"repo\":\"llm-bridge\"}"
+          },
+          {
+            "name": "github_read",
+            "args_preview": "{\"branch\":\"Agent-loop\",\"path\":\"revenue_agents/pitch.schema.json\",\"repo\":\"llm-bridge\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'revenue_agents/prompts/02_generator.md', 'sha': '66f5c3b2cf9af9e0bec866551a43c1e34396247b', 'size': 3622, 'content': '---\\nname: revenue-generator\\nstage: 2\\nreads: [assets.json, demand_signals.json, verdicts.jsonl, pitch.schema.json]\\nwrites: pitches_raw.json\\ntool_set: bu"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'revenue_agents/assets.json', 'sha': 'd9c87723a7facc2ec61c5f0f8e44294561203c72', 'size': 4160, 'content': '{\\n  \"_comment\": \"The constraint file. Every pitch must cite >=2 asset ids. Edit the TODOs before first run - the whole system is only as good as this file.\",\\n  \"versi"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'revenue_agents/demand_signals.json', 'sha': '54c5cc5eab5434d14a1e1b044e875ff0b3d1177d', 'size': 5773, 'content': '{\\n  \"run_at\": \"2026-08-04T02:30:00Z\",\\n  \"gathered_by\": \"claude-opus-5 (manual stand-in \u2014 the research tool_set hangs; see change-log issue #2)\",\\n  \"signals\":"
+          },
+          {
+            "status": "ok",
+            "preview": "{'type': 'file', 'path': 'revenue_agents/pitch.schema.json', 'sha': 'ab9031ff5c95fc4e3d2dc8e9adefac12355f6506', 'size': 2016, 'content': '{\\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\\n  \"title\": \"Pitch\",\\n  \"type\": \"object\",\\n  \"required\": [\\n    \"id\", \"thesis\", \"assets_used\", \"signal_"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-04T02:25:49.707543+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 5.4041999999999994,
+          "usage": {
+            "prompt_tokens": 7628,
+            "completion_tokens": 2538,
+            "cached_tokens": 2560
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "github_commit",
+            "args_preview": "{\"branch\":\"main\",\"content\":\"{\\n  \\\"run_at\\\": \\\"2026-08-04T00:00:00Z\\\",\\n  \\\"pitches\\\": [\\n    {\\n      \\\"id\\\": \\\"astro_etsy_auto_reports\\\",\\n      \\\"thesis\\\": \\\"Etsy buyers pay $20-60 for automated na"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'committed': True, 'path': 'revenue_agents/pitches_raw.json', 'commit_sha': '9bdee0f084c48cabebe32773e96a6060cf8b5aef', 'updated': False}"
+          }
+        ]
+      },
+      {
+        "turn": 3,
+        "timestamp": "2026-08-04T02:26:56.312319+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 1.2946199999999999,
+          "usage": {
+            "prompt_tokens": 10222,
+            "completion_tokens": 155,
+            "cached_tokens": 7424
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "write_memory",
+            "args_preview": "{\"entry\":\"Generator stage run succeeded: read 4 revenue_agents files from Agent-loop branch, produced 6 schema-conforming pitches (boring_slot = contractor 1099 season service), committed only revenue"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'written': True, 'entry_id': '147c1325'}"
+          }
+        ]
+      },
+      {
+        "turn": 4,
+        "timestamp": "2026-08-04T02:27:03.571764+00:00",
+        "llm": {
+          "content_preview": "Generator stage complete: 6 schema-conforming pitches (each citing \u22652 asset ids and \u22651 signal id, boring slot = contractor 1099-season service) committed as revenue_agents/pitches_raw.json to branch m",
+          "tool_calls_count": 0,
+          "cost_cents": 0.5410200000000001,
+          "usage": {
+            "prompt_tokens": 10419,
+            "completion_tokens": 74,
+            "cached_tokens": 9984
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "Generator stage complete: 6 schema-conforming pitches (each citing \u22652 asset ids and \u22651 signal id, boring slot = contractor 1099-season service) committed as revenue_agents/pitches_raw.json to branch main (commit 9bdee0f), nothing else touched."
+      }
+    ],
+    "turns_used": 4,
+    "max_turns": 12,
+    "total_cost_cents": 8.5028,
+    "total_tokens": {
+      "prompt": 30919,
+      "completion": 3079
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "tool_set": "build"
   },
   "error": null,
-  "processed_at": "2026-08-04T02:25:39.926101+00:00"
+  "processed_at": "2026-08-04T02:27:10.512715+00:00"
 }
