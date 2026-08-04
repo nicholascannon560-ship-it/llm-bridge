@@ -1,7 +1,42 @@
 {
   "id": "probe-01",
-  "status": "error",
-  "error": "write commands/results/probe-01.json failed: 422 {\"message\":\"Invalid request.\\n\\n\\\"sha\\\" wasn't supplied.\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"422\"}",
-  "attempts": 1,
-  "processed_at": "2026-08-04T02:17:03.142202+00:00"
+  "action": "agent_run",
+  "status": "ok",
+  "result": {
+    "status": "complete",
+    "task_id": "probe-01",
+    "task": "Say the single word PROBE and stop. Do not call any tools.",
+    "final_answer": "PROBE",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-04T02:17:02.401306+00:00",
+        "llm": {
+          "content_preview": "PROBE",
+          "tool_calls_count": 0,
+          "cost_cents": 0.8256,
+          "usage": {
+            "prompt_tokens": 2497,
+            "completion_tokens": 51,
+            "cached_tokens": 0
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "PROBE"
+      }
+    ],
+    "turns_used": 1,
+    "max_turns": 2,
+    "total_cost_cents": 0.8256,
+    "total_tokens": {
+      "prompt": 2497,
+      "completion": 51
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "tool_set": "build"
+  },
+  "error": null,
+  "processed_at": "2026-08-04T02:17:06.027600+00:00"
 }
