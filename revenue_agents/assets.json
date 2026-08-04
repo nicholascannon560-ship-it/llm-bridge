@@ -2,15 +2,17 @@
   "_comment": "The constraint file. Every pitch must cite >=2 asset ids. Edit the TODOs before first run - the whole system is only as good as this file.",
   "version": 1,
   "operator": {
-    "hours_per_week_available": "TODO: real number, be honest",
-    "hours_per_week_max_sustained": "TODO: what you can hold for 6 months without dropping something",
-    "cash_ceiling_first_test_usd": "TODO: most you'll spend to learn if an idea is real",
-    "cash_ceiling_total_usd": "TODO: most you'd put in before it must pay for itself",
-    "risk_tolerance": "TODO: one sentence in your own words",
+    "hours_per_week_available": 8,
+    "hours_per_week_max_sustained": 8,
+    "_hours_note": "5-8 realistic on top of carpentry, KalshiML, Helm & Fortune and DoorDash. Treat 8 as a ceiling, not a target.",
+    "cash_ceiling_first_test_usd": 200,
+    "cash_ceiling_total_usd": 200,
+    "_cash_note": "Per-idea test budget. Anything needing more must earn its way there.",
+    "risk_tolerance": "Not yet specified by the operator. Do not assume high.",
     "hard_nos": [
-      "Anything requiring continuous live attention during work hours",
-      "Anything that needs a second person hired before first revenue",
-      "TODO: add your own"
+      "Anything that requires an audience he does not already have. Helm & Fortune's existing subscribers count as an audience he HAS; a hypothetical TikTok following does not.",
+      "Anything requiring a hire or a partner before first revenue",
+      "Anything whose first step is building a platform rather than making a sale"
     ]
   },
   "assets": [
@@ -70,10 +72,30 @@
     }
   ],
   "existing_revenue": [
-    { "id": "wages", "desc": "Finish carpentry wages", "stability": "high", "ceiling": "capped by hours" },
-    { "id": "astro_rev", "desc": "Helm & Fortune readings + subscriptions", "stability": "medium", "ceiling": "unclear - untested" },
-    { "id": "doordash", "desc": "DoorDash delivery", "stability": "high", "ceiling": "capped by hours, low rate" },
-    { "id": "kalshi", "desc": "KalshiML - paper mode, not yet trading real size", "stability": "none yet", "ceiling": "unknown" }
+    {
+      "id": "wages",
+      "desc": "Finish carpentry wages",
+      "stability": "high",
+      "ceiling": "capped by hours"
+    },
+    {
+      "id": "astro_rev",
+      "desc": "Helm & Fortune readings + subscriptions",
+      "stability": "medium",
+      "ceiling": "unclear - untested"
+    },
+    {
+      "id": "doordash",
+      "desc": "DoorDash delivery",
+      "stability": "high",
+      "ceiling": "capped by hours, low rate"
+    },
+    {
+      "id": "kalshi",
+      "desc": "KalshiML - paper mode, not yet trading real size",
+      "stability": "none yet",
+      "ceiling": "unknown"
+    }
   ],
   "explicitly_in_scope": [
     "Polymarket / other prediction markets",
