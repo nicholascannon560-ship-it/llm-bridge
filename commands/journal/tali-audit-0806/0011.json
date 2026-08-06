@@ -1,0 +1,45 @@
+{
+  "turn": 11,
+  "timestamp": "2026-08-06T23:19:19.604011+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 2,
+    "cost_cents": 2.07996,
+    "usage": {
+      "prompt_tokens": 42111,
+      "completion_tokens": 199,
+      "cached_tokens": 40192
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"path\":\"web/lib/vault/packets\",\"repo\":\"tali\"}"
+    },
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":6000,\"path\":\"web/lib/vault/formatContext.ts\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'directory', 'entries': [{'name': 'index.ts', 'type': 'file'}, {'name': 'personality.ts', 'type': 'file'}, {'name': 'relationships.ts', 'type': 'file'}, {'name': 'structuralTopics.ts', 'type': 'file'}, {'name': 'vocation.ts', 'type': 'file'}]}"
+    },
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/lib/vault/formatContext.ts', 'sha': 'c6eb7f6116fb4e6e4a2e67b433c02f8e37f573bd', 'size': 3844, 'offset': 0, 'total_chars': 3836, 'returned_chars': 3836, 'truncated': False, 'next_offset': None, 'content': '/**\\n * Format topic packets and cross-topic vault links for the "
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 21.3166,
+  "tokens_total": {
+    "prompt": 229976,
+    "completion": 1716,
+    "last_prompt": 42111
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
