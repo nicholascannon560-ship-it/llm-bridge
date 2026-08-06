@@ -758,10 +758,25 @@ async def _tool_run_tests(args: Dict) -> Dict:
             await asyncio.sleep(5)
 
         if conclusion is None:
+            # Carry the URL and the queue/start timestamps: a timeout with
+            # run_started_at far after created_at is GitHub queueing, not a
+            # hanging command, and the two need different responses.
+            meta = {}
+            try:
+                d = await client.get(f"{base}/actions/runs/{run_id}", headers=_github_headers())
+                if d.status_code == 200:
+                    b = d.json()
+                    meta = {"html_url": b.get("html_url"), "run_status": b.get("status"),
+                            "created_at": b.get("created_at"),
+                            "run_started_at": b.get("run_started_at")}
+            except Exception:
+                pass
             return {
                 "error": "timed out waiting for completion",
                 "run_id": run_id, "waited_sec": round(time.time() - started),
-                "hint": "raise timeout_sec, or the command may be hanging",
+                "hint": ("raise timeout_sec, or the command may be hanging. "
+                         "GET /sandbox/run/<run_id> on the bridge shows queue vs run time."),
+                **meta,
             }
 
         logs_text = ""
