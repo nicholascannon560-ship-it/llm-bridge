@@ -1,9 +1,7 @@
 {
   "id": "sandbox-smoke-20260806",
-  "action": "agent_run",
   "status": "error",
-  "result": null,
-  "error": "'str' object has no attribute 'get'",
-  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 260, in _worker\n    payload[\"result\"] = asyncio.run(\n                        ^^^^^^^^^^^^\n  File \"/root/.nix-profile/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/root/.nix-profile/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"uvloop/loop.pyx\", line 1518, in uvloop.loop.Loop.run_until_complete\n  File \"/app/agent_loop/harness.py\", line 421, in run_agent\n    harness = AgentHarness(\n              ^^^^^^^^^^^^^\n  File \"/app/agent_loop/harness.py\", line 95, in __init__\n    self.tools = resolve_tools(tools, tool_set)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/agent_loop/tools.py\", line 416, in resolve_tools\n    assert_tool_set_safe(tools)\n  File \"/app/agent_loop/tools.py\", line 401, in assert_tool_set_safe\n    names = {t.get(\"function\", {}).get(\"name\") for t in (tools or [])}\n             ^^^^^\nAttributeError: 'str' object has no attribute 'get'\n",
-  "processed_at": "2026-08-06T13:19:41.381847+00:00"
+  "error": "write commands/results/sandbox-smoke-20260806.json failed: 409 {\"message\":\"is at 2319745f2fed6602a1eeca5e039ad50afe6dd887 but expected cab3afe705a151ed42863425f192b8d8da11b2ca\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "attempts": 1,
+  "processed_at": "2026-08-06T13:19:42.780566+00:00"
 }
