@@ -1,0 +1,84 @@
+{
+  "id": "gql-source-03",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "deployment": {
+      "id": "0e065d37-a29d-48db-8c1b-bad15fbba7c8",
+      "status": "SUCCESS",
+      "meta": {
+        "plan": "pro",
+        "repo": "nicholascannon560-ship-it/llm-bridge",
+        "branch": "Agent-loop",
+        "logsV2": true,
+        "reason": "deploy",
+        "runtime": "V2",
+        "buildOnly": false,
+        "commitHash": "a4397a1b02ee4f19494a4ea5be57526b34e651a8",
+        "configFile": "/railway.json",
+        "imageDigest": "sha256:b0e3a1c3b33470630525581a0cc84938601dc7c6d394444d89ae080d32c51c30",
+        "commitAuthor": "nicholascannon560-ship-it",
+        "volumeMounts": [],
+        "commitMessage": "docs(map): run_tests sandbox tool + agent_run tools-arg shape",
+        "rootDirectory": "",
+        "skipBuildCache": true,
+        "serviceManifest": {
+          "build": {
+            "builder": "NIXPACKS",
+            "buildCommand": null,
+            "nixpacksPlan": null,
+            "watchPatterns": [
+              "/**",
+              "!/commands/**",
+              "!/revenue_agents/**"
+            ],
+            "dockerfilePath": null,
+            "buildEnvironment": "V3",
+            "nixpacksConfigPath": null
+          },
+          "deploy": {
+            "region": null,
+            "runtime": "V2",
+            "numReplicas": 1,
+            "cronSchedule": null,
+            "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT",
+            "limitOverride": null,
+            "overlapSeconds": null,
+            "drainingSeconds": null,
+            "healthcheckPath": null,
+            "preDeployCommand": null,
+            "sleepApplication": false,
+            "useLegacyStacker": false,
+            "ipv6EgressEnabled": false,
+            "multiRegionConfig": {
+              "sfo": {
+                "numReplicas": 1
+              }
+            },
+            "requiredMountPath": null,
+            "restartPolicyType": "ON_FAILURE",
+            "healthcheckTimeout": null,
+            "registryCredentials": null,
+            "restartPolicyMaxRetries": 10
+          }
+        },
+        "nixpacksProviders": [],
+        "fileServiceManifest": {
+          "build": {
+            "builder": "NIXPACKS"
+          },
+          "deploy": {
+            "startCommand": "uvicorn main:app --host 0.0.0.0 --port $PORT"
+          }
+        },
+        "ignoreWatchPatterns": true,
+        "propertyFileMapping": {
+          "build.builder": "$.build.builder",
+          "deploy.startCommand": "$.deploy.startCommand"
+        }
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-06T15:57:30.622408+00:00"
+}
