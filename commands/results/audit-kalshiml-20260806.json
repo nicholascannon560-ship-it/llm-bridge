@@ -1,0 +1,9 @@
+{
+  "id": "audit-kalshiml-20260806",
+  "status": "error",
+  "action": "agent_run",
+  "result": null,
+  "error": "agent runs are disabled (AGENT_LOOP_ENABLED=0)",
+  "processed_at": "2026-08-06T02:28:17.421022+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 389, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd, cmd_id)\n                               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 324, in _execute\n    raise RuntimeError(\"agent runs are disabled (AGENT_LOOP_ENABLED=0)\")\nRuntimeError: agent runs are disabled (AGENT_LOOP_ENABLED=0)\n"
+}
