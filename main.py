@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -667,6 +667,99 @@ async def read_contents(
         "encoding": data.get("encoding"),
         "content": decoded,
         "html_url": data.get("html_url"),
+    }
+
+
+# ── file deletion ───────────────────────────────────────────────────────────
+# The bridge could create and overwrite files but never remove one. That gap
+# cost real time twice: the 2026-07-30 poison-file incident (a 0-byte command
+# retried on every liveness probe, 2,141 error commits, "fixed" only by
+# overwriting it with a no-op), and a stale agent run marker that could only be
+# tombstoned in place.
+#
+# It stays narrow on purpose. The bridge's token carries repo + workflow +
+# delete_repo scope, and any agent that can reach this route can reach every
+# repo that token can see. Deletion is therefore restricted to path prefixes
+# that hold machine-generated bookkeeping — never source. Widen
+# DELETE_ALLOWED_PREFIXES only with that in mind.
+DELETE_ALLOWED_PREFIXES = tuple(
+    p.strip() for p in os.getenv(
+        "DELETE_ALLOWED_PREFIXES", "commands/pending/,commands/results/,commands/running/"
+    ).split(",") if p.strip()
+)
+
+
+def _check_deletable(path: str) -> None:
+    """Raise HTTPException unless `path` is a plain file under an allowed prefix."""
+    if not path or path.endswith("/"):
+        raise HTTPException(status_code=400, detail="path must name a file, not a directory")
+    if ".." in path.split("/") or path.startswith("/"):
+        raise HTTPException(status_code=400, detail="path traversal is not allowed")
+    if path.rsplit("/", 1)[-1] == ".gitkeep":
+        raise HTTPException(status_code=403, detail=".gitkeep files keep queue directories alive")
+    if not any(path.startswith(prefix) for prefix in DELETE_ALLOWED_PREFIXES):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"deletion is limited to {list(DELETE_ALLOWED_PREFIXES)}; "
+                f"'{path}' is outside that. Overwrite it instead, or widen "
+                "DELETE_ALLOWED_PREFIXES if you are certain."
+            ),
+        )
+
+
+class DeleteFileRequest(BaseModel):
+    message: str = Field(..., description="Commit message for the deletion.")
+    branch: Optional[str] = Field(
+        None, description="Branch to delete from. Defaults to the repo default."
+    )
+    sha: Optional[str] = Field(
+        None,
+        description=(
+            "Blob sha of the file you intend to delete. Strongly recommended: "
+            "without it the sha is looked up first, and anything that rewrites "
+            "the file in between is deleted instead of what you read."
+        ),
+    )
+
+
+@app.delete(
+    "/contents/{owner}/{repo}/{path:path}",
+    tags=["files"],
+    summary="Delete a file (bookkeeping paths only)",
+)
+async def delete_contents(
+    owner: str = Path(..., description="Repository owner."),
+    repo: str = Path(..., description="Repository name."),
+    path: str = Path(..., description="Path to the file inside the repo."),
+    req: DeleteFileRequest = Body(...),
+) -> dict[str, Any]:
+    _check_deletable(path)
+    contents_path = f"/repos/{owner}/{repo}/contents/{path}"
+
+    sha = req.sha
+    if not sha:
+        params = {"ref": req.branch} if req.branch else None
+        lookup = await github_request("GET", contents_path, params=params)
+        data = lookup.json()
+        if isinstance(data, list):
+            raise HTTPException(status_code=400, detail="path is a directory")
+        sha = data.get("sha")
+    if not sha:
+        raise HTTPException(status_code=404, detail="file not found")
+
+    payload: dict[str, Any] = {"message": req.message, "sha": sha}
+    if req.branch:
+        payload["branch"] = req.branch
+
+    response = await github_request("DELETE", contents_path, json=payload)
+    data = response.json()
+    return {
+        "deleted": True,
+        "path": path,
+        "branch": req.branch,
+        "sha": sha,
+        "commit_sha": (data.get("commit") or {}).get("sha"),
     }
 
 
