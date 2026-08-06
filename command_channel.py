@@ -18,6 +18,7 @@ import base64
 import json
 import os
 import threading
+import time
 import traceback
 
 # Agent loop (optional — only loaded when agent_run is used)
@@ -54,6 +55,16 @@ REPO = os.getenv("GITHUB_REPO", "llm-bridge")
 BRANCH = os.getenv("GITHUB_BRANCH", "").strip()
 PENDING_PATH = "commands/pending"
 RESULTS_PATH = "commands/results"
+# In-progress state (agent_run placeholder + checkpoints) lives here, NOT in
+# commands/results. Two writers on one path raced: the placeholder and the
+# worker's final payload have no ordering, so a fast run either 409'd or — worse
+# — had its real result overwritten by a late "started" placeholder and was
+# frozen at that forever. commands/results now has exactly ONE writer per id:
+# the final write. See llm-bridge issue #2.
+RUNNING_PATH = "commands/running"
+# One retry is enough for a stale-read 409; more just delays a real conflict.
+WRITE_CONFLICT_RETRIES = int(os.getenv("WRITE_CONFLICT_RETRIES", "1"))
+WRITE_CONFLICT_BACKOFF_SEC = float(os.getenv("WRITE_CONFLICT_BACKOFF_SEC", "0.5"))
 
 MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
 MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions"
@@ -113,26 +124,43 @@ def _read_file(path: str) -> tuple[str, str]:
 
 
 def _write_file(path: str, content: str, message: str) -> None:
+    """Commit `content` to `path`, re-resolving the blob sha on conflict.
+
+    The sha lookup and the PUT are two round trips; anything that writes the
+    same path in between makes the PUT 409. Retrying with a freshly read sha
+    resolves the benign case (a stale read). This is a backstop, not the
+    ordering fix — see RUNNING_PATH above for that.
+    """
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
-    sha = None
-    with httpx.Client(timeout=20) as client:
-        lookup = client.get(url, headers=_github_headers(), params=_ref_params())
-        if lookup.status_code == 200:
-            sha = lookup.json().get("sha")
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
 
-    payload: dict[str, Any] = {
-        "message": message,
-        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
-    }
-    if BRANCH:
-        payload["branch"] = BRANCH
-    if sha:
-        payload["sha"] = sha
+    last_resp = None
+    for attempt in range(WRITE_CONFLICT_RETRIES + 1):
+        sha = None
+        with httpx.Client(timeout=20) as client:
+            lookup = client.get(url, headers=_github_headers(), params=_ref_params())
+            if lookup.status_code == 200:
+                sha = lookup.json().get("sha")
 
-    with httpx.Client(timeout=20) as client:
-        resp = client.put(url, headers=_github_headers(), json=payload)
-    if resp.status_code not in (200, 201):
-        raise RuntimeError(f"write {path} failed: {resp.status_code} {resp.text[:300]}")
+        payload: dict[str, Any] = {"message": message, "content": encoded}
+        if BRANCH:
+            payload["branch"] = BRANCH
+        if sha:
+            payload["sha"] = sha
+
+        with httpx.Client(timeout=20) as client:
+            resp = client.put(url, headers=_github_headers(), json=payload)
+        if resp.status_code in (200, 201):
+            return
+        last_resp = resp
+        if resp.status_code != 409:
+            break
+        if attempt < WRITE_CONFLICT_RETRIES:
+            time.sleep(WRITE_CONFLICT_BACKOFF_SEC * (attempt + 1))
+
+    raise RuntimeError(
+        f"write {path} failed: {last_resp.status_code} {last_resp.text[:300]}"
+    )
 
 
 def _delete_file(path: str, sha: str, message: str) -> None:
@@ -238,7 +266,7 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
         """
         try:
             _write_file(
-                f"{RESULTS_PATH}/{cmd_id}.json",
+                f"{RUNNING_PATH}/{cmd_id}.json",
                 json.dumps({"id": cmd_id, "action": "agent_run", "status": "running",
                             "result": partial, "error": None,
                             "checkpoint_at": datetime.now(timezone.utc).isoformat()},
@@ -289,6 +317,16 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
             )
         except Exception as write_err:  # nothing useful left to do but say so
             print(f"[agent_loop] could not write result for {cmd_id}: {write_err}", flush=True)
+
+        # Clear the in-progress marker last: while it exists the run is either
+        # live or died without writing a result, and that distinction is the
+        # whole point of the separate path. Failure here is cosmetic.
+        try:
+            _, running_sha = _read_file(f"{RUNNING_PATH}/{cmd_id}.json")
+            _delete_file(f"{RUNNING_PATH}/{cmd_id}.json", running_sha,
+                         f"agent run finished: {cmd_id}")
+        except Exception:
+            pass
 
     threading.Thread(target=_worker, name=f"agent-{cmd_id or 'run'}", daemon=True).start()
 
@@ -538,7 +576,21 @@ def process_pending_commands() -> dict[str, Any]:
                 result_payload["traceback"] = traceback.format_exc()[-1500:]
                 summary["errors"] += 1
 
-            result_path = f"{RESULTS_PATH}/{cmd_id}.json"
+            # A backgrounded run (agent_run) returns immediately with a
+            # "started" stub while its worker thread keeps going. Writing that
+            # stub to commands/results would race the worker's final payload —
+            # send it to commands/running instead so results stays single-writer.
+            res = result_payload.get("result")
+            backgrounded = (
+                result_payload["status"] == "ok"
+                and isinstance(res, dict)
+                and res.get("status") == "started"
+                and res.get("task_id")
+            )
+            result_path = (
+                f"{RUNNING_PATH}/{cmd_id}.json" if backgrounded
+                else f"{RESULTS_PATH}/{cmd_id}.json"
+            )
             _write_file(
                 result_path,
                 json.dumps(result_payload, indent=2, default=str),
