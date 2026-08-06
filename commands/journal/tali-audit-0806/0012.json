@@ -1,0 +1,45 @@
+{
+  "turn": 12,
+  "timestamp": "2026-08-06T23:19:28.736223+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 2,
+    "cost_cents": 2.09952,
+    "usage": {
+      "prompt_tokens": 43689,
+      "completion_tokens": 219,
+      "cached_tokens": 41984
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":12000,\"path\":\"web/lib/engine/pipeline.ts\",\"repo\":\"tali\"}"
+    },
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":6000,\"path\":\"web/lib/vault/packets/relationships.ts\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/lib/engine/pipeline.ts', 'sha': '29e1a532d339ec3bac5db76493c633d44d012e90', 'size': 2057, 'offset': 0, 'total_chars': 2055, 'returned_chars': 2055, 'truncated': False, 'next_offset': None, 'content': '/**\\n * High-level pipeline: birth data -> tradition chart + facts bl"
+    },
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/lib/vault/packets/relationships.ts', 'sha': '3050984774a97bb272dcb85e216477f751527abc', 'size': 13562, 'offset': 0, 'total_chars': 13503, 'returned_chars': 6000, 'truncated': True, 'next_offset': 6000, 'content': '/**\\n * Relationships topic packet \u2014 thick verdict block"
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 23.4161,
+  "tokens_total": {
+    "prompt": 273665,
+    "completion": 1935,
+    "last_prompt": 43689
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
