@@ -1,0 +1,10 @@
+{
+  "id": "crashtest-issue2-b",
+  "action": "agent_run",
+  "status": "running",
+  "result": {
+    "status": "started",
+    "task_id": "crashtest-issue2-b"
+  },
+  "started_at": "2026-08-06T19:28:49.806528+00:00"
+}
