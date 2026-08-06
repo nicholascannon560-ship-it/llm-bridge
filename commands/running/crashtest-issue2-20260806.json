@@ -1,6 +1,0 @@
-{
-  "id": "crashtest-issue2-20260806",
-  "status": "stale-marker",
-  "note": "Left behind by the first deploy of the issue #2 fix, before the marker was moved ahead of the worker thread. The run itself completed - see commands/results/crashtest-issue2-20260806.json. No delete route exists on the bridge; safe to remove by hand.",
-  "tombstoned_at": "2026-08-06T19:30:00Z"
-}
