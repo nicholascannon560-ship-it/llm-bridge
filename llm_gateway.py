@@ -205,6 +205,7 @@ class UsageRecord:
     cost_cents: float
     latency_ms: float
     bridge_key_hash: str  # hashed key for audit, not the key itself
+    cached_tokens: int = 0  # prompt tokens served from the provider's prefix cache
 
 
 # ── provider clients ──────────────────────────────────────────────────────────
@@ -619,6 +620,7 @@ class LLMRouter:
             model=resp.model,
             prompt_tokens=resp.usage.get("prompt_tokens", 0),
             completion_tokens=resp.usage.get("completion_tokens", 0),
+            cached_tokens=resp.usage.get("cached_tokens", 0),
             cost_cents=resp.cost_cents,
             latency_ms=resp.latency_ms,
             bridge_key_hash="",  # filled by route handler

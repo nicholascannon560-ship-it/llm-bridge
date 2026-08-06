@@ -67,6 +67,8 @@ class UsageSummary(BaseModel):
     total_cost_cents: float
     total_prompt_tokens: int
     total_completion_tokens: int
+    total_cached_tokens: int = 0
+    cache_hit_rate: float = 0.0
     by_provider: Dict[str, dict]
 
 
@@ -226,6 +228,7 @@ async def get_usage(days: int = 7, x_bridge_key: str = Header(None, alias="X-Bri
     total_cost = 0.0
     total_prompt = 0
     total_completion = 0
+    total_cached = 0
     by_provider = {}
 
     try:
@@ -239,16 +242,19 @@ async def get_usage(days: int = 7, x_bridge_key: str = Header(None, alias="X-Bri
                         total_cost += record.get("cost_cents", 0)
                         total_prompt += record.get("prompt_tokens", 0)
                         total_completion += record.get("completion_tokens", 0)
+                        total_cached += record.get("cached_tokens", 0)
 
                         prov = record.get("provider", "unknown")
                         by_provider.setdefault(prov, {
                             "requests": 0, "cost_cents": 0.0,
                             "prompt_tokens": 0, "completion_tokens": 0,
+                            "cached_tokens": 0,
                         })
                         by_provider[prov]["requests"] += 1
                         by_provider[prov]["cost_cents"] += record.get("cost_cents", 0)
                         by_provider[prov]["prompt_tokens"] += record.get("prompt_tokens", 0)
                         by_provider[prov]["completion_tokens"] += record.get("completion_tokens", 0)
+                        by_provider[prov]["cached_tokens"] += record.get("cached_tokens", 0)
                 except Exception:
                     continue
     except FileNotFoundError:
@@ -259,5 +265,7 @@ async def get_usage(days: int = 7, x_bridge_key: str = Header(None, alias="X-Bri
         total_cost_cents=round(total_cost, 4),
         total_prompt_tokens=total_prompt,
         total_completion_tokens=total_completion,
+        total_cached_tokens=total_cached,
+        cache_hit_rate=round(total_cached / total_prompt, 4) if total_prompt else 0.0,
         by_provider={k: {**v, "cost_cents": round(v["cost_cents"], 4)} for k, v in by_provider.items()},
     )
