@@ -1,0 +1,8 @@
+{
+  "action": "agent_run",
+  "task": "Call run_tests exactly once with command='pytest -q test_smoke.py' and setup='pip install pytest'. Then reply with the tool's passed value and conclusion.",
+  "tool_set": "build",
+  "max_turns": 4,
+  "reasoning_effort": "low",
+  "max_tokens": 8192
+}
