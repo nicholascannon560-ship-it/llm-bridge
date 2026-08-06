@@ -1,0 +1,45 @@
+{
+  "turn": 3,
+  "timestamp": "2026-08-06T23:18:23.091748+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 2,
+    "cost_cents": 0.8803200000000001,
+    "usage": {
+      "prompt_tokens": 5565,
+      "completion_tokens": 119,
+      "cached_tokens": 3584
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"path\":\"web/lib/engine\",\"repo\":\"tali\"}"
+    },
+    {
+      "name": "github_read",
+      "args_preview": "{\"path\":\"web/lib/vault\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'directory', 'entries': [{'name': 'adapter.ts', 'type': 'file'}, {'name': 'aspectsReceptions.ts', 'type': 'file'}, {'name': 'compose.ts', 'type': 'file'}, {'name': 'data', 'type': 'dir'}, {'name': 'dateUtil.ts', 'type': 'file'}, {'name': 'electional.ts', 'type': 'file'}, {'name': 'factsBloc"
+    },
+    {
+      "status": "ok",
+      "preview": "{'type': 'directory', 'entries': [{'name': 'buildStructure.ts', 'type': 'file'}, {'name': 'enrichPortrait.ts', 'type': 'file'}, {'name': 'formatContext.ts', 'type': 'file'}, {'name': 'index.ts', 'type': 'file'}, {'name': 'packets', 'type': 'dir'}, {'name': 'routeTopic.ts', 'type': 'file'}, {'name': "
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 2.4823,
+  "tokens_total": {
+    "prompt": 12870,
+    "completion": 325,
+    "last_prompt": 5565
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
