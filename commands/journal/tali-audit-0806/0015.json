@@ -1,0 +1,37 @@
+{
+  "turn": 15,
+  "timestamp": "2026-08-06T23:19:48.895279+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 1,
+    "cost_cents": 2.3014799999999997,
+    "usage": {
+      "prompt_tokens": 51218,
+      "completion_tokens": 92,
+      "cached_tokens": 48896
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":6000,\"path\":\"web/lib/engine/data/planets.json\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/lib/engine/data/planets.json', 'sha': '207e64cf6eee4bd5eaaf457dc7f14638c80a7dc9', 'size': 20160, 'offset': 0, 'total_chars': 20160, 'returned_chars': 6000, 'truncated': True, 'next_offset': 6000, 'content': '{\\n  \"_schema\": \"planet nodes. `links` are topic ids the plane"
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 30.5749,
+  "tokens_total": {
+    "prompt": 420635,
+    "completion": 2335,
+    "last_prompt": 51218
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
