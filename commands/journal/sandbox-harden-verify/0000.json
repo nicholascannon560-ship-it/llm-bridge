@@ -1,0 +1,13 @@
+{
+  "turn": 0,
+  "type": "run_start",
+  "task_id": "sandbox-harden-verify",
+  "timestamp": "2026-08-06T20:37:48.491255+00:00",
+  "task": "Call run_tests exactly once with command='pytest -q test_smoke.py' and setup='pip install pytest'. Then reply with the tool's passed value and conclusion.",
+  "tool_names": null,
+  "tool_set": "build",
+  "max_turns": 4,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
