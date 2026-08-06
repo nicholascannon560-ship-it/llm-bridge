@@ -44,6 +44,21 @@ except Exception:  # pragma: no cover
         return None
 
 
+# Completion-token ceiling by reasoning effort. Moonshot counts reasoning
+# tokens against max_tokens, so "max" needs far more headroom than "low".
+# Long, high-effort runs need ceilings the loop can stop at deliberately.
+# Without them the stop condition is whichever provider error fires first —
+# a 400 for context overflow, which is not retried and kills the run.
+CONTEXT_BUDGET_TOKENS = int(os.environ.get("AGENT_CONTEXT_BUDGET_TOKENS", "180000"))
+COST_BUDGET_CENTS = float(os.environ.get("AGENT_COST_BUDGET_CENTS", "400"))
+
+DEFAULT_MAX_TOKENS = {
+    "low": int(os.environ.get("AGENT_MAX_TOKENS_LOW", "4096")),
+    "high": int(os.environ.get("AGENT_MAX_TOKENS_HIGH", "16384")),
+    "max": int(os.environ.get("AGENT_MAX_TOKENS_MAX", "32768")),
+}
+
+
 class AgentHarness:
     """Stateful agent that runs a task to completion using tool calls."""
 
@@ -55,6 +70,7 @@ class AgentHarness:
         provider: str = "moonshot",
         model: str = "kimi-k3",
         reasoning_effort: str = "low",
+        max_tokens: Optional[int] = None,
         memory_path: Optional[str] = None,
         task_id: Optional[str] = None,
         tool_set: Optional[str] = None,
@@ -70,6 +86,13 @@ class AgentHarness:
         self.provider = provider
         self.model = model
         self.reasoning_effort = reasoning_effort
+        # Reasoning tokens are billed and budgeted as completion tokens, so a
+        # ceiling sized for reasoning_effort="low" truncates the answer the
+        # moment effort goes up — the model spends the budget thinking and the
+        # tool call never gets emitted. Scale the default with the effort and
+        # let the caller override.
+        self.max_tokens = int(max_tokens or DEFAULT_MAX_TOKENS.get(
+            (reasoning_effort or "low").lower(), 8192))
         self.memory = MemoryStore(path=memory_path)
         self.task_id = task_id or f"agent-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
@@ -141,7 +164,21 @@ Rules:
         for turn in range(1, self.max_turns + 1):
             turn_record = {"turn": turn, "timestamp": datetime.now(timezone.utc).isoformat()}
 
-            llm_result = await self._call_llm()
+            try:
+                llm_result = await self._call_llm()
+            except Exception as exc:
+                # A read timeout, a context-length 400, or a provider hiccup
+                # used to propagate out of run() and lose the whole transcript.
+                # Stop cleanly instead and hand back what was learned.
+                status = "llm_error"
+                final_answer = (
+                    f"Run stopped at turn {turn}: {type(exc).__name__}: {exc}"
+                )
+                turn_record["type"] = "llm_error"
+                turn_record["error"] = f"{type(exc).__name__}: {exc}"
+                self.transcript.append(turn_record)
+                break
+
             turn_record["llm"] = {
                 "content_preview": llm_result.get("content", "")[:200],
                 "tool_calls_count": len(llm_result.get("tool_calls") or []),
@@ -152,14 +189,49 @@ Rules:
             self.total_cost_cents += llm_result.get("cost_cents", 0)
             self.total_tokens["prompt"] += llm_result.get("usage", {}).get("prompt_tokens", 0)
             self.total_tokens["completion"] += llm_result.get("usage", {}).get("completion_tokens", 0)
+            self.total_tokens["last_prompt"] = llm_result.get("usage", {}).get("prompt_tokens", 0)
 
             tool_calls = llm_result.get("tool_calls")
 
             if not tool_calls:
                 final_answer = llm_result.get("content", "")
-                status = "complete"
-                turn_record["type"] = "final"
+                # finish_reason == "length" means the model ran out of
+                # completion budget mid-thought. Without this branch a
+                # truncated turn was recorded as a clean "complete" — the
+                # single most misleading failure mode of this loop.
+                if llm_result.get("finish_reason") == "length":
+                    status = "truncated"
+                    turn_record["type"] = "truncated"
+                    turn_record["note"] = (
+                        f"output hit max_tokens={self.max_tokens} at "
+                        f"reasoning_effort={self.reasoning_effort}; raise max_tokens "
+                        "or lower reasoning_effort"
+                    )
+                else:
+                    status = "complete"
+                    turn_record["type"] = "final"
                 turn_record["final_answer"] = final_answer[:500]
+                self.transcript.append(turn_record)
+                break
+
+            prompt_tokens_last = llm_result.get("usage", {}).get("prompt_tokens", 0)
+            if prompt_tokens_last >= CONTEXT_BUDGET_TOKENS:
+                status = "context_budget_reached"
+                final_answer = (
+                    f"Stopped at turn {turn}: prompt reached {prompt_tokens_last} tokens "
+                    f"(budget {CONTEXT_BUDGET_TOKENS}). Narrow the task or raise "
+                    "AGENT_CONTEXT_BUDGET_TOKENS."
+                )
+                turn_record["type"] = "budget_stop"
+                self.transcript.append(turn_record)
+                break
+            if self.total_cost_cents >= COST_BUDGET_CENTS:
+                status = "cost_budget_reached"
+                final_answer = (
+                    f"Stopped at turn {turn}: spent {self.total_cost_cents:.1f}c "
+                    f"(budget {COST_BUDGET_CENTS}c)."
+                )
+                turn_record["type"] = "budget_stop"
                 self.transcript.append(turn_record)
                 break
 
@@ -192,6 +264,9 @@ Rules:
             "provider": self.provider,
             "model": self.model,
             "tool_set": self.tool_set,
+            "reasoning_effort": self.reasoning_effort,
+            "last_prompt_tokens": self.total_tokens.get("last_prompt", 0),
+            "max_tokens": self.max_tokens,
         }
 
         if self.browser_auth is not None:
@@ -225,7 +300,7 @@ Rules:
             provider=self.provider,
             model=self.model,
             messages=chat_messages,
-            max_tokens=4096,
+            max_tokens=self.max_tokens,
             temperature=1.0,
             tools=self.tools,
             tool_choice="auto",
@@ -278,6 +353,7 @@ async def run_agent(
     provider: str = "moonshot",
     model: str = "kimi-k3",
     reasoning_effort: str = "low",
+    max_tokens: Optional[int] = None,
     memory_path: Optional[str] = None,
     task_id: Optional[str] = None,
     tool_set: Optional[str] = None,
@@ -291,6 +367,7 @@ async def run_agent(
         provider=provider,
         model=model,
         reasoning_effort=reasoning_effort,
+        max_tokens=max_tokens,
         memory_path=memory_path,
         task_id=task_id,
         tool_set=tool_set,
