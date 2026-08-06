@@ -62,7 +62,14 @@ RESULTS_PATH = "commands/results"
 # frozen at that forever. commands/results now has exactly ONE writer per id:
 # the final write. See llm-bridge issue #2.
 RUNNING_PATH = "commands/running"
+# Append-only per-turn log: commands/journal/<run_id>/<turn>.json. Each entry is
+# written once to a path that has never existed, so there is no sha to conflict
+# over and no overwrite to race — the 409 class of bug cannot occur here by
+# construction. A run that dies mid-flight leaves every completed turn on disk,
+# including the one that killed it.
+JOURNAL_PATH = "commands/journal"
 # One retry is enough for a stale-read 409; more just delays a real conflict.
+JOURNAL_ENABLED = os.getenv("AGENT_JOURNAL", "1") not in ("0", "false", "False")
 WRITE_CONFLICT_RETRIES = int(os.getenv("WRITE_CONFLICT_RETRIES", "1"))
 WRITE_CONFLICT_BACKOFF_SEC = float(os.getenv("WRITE_CONFLICT_BACKOFF_SEC", "0.5"))
 
@@ -161,6 +168,87 @@ def _write_file(path: str, content: str, message: str) -> None:
     raise RuntimeError(
         f"write {path} failed: {last_resp.status_code} {last_resp.text[:300]}"
     )
+
+
+def _write_new_file(path: str, content: str, message: str) -> bool:
+    """Create `path`, never overwrite it. Returns False if it already existed.
+
+    No sha lookup and no sha in the payload: GitHub rejects a create against an
+    existing file, which is exactly the guarantee an append-only log wants. A
+    collision means a duplicate turn number, i.e. a bug worth seeing in the
+    logs rather than silently papering over.
+    """
+    url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
+    payload: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+    }
+    if BRANCH:
+        payload["branch"] = BRANCH
+    with httpx.Client(timeout=20) as client:
+        resp = client.put(url, headers=_github_headers(), json=payload)
+    if resp.status_code in (200, 201):
+        return True
+    if resp.status_code in (409, 422):
+        print(f"[agent_loop] journal entry {path} already exists; not overwriting", flush=True)
+        return False
+    raise RuntimeError(f"create {path} failed: {resp.status_code} {resp.text[:300]}")
+
+
+def _journal_writer(cmd_id: str):
+    """Return an on_turn callback that appends one file per turn."""
+    def write_turn(entry: dict[str, Any]) -> None:
+        turn = entry.get("turn")
+        try:
+            turn_label = f"{int(turn):04d}"
+        except (TypeError, ValueError):
+            turn_label = str(turn)
+        # Swallowed here, not just in the harness caller: journaling is
+        # best-effort by definition, and this function should be safe to hand
+        # to any caller without assuming that caller guards it. A lost entry
+        # costs an audit trail; a raised one would cost the run.
+        try:
+            _write_new_file(
+                f"{JOURNAL_PATH}/{cmd_id}/{turn_label}.json",
+                json.dumps(entry, indent=2, default=str),
+                f"agent journal: {cmd_id} turn {turn}",
+            )
+        except Exception as e:
+            print(f"[agent_loop] journal write failed for {cmd_id} turn {turn}: {e}", flush=True)
+    return write_turn
+
+
+def _journal_run_start(cmd_id: str, cmd: dict[str, Any]) -> None:
+    """Entry 0000 — what the run was asked to do, before any turn happens.
+
+    Written so a resumed or audited run can reconstruct its own instructions
+    without the pending file, which is deleted as soon as the command executes.
+    """
+    tools = cmd.get("tools")
+    entry = {
+        "turn": 0,
+        "type": "run_start",
+        "task_id": cmd_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "task": cmd.get("task"),
+        "tool_names": (
+            [t.get("function", {}).get("name") for t in tools if isinstance(t, dict)]
+            if isinstance(tools, list) else None
+        ),
+        "tool_set": cmd.get("tool_set"),
+        "max_turns": cmd.get("max_turns", 10),
+        "provider": cmd.get("provider", "moonshot"),
+        "model": cmd.get("model", "kimi-k3"),
+        "reasoning_effort": cmd.get("reasoning_effort", "low"),
+    }
+    try:
+        _write_new_file(
+            f"{JOURNAL_PATH}/{cmd_id}/0000.json",
+            json.dumps(entry, indent=2, default=str),
+            f"agent journal: {cmd_id} run start",
+        )
+    except Exception as e:
+        print(f"[agent_loop] could not write run-start journal for {cmd_id}: {e}", flush=True)
 
 
 def _delete_file(path: str, sha: str, message: str) -> None:
@@ -265,10 +353,15 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
         a commit; set it to 0 to disable and rely on GET /agent/status instead.
         """
         try:
+            # The journal holds the per-turn detail now, so the marker carries
+            # only live status. Writing the whole transcript here made every
+            # checkpoint commit grow with the run.
+            slim = {k: v for k, v in partial.items() if k != "transcript"}
             _write_file(
                 f"{RUNNING_PATH}/{cmd_id}.json",
                 json.dumps({"id": cmd_id, "action": "agent_run", "status": "running",
-                            "result": partial, "error": None,
+                            "result": slim, "error": None,
+                            "journal": f"{JOURNAL_PATH}/{cmd_id}/",
                             "checkpoint_at": datetime.now(timezone.utc).isoformat()},
                            indent=2, default=str),
                 f"agent checkpoint: {cmd_id} turn {partial.get('turns_used')}",
@@ -299,6 +392,7 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
                     checkpoint_every=checkpoint_every,
                     task_id=cmd_id or cmd.get("id"),
                     browser_auth=RunAuthorization(),
+                    on_turn=_journal_writer(cmd_id) if JOURNAL_ENABLED else None,
                 )
             )
         except Exception as exc:
@@ -530,6 +624,9 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
         # not been written yet, finds nothing to clear, and the marker lands
         # after the run is already over and outlives it. Observed live on the
         # first deploy of this fix.
+        if JOURNAL_ENABLED:
+            _journal_run_start(cmd_id, cmd)
+
         try:
             _write_file(
                 f"{RUNNING_PATH}/{cmd_id}.json",
