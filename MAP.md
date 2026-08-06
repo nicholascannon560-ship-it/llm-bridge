@@ -97,3 +97,5 @@
 - 2026-07-28 | Added GET /map_freshness: runs change-log's per-slice gate with the bridge's token | files: main.py
 - 2026-08-06 | Railway deployments connection is newest-first: use first: not last: | files: railway_extension.py
 - 2026-08-06 | llm-bridge-v2 service DELETED (was consuming queue commands) | files: none
+- 2026-08-06 | run_tests tool: agent executes code in zero-secret agent-sandbox repo via Actions | files: agent_loop/tools.py, agent-sandbox/.github/workflows/sandbox.yml
+- 2026-08-06 | agent_run `tools` takes full schema DICTS, not name strings | files: none (usage)
