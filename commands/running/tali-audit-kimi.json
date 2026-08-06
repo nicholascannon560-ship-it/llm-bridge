@@ -1,0 +1,10 @@
+{
+  "id": "tali-audit-kimi",
+  "action": "agent_run",
+  "status": "running",
+  "result": {
+    "status": "started",
+    "task_id": "tali-audit-kimi"
+  },
+  "started_at": "2026-08-06T22:41:00.015899+00:00"
+}
