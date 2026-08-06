@@ -53,14 +53,22 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "github_read",
-            "description": "Read a file or list a directory from a GitHub repository.",
+            "description": (
+                "Read a file or list a directory from a GitHub repository. Large files are "
+                "returned in windows: the reply carries total_chars, returned_chars, truncated "
+                "and next_offset. If truncated is true you have NOT seen the whole file — call "
+                "again with offset=next_offset until truncated is false. Never judge a file you "
+                "have only read one window of."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "owner": {"type": "string", "description": "Repo owner (default: nicholascannon560-ship-it)"},
                     "repo": {"type": "string", "description": "Repo name"},
                     "path": {"type": "string", "description": "File or directory path"},
-                    "branch": {"type": "string", "description": "Branch or ref (default: repo default)"}
+                    "branch": {"type": "string", "description": "Branch or ref (default: repo default)"},
+                    "offset": {"type": "integer", "description": "Character offset to start reading from (default 0)"},
+                    "max_chars": {"type": "integer", "description": "Characters to return this call (default 8000, max 60000)"}
                 },
                 "required": ["repo", "path"]
             }
@@ -405,6 +413,10 @@ async def run_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         return {"error": str(e), "traceback": traceback.format_exc()[-800:]}
 
 
+GITHUB_READ_DEFAULT_CHARS = int(os.environ.get("GITHUB_READ_DEFAULT_CHARS", "8000"))
+GITHUB_READ_MAX_CHARS = int(os.environ.get("GITHUB_READ_MAX_CHARS", "60000"))
+
+
 async def _tool_github_read(args: Dict) -> Dict:
     import httpx
     owner = args.get("owner", OWNER)
@@ -429,12 +441,26 @@ async def _tool_github_read(args: Dict) -> Dict:
     if data.get("encoding") == "base64" and data.get("content"):
         content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
 
+    # A flat 8k cut made every file over ~200 lines unreadable, silently: the
+    # model saw a prefix and reasoned about it as if it were the whole file.
+    # Window it instead and say plainly that more remains.
+    offset = max(0, int(args.get("offset") or 0))
+    max_chars = int(args.get("max_chars") or GITHUB_READ_DEFAULT_CHARS)
+    max_chars = max(1000, min(max_chars, GITHUB_READ_MAX_CHARS))
+    window = content[offset:offset + max_chars]
+    end = offset + len(window)
+
     return {
         "type": "file",
         "path": data["path"],
         "sha": data.get("sha"),
         "size": data.get("size"),
-        "content": content[:8000]  # Truncate very large files
+        "offset": offset,
+        "total_chars": len(content),
+        "returned_chars": len(window),
+        "truncated": end < len(content),
+        "next_offset": end if end < len(content) else None,
+        "content": window,
     }
 
 

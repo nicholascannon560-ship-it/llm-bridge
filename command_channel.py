@@ -234,6 +234,7 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
                     provider=cmd.get("provider", "moonshot"),
                     model=cmd.get("model", "kimi-k3"),
                     reasoning_effort=cmd.get("reasoning_effort", "low"),
+                    max_tokens=(int(cmd["max_tokens"]) if cmd.get("max_tokens") else None),
                     task_id=cmd_id or cmd.get("id"),
                     browser_auth=RunAuthorization(),
                 )
