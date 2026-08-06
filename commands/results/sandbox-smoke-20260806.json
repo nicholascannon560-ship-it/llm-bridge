@@ -1,7 +1,13 @@
 {
   "id": "sandbox-smoke-20260806",
-  "status": "error",
-  "error": "write commands/results/sandbox-smoke-20260806.json failed: 409 {\"message\":\"is at 2319745f2fed6602a1eeca5e039ad50afe6dd887 but expected cab3afe705a151ed42863425f192b8d8da11b2ca\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
-  "attempts": 1,
-  "processed_at": "2026-08-06T13:19:42.780566+00:00"
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "started",
+    "task_id": "sandbox-smoke-20260806",
+    "note": "running in the background; this result file is overwritten on completion",
+    "started_at": "2026-08-06T13:19:54.367729+00:00"
+  },
+  "error": null,
+  "processed_at": "2026-08-06T13:19:54.367040+00:00"
 }
