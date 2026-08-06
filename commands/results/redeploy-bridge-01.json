@@ -1,0 +1,10 @@
+{
+  "id": "redeploy-bridge-01",
+  "status": "ok",
+  "action": "redeploy",
+  "result": {
+    "serviceInstanceDeploy": true
+  },
+  "error": null,
+  "processed_at": "2026-08-06T15:40:07.184992+00:00"
+}
