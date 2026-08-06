@@ -1,0 +1,21 @@
+{
+  "id": "patch-tree-v3",
+  "status": "ok",
+  "action": "patch_file",
+  "result": {
+    "repo": "KalshiML",
+    "path": "adaptive_tree.py",
+    "branch": "main",
+    "old_blob_sha": "a819f8c782375349aa46856dd04940ce6720665f",
+    "new_commit": "16b610303d740de7acdee375cff5857fb6690690",
+    "chars_after": 23850,
+    "ops_applied": [
+      {
+        "op": 0,
+        "type": "replace"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-06T16:18:20.888354+00:00"
+}
