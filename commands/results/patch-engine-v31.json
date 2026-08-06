@@ -1,0 +1,33 @@
+{
+  "id": "patch-engine-v31",
+  "status": "ok",
+  "action": "patch_file",
+  "result": {
+    "repo": "KalshiML",
+    "path": "hourly_engine.py",
+    "branch": "main",
+    "old_blob_sha": "b895045476851b5bf2a6bd94da9aab542f8e3221",
+    "new_commit": "df33b68cf40f074b9b9c86f5239ae305c16bfde8",
+    "chars_after": 95955,
+    "ops_applied": [
+      {
+        "op": 0,
+        "type": "replace"
+      },
+      {
+        "op": 1,
+        "type": "insert_before"
+      },
+      {
+        "op": 2,
+        "type": "insert_before"
+      },
+      {
+        "op": 3,
+        "type": "insert_before"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-06T18:39:07.306541+00:00"
+}
