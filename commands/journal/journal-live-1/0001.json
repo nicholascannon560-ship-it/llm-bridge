@@ -1,0 +1,37 @@
+{
+  "turn": 1,
+  "timestamp": "2026-08-06T19:51:35.189507+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 1,
+    "cost_cents": 1.0662,
+    "usage": {
+      "prompt_tokens": 3019,
+      "completion_tokens": 107,
+      "cached_tokens": 0
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "run_tests",
+      "args_preview": "{\"command\":\"pytest -q test_smoke.py\",\"setup\":\"pip install pytest\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "error",
+      "preview": "{'error': 'timed out waiting for completion', 'run_id': 31127179558, 'waited_sec': 302, 'hint': 'raise timeout_sec, or the command may be hanging'}"
+    }
+  ],
+  "task_id": "journal-live-1",
+  "cost_cents_total": 1.0662,
+  "tokens_total": {
+    "prompt": 3019,
+    "completion": 107,
+    "last_prompt": 3019
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
