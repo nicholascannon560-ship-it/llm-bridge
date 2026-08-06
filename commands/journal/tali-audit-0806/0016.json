@@ -1,0 +1,37 @@
+{
+  "turn": 16,
+  "timestamp": "2026-08-06T23:19:54.322798+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 1,
+    "cost_cents": 2.3750999999999998,
+    "usage": {
+      "prompt_tokens": 53147,
+      "completion_tokens": 170,
+      "cached_tokens": 51200
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "write_memory",
+      "args_preview": "{\"entry\":\"Tali audit: repo is tali (Next.js web app, TS engine + vault). Read MAP, natalEngine, aspectsReceptions, factsBlock, timing, compose (noted preserved \\\"#N\\\" nakshatra quirk + PROFECTION AMPL"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'written': True, 'entry_id': 'f4f06919'}"
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 32.95,
+  "tokens_total": {
+    "prompt": 473782,
+    "completion": 2505,
+    "last_prompt": 53147
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
