@@ -1,0 +1,37 @@
+{
+  "turn": 13,
+  "timestamp": "2026-08-06T23:19:36.463764+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 1,
+    "cost_cents": 2.3952,
+    "usage": {
+      "prompt_tokens": 46702,
+      "completion_tokens": 90,
+      "cached_tokens": 43520
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":10000,\"path\":\"web/lib/engine/compose.ts\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/lib/engine/compose.ts', 'sha': 'bc1a5ac6e8386a34925bed38ec76d5d5aeb43127', 'size': 6248, 'offset': 0, 'total_chars': 6218, 'returned_chars': 6218, 'truncated': False, 'next_offset': None, 'content': '/**\\n * CURRENT TIMING block \u2014 TypeScript port of tali/timing/compose."
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 25.8113,
+  "tokens_total": {
+    "prompt": 320367,
+    "completion": 2025,
+    "last_prompt": 46702
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
