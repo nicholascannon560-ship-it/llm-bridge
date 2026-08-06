@@ -1,13 +1,74 @@
 {
   "id": "sandbox-smoke-2",
-  "status": "ok",
   "action": "agent_run",
+  "status": "ok",
   "result": {
-    "status": "started",
+    "status": "complete",
     "task_id": "sandbox-smoke-2",
-    "note": "running in the background; this result file is overwritten on completion",
-    "started_at": "2026-08-06T13:27:27.337916+00:00"
+    "task": "Call the run_tests tool exactly once with command='pytest -q test_smoke.py' and setup='pip install pytest'. Then reply with the tool's passed value, its conclusion, and the final line of pytest output. Call no other tool.",
+    "final_answer": "- **passed:** true\n- **conclusion:** success\n- **Final pytest output line:** `2 passed in 0.01s`",
+    "transcript": [
+      {
+        "turn": 1,
+        "timestamp": "2026-08-06T13:27:27.338385+00:00",
+        "llm": {
+          "content_preview": "",
+          "tool_calls_count": 1,
+          "cost_cents": 0.3693,
+          "usage": {
+            "prompt_tokens": 806,
+            "completion_tokens": 85,
+            "cached_tokens": 0
+          },
+          "finish_reason": "tool_calls"
+        },
+        "type": "tool_loop",
+        "tool_calls": [
+          {
+            "name": "run_tests",
+            "args_preview": "{\"command\":\"pytest -q test_smoke.py\",\"setup\":\"pip install pytest\"}"
+          }
+        ],
+        "tool_results": [
+          {
+            "status": "ok",
+            "preview": "{'passed': True, 'conclusion': 'success', 'run_id': 31106005832, 'elapsed_sec': 24, 'command': 'pytest -q test_smoke.py', 'logs': '\\ufeff2026-08-06T13:27:40.2500000Z Current runner version: \\'2.336.0\\'\\n2026-08-06T13:27:40.2537089Z ##[group]Runner Image Provisioner\\n2026-08-06T13:27:40.2538579Z Host"
+          }
+        ]
+      },
+      {
+        "turn": 2,
+        "timestamp": "2026-08-06T13:27:55.216049+00:00",
+        "llm": {
+          "content_preview": "- **passed:** true\n- **conclusion:** success\n- **Final pytest output line:** `2 passed in 0.01s`",
+          "tool_calls_count": 0,
+          "cost_cents": 4.125839999999999,
+          "usage": {
+            "prompt_tokens": 14214,
+            "completion_tokens": 46,
+            "cached_tokens": 768
+          },
+          "finish_reason": "stop"
+        },
+        "type": "final",
+        "final_answer": "- **passed:** true\n- **conclusion:** success\n- **Final pytest output line:** `2 passed in 0.01s`"
+      }
+    ],
+    "turns_used": 2,
+    "max_turns": 4,
+    "total_cost_cents": 4.4951,
+    "total_tokens": {
+      "prompt": 15020,
+      "completion": 131,
+      "last_prompt": 14214
+    },
+    "provider": "moonshot",
+    "model": "kimi-k3",
+    "tool_set": "custom",
+    "reasoning_effort": "low",
+    "last_prompt_tokens": 14214,
+    "max_tokens": 4096
   },
   "error": null,
-  "processed_at": "2026-08-06T13:27:27.337262+00:00"
+  "processed_at": "2026-08-06T13:27:59.432687+00:00"
 }
