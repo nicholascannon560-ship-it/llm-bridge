@@ -80,6 +80,9 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-06 | append-only journal commands/journal/<run_id>/<turn>.json; harness on_turn hook | files: command_channel.py, agent_loop/harness.py
+- 2026-08-06 | MAP still has no agent_loop/ slice — harness.py now carries on_turn/_record | files: agent_loop/harness.py
+
 - 2026-08-06 | DELETE /contents added (guarded to commands/* prefixes) | files: main.py, tests/test_delete_guard.py
 - 2026-08-06 | OPERATING NOTE: a commit may not auto-deploy; always POST /railway/service/{id}/redeploy after committing | files: -
 
