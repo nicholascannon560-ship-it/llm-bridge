@@ -48,6 +48,10 @@ GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 OWNER = os.getenv("GITHUB_OWNER", "nicholascannon560-ship-it")
 REPO = os.getenv("GITHUB_REPO", "llm-bridge")
+# Code deploys from one branch and the queue was read from the repo default
+# branch — they drifted, and a command committed to the wrong one is invisible
+# forever with no error. Pin both to one env var.
+BRANCH = os.getenv("GITHUB_BRANCH", "").strip()
 PENDING_PATH = "commands/pending"
 RESULTS_PATH = "commands/results"
 
@@ -79,10 +83,14 @@ def _github_headers() -> dict[str, str]:
     }
 
 
+def _ref_params() -> dict[str, str]:
+    return {"ref": BRANCH} if BRANCH else {}
+
+
 def _list_pending() -> list[dict[str, Any]]:
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{PENDING_PATH}"
     with httpx.Client(timeout=20) as client:
-        resp = client.get(url, headers=_github_headers())
+        resp = client.get(url, headers=_github_headers(), params=_ref_params())
     if resp.status_code == 404:
         return []
     if resp.status_code != 200:
@@ -96,7 +104,7 @@ def _list_pending() -> list[dict[str, Any]]:
 def _read_file(path: str) -> tuple[str, str]:
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     with httpx.Client(timeout=20) as client:
-        resp = client.get(url, headers=_github_headers())
+        resp = client.get(url, headers=_github_headers(), params=_ref_params())
     if resp.status_code != 200:
         raise RuntimeError(f"read {path} failed: {resp.status_code}")
     data = resp.json()
@@ -108,7 +116,7 @@ def _write_file(path: str, content: str, message: str) -> None:
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
     sha = None
     with httpx.Client(timeout=20) as client:
-        lookup = client.get(url, headers=_github_headers())
+        lookup = client.get(url, headers=_github_headers(), params=_ref_params())
         if lookup.status_code == 200:
             sha = lookup.json().get("sha")
 
@@ -116,6 +124,8 @@ def _write_file(path: str, content: str, message: str) -> None:
         "message": message,
         "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
     }
+    if BRANCH:
+        payload["branch"] = BRANCH
     if sha:
         payload["sha"] = sha
 
@@ -127,7 +137,9 @@ def _write_file(path: str, content: str, message: str) -> None:
 
 def _delete_file(path: str, sha: str, message: str) -> None:
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{path}"
-    payload = {"message": message, "sha": sha}
+    payload: dict[str, Any] = {"message": message, "sha": sha}
+    if BRANCH:
+        payload["branch"] = BRANCH
     headers = _github_headers()
     headers["Content-Type"] = "application/json"
     with httpx.Client(timeout=20) as client:
@@ -216,6 +228,26 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
 
     from agent_loop.browser import RunAuthorization
 
+    checkpoint_every = int(os.getenv("AGENT_CHECKPOINT_EVERY_TURNS", "5"))
+
+    def _checkpoint(partial: dict[str, Any]) -> None:
+        """Write an in-progress snapshot so a run is observable while it runs.
+
+        Rate-limited by AGENT_CHECKPOINT_EVERY_TURNS because every write here is
+        a commit; set it to 0 to disable and rely on GET /agent/status instead.
+        """
+        try:
+            _write_file(
+                f"{RESULTS_PATH}/{cmd_id}.json",
+                json.dumps({"id": cmd_id, "action": "agent_run", "status": "running",
+                            "result": partial, "error": None,
+                            "checkpoint_at": datetime.now(timezone.utc).isoformat()},
+                           indent=2, default=str),
+                f"agent checkpoint: {cmd_id} turn {partial.get('turns_used')}",
+            )
+        except Exception as e:
+            print(f"[agent_loop] checkpoint failed for {cmd_id}: {e}", flush=True)
+
     def _worker() -> None:
         payload: dict[str, Any] = {
             "id": cmd_id,
@@ -235,6 +267,8 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
                     model=cmd.get("model", "kimi-k3"),
                     reasoning_effort=cmd.get("reasoning_effort", "low"),
                     max_tokens=(int(cmd["max_tokens"]) if cmd.get("max_tokens") else None),
+                    on_checkpoint=(_checkpoint if checkpoint_every > 0 else None),
+                    checkpoint_every=checkpoint_every,
                     task_id=cmd_id or cmd.get("id"),
                     browser_auth=RunAuthorization(),
                 )
