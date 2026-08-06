@@ -1,0 +1,45 @@
+{
+  "turn": 1,
+  "timestamp": "2026-08-06T22:41:01.637485+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 2,
+    "cost_cents": 1.2429,
+    "usage": {
+      "prompt_tokens": 3308,
+      "completion_tokens": 167,
+      "cached_tokens": 0
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":20000,\"path\":\"\",\"repo\":\"tali\"}"
+    },
+    {
+      "name": "read_memory",
+      "args_preview": "{\"limit\":5,\"tag\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'directory', 'entries': [{'name': '.gitignore', 'type': 'file'}, {'name': 'LICENSE', 'type': 'file'}, {'name': 'MAP.md', 'type': 'file'}, {'name': 'Procfile', 'type': 'file'}, {'name': 'RAILWAY_DEPLOY.md', 'type': 'file'}, {'name': 'README.md', 'type': 'file'}, {'name': 'TALI_APP_SPEC.md', "
+    },
+    {
+      "status": "ok",
+      "preview": "{'entries': [], 'count': 0}"
+    }
+  ],
+  "task_id": "tali-audit-kimi",
+  "cost_cents_total": 1.2429,
+  "tokens_total": {
+    "prompt": 3308,
+    "completion": 167,
+    "last_prompt": 3308
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
