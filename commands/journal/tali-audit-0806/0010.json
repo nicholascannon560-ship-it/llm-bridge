@@ -1,0 +1,45 @@
+{
+  "turn": 10,
+  "timestamp": "2026-08-06T23:19:10.440912+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 2,
+    "cost_cents": 2.9988599999999996,
+    "usage": {
+      "prompt_tokens": 40441,
+      "completion_tokens": 224,
+      "cached_tokens": 35072
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":8000,\"path\":\"web/prompts/ancient-astrologer.md\",\"repo\":\"tali\"}"
+    },
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":8000,\"path\":\"web/lib/vault/routeTopic.ts\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/prompts/ancient-astrologer.md', 'sha': 'a1876eabee20cee0dbaa5b195c0002970f34d447', 'size': 2125, 'offset': 0, 'total_chars': 2111, 'returned_chars': 2111, 'truncated': False, 'next_offset': None, 'content': '# VOICE: The Stoic\\n(legacy id: ancient-astrologer)\\n(include:"
+    },
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'web/lib/vault/routeTopic.ts', 'sha': '8d444374763c1c62c74b9e405dec2be6aadeafb1', 'size': 1978, 'offset': 0, 'total_chars': 1974, 'returned_chars': 1974, 'truncated': False, 'next_offset': None, 'content': '/**\\n * Lightweight topic router \u2014 keyword / phrase match, no LLM.\\n"
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 19.2366,
+  "tokens_total": {
+    "prompt": 187865,
+    "completion": 1517,
+    "last_prompt": 40441
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
