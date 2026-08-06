@@ -1,0 +1,3 @@
+line with "quotes" and 'single' and {"json": "like"} plus — unicode ¢ × · ─
+second line
+f-string: f'{h["total"]:,}'
