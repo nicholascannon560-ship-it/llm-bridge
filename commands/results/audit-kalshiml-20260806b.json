@@ -1,0 +1,13 @@
+{
+  "id": "audit-kalshiml-20260806b",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "started",
+    "task_id": "audit-kalshiml-20260806b",
+    "note": "running in the background; this result file is overwritten on completion",
+    "started_at": "2026-08-06T02:42:20.945760+00:00"
+  },
+  "error": null,
+  "processed_at": "2026-08-06T02:42:20.944061+00:00"
+}
