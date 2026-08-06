@@ -1,0 +1,259 @@
+{
+ "id": "audit-kalshiml-20260806b",
+ "action": "agent_run",
+ "task": "AUDIT the KalshiML trading system (repo nicholascannon560-ship-it/KalshiML, branch main). Read-only: you have no write tools, do not attempt commits.\n\nDeliverable: a severity-ranked findings list. For each finding give: SEVERITY (critical/high/medium/low), FILE + function or approximate line, EVIDENCE (what the code or live data actually says \u2014 quote the specific values), WHY IT MATTERS, and FIX (concrete). No generic advice, no praise, no restating what the code does without a claim attached.\n\nPriority questions, in order:\n1. PROMOTION GATE INTEGRITY. learning.py and adaptive_tree.py move cells LEARNING -> PROBATION -> ARMED. Does the gate actually enforce what it claims? Look for: gate conditions that can pass on stale or duplicated evidence, independence accounting (n_eff, distinct days/events) that can be gamed by correlated rows, and any path where the adaptive tree license overrides the flat gate.\n2. THE PnL IDENTITY. The system publishes cal_err_signed, realized_c and realized_lb_c (a day-blocked bootstrap 5th-percentile floor). Verify the code computes realized cents as mean_edge_c - 100*signed cal_err, that the bootstrap resamples BY DAY not by row, and that the sample floors (>=20 priced rows, >=5 priced days) are actually enforced before the bound is published.\n3. AUTOPILOT. autopilot.py graduates capabilities by scanning the last AUTOPILOT_SCAN_BYTES of data/cell_states_history.jsonl. Find every other place in the codebase that counts distinct days or reads that file with a byte window, since a byte window over an append-only log silently loses the oldest days. Report each one.\n4. MONEY SAFETY. maker_orders.py and hourly_engine.py place and cancel orders. Assume PLACE_REAL_ORDERS is about to be flipped true. Find every path that could place, double-place, or fail to cancel an order: a cancel whose result is unknown, a size derived from an unconfirmed fill count, missing startup reconciliation against the exchange's open orders, and any place where DRY_RUN is checked after the side effect rather than before.\n5. SILENT FAILURE. Any except: pass, any thread whose death is not surfaced, any counter that can decrease, any config default that disagrees with the deployed environment.\n\nMethod:\n- Start with MAP.md to orient, then read the actual code. github_read windows large files: if the reply says truncated=true you have NOT seen the file \u2014 call again with offset=next_offset until truncated is false. Never judge a file from one window.\n- Cross-check code against live state with kml_data_read (data/ files on the dashboard) and kml_app_logs (recent log lines, supports contains=).\n- Prefer depth on the five questions above over breadth across the repo. Six well-evidenced findings beat twenty guesses.\n- Do not use llm_chat unless you are genuinely stuck.\nFinish with the findings list as your final answer.",
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "github_read",
+    "description": "Read a file or list a directory from a GitHub repository. Large files are returned in windows: the reply carries total_chars, returned_chars, truncated and next_offset. If truncated is true you have NOT seen the whole file \u2014 call again with offset=next_offset until truncated is false. Never judge a file you have only read one window of.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "owner": {
+       "type": "string",
+       "description": "Repo owner (default: nicholascannon560-ship-it)"
+      },
+      "repo": {
+       "type": "string",
+       "description": "Repo name"
+      },
+      "path": {
+       "type": "string",
+       "description": "File or directory path"
+      },
+      "branch": {
+       "type": "string",
+       "description": "Branch or ref (default: repo default)"
+      },
+      "offset": {
+       "type": "integer",
+       "description": "Character offset to start reading from (default 0)"
+      },
+      "max_chars": {
+       "type": "integer",
+       "description": "Characters to return this call (default 8000, max 60000)"
+      }
+     },
+     "required": [
+      "repo",
+      "path"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "railway_get_status",
+    "description": "Get the latest deployment status of a Railway service.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "service_id": {
+       "type": "string",
+       "description": "Service ID (default: bridge)"
+      }
+     },
+     "required": []
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "railway_get_logs",
+    "description": "Get recent logs for a specific Railway deployment.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "deployment_id": {
+       "type": "string",
+       "description": "Deployment UUID"
+      },
+      "limit": {
+       "type": "integer",
+       "description": "Max lines",
+       "default": 100
+      }
+     },
+     "required": [
+      "deployment_id"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "llm_chat",
+    "description": "Ask a sub-question to an LLM. Use for analysis, planning, code review, or breaking down complex tasks.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "prompt": {
+       "type": "string",
+       "description": "The question or task"
+      },
+      "provider": {
+       "type": "string",
+       "default": "moonshot"
+      },
+      "model": {
+       "type": "string",
+       "default": "kimi-k3"
+      },
+      "max_tokens": {
+       "type": "integer",
+       "default": 2048
+      },
+      "reasoning_effort": {
+       "type": "string",
+       "default": "low",
+       "description": "low | high | max"
+      }
+     },
+     "required": [
+      "prompt"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "read_memory",
+    "description": "Read recent agent memory entries to inform current decisions.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "limit": {
+       "type": "integer",
+       "default": 10
+      },
+      "tag": {
+       "type": "string",
+       "description": "Filter by tag"
+      }
+     },
+     "required": []
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "http_get",
+    "description": "Fetch an allowlisted https URL and return its body as text. Allowed hosts come from FETCH_ALLOWED_HOSTS and currently cover the KalshiML dashboard, the bridge itself, api.elections.kalshi.com, Open-Meteo, IEM (mesonet.agron.iastate.edu) and api.weather.gov. A refusal naming FETCH_ALLOWED_HOSTS means that HOST is not permitted -- it does NOT mean this tool is unavailable, so do not conclude you have no HTTP access and fall back to guessing.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "url": {
+       "type": "string",
+       "description": "Full https URL"
+      },
+      "max_bytes": {
+       "type": "integer",
+       "description": "Response cap",
+       "default": 8000
+      }
+     },
+     "required": [
+      "url"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "kml_data_read",
+    "description": "Read a live state/JSON file from the running KalshiML instance -- CURRENT state, not repo content, and the two disagree often. Useful paths: exec_scorecard.json (live fill rates, n_graded), exec_backfill_scorecard.json (maker-vs-taker backfill), maker_policy_promote.json (promote gates), ml_status.json, exec_grade_checkpoint.json.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "path": {
+       "type": "string",
+       "description": "Filename, e.g. exec_scorecard.json"
+      },
+      "host": {
+       "type": "string",
+       "description": "Service host to read from. Defaults to the KalshiML dashboard. Any allowlisted host with an /api/file endpoint works."
+      },
+      "max_bytes": {
+       "type": "integer",
+       "description": "Response cap",
+       "default": 8000
+      }
+     },
+     "required": [
+      "path"
+     ]
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "kml_app_logs",
+    "description": "Read the running KalshiML process's in-memory log tail, each line stamped with its own UTC time. ALWAYS pass `contains` -- the buffer holds ~8000 lines and an unfiltered pull is mostly noise. Useful filters: 'SCAN' (candidate counts and reject reasons), '429', '[ENS-GATE]', '[evidence]', '[exec-grade]'. The buffer does NOT survive a process restart, so after a deploy it only covers time since restart.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "contains": {
+       "type": "string",
+       "description": "Substring filter"
+      },
+      "n": {
+       "type": "integer",
+       "description": "Lines to search, max 8000",
+       "default": 2000
+      }
+     },
+     "required": []
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "github_list_repos",
+    "description": "List every GitHub repo the bridge token can reach, newest-pushed first. Use this before github_read when you do not already know the exact repo name -- do not guess names, and note a 404 from github_read usually means a wrong name or a wrong branch, not a missing file.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "limit": {
+       "type": "integer",
+       "description": "Max repos",
+       "default": 50
+      }
+     },
+     "required": []
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "railway_list",
+    "description": "List Railway projects, and the services + environments inside one. Call with no arguments to see all projects, then pass project_id for its services. Service and project NAMES have been changed before while IDs stayed constant -- always work from IDs. Feed the service_id into railway_get_status or railway_get_logs.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "project_id": {
+       "type": "string",
+       "description": "Omit to list all projects"
+      }
+     },
+     "required": []
+    }
+   }
+  }
+ ],
+ "max_turns": 24,
+ "provider": "moonshot",
+ "model": "kimi-k3",
+ "reasoning_effort": "high",
+ "max_tokens": 16384
+}
