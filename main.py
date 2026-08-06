@@ -763,6 +763,56 @@ async def delete_contents(
     }
 
 
+# ── sandbox workflow inspection ─────────────────────────────────────────────
+# run_tests reports "timed out waiting for completion" and nothing else, which
+# cannot distinguish a hanging command from GitHub queueing the job. Read-only,
+# and hardcoded to the sandbox repo for the same reason run_tests is: the token
+# carries `workflow` scope, and a caller-supplied repo would widen that.
+SANDBOX_REPO = os.getenv("AGENT_SANDBOX_REPO", "agent-sandbox")
+SANDBOX_OWNER = os.getenv("GITHUB_OWNER", "nicholascannon560-ship-it")
+
+
+@app.get(
+    "/sandbox/run/{run_id}",
+    tags=["files"],
+    summary="Status and timings of one sandbox workflow run",
+)
+async def get_sandbox_run(
+    run_id: int = Path(..., description="GitHub Actions run id, as returned by run_tests."),
+) -> dict[str, Any]:
+    base = f"/repos/{SANDBOX_OWNER}/{SANDBOX_REPO}/actions/runs/{run_id}"
+    run = (await github_request("GET", base)).json()
+
+    jobs: list[dict[str, Any]] = []
+    try:
+        for job in (await github_request("GET", f"{base}/jobs")).json().get("jobs", []):
+            jobs.append({
+                "name": job.get("name"),
+                "status": job.get("status"),
+                "conclusion": job.get("conclusion"),
+                "started_at": job.get("started_at"),
+                "completed_at": job.get("completed_at"),
+                "steps": [
+                    {"name": s.get("name"), "conclusion": s.get("conclusion"),
+                     "started_at": s.get("started_at"), "completed_at": s.get("completed_at")}
+                    for s in (job.get("steps") or [])
+                ],
+            })
+    except HTTPException:
+        pass
+
+    return {
+        "run_id": run_id,
+        "status": run.get("status"),
+        "conclusion": run.get("conclusion"),
+        "created_at": run.get("created_at"),      # dispatch accepted
+        "run_started_at": run.get("run_started_at"),  # runner picked it up
+        "updated_at": run.get("updated_at"),
+        "html_url": run.get("html_url"),
+        "jobs": jobs,
+    }
+
+
 class TreeFile(BaseModel):
     path: str = Field(..., description="Path of the file inside the repo.")
     content: str = Field(..., description="Raw (unencoded) UTF-8 file content.")
