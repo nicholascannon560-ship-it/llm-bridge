@@ -1,0 +1,13 @@
+{
+  "id": "sandbox-smoke-2",
+  "status": "ok",
+  "action": "agent_run",
+  "result": {
+    "status": "started",
+    "task_id": "sandbox-smoke-2",
+    "note": "running in the background; this result file is overwritten on completion",
+    "started_at": "2026-08-06T13:27:27.337916+00:00"
+  },
+  "error": null,
+  "processed_at": "2026-08-06T13:27:27.337262+00:00"
+}
