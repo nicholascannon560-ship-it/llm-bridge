@@ -328,7 +328,7 @@ TOOL_SCHEMAS = [
                     "command": {"type": "string", "description": "Command to run, e.g. 'pytest -q test_journal.py'"},
                     "setup": {"type": "string", "description": "Optional command run first, e.g. 'pip install pytest httpx'"},
                     "workdir": {"type": "string", "description": "Directory relative to repo root (default '.')"},
-                    "timeout_sec": {"type": "integer", "description": "Max seconds to wait for completion (default 300, max 900)"},
+                    "timeout_sec": {"type": "integer", "description": "Max seconds to wait for completion (default 420, max 900)"},
                 },
                 "required": ["command"],
             },
@@ -700,7 +700,12 @@ async def _tool_run_tests(args: Dict) -> Dict:
     command = args["command"]
     setup = args.get("setup", "") or ""
     workdir = args.get("workdir", ".") or "."
-    timeout_sec = min(int(args.get("timeout_sec") or 300), 900)
+    # 420 not 300: the sandbox workflow's worst case is ~5.5 min (2-min setup
+    # step + 3-min command step + checkout/setup-python), and the caller must
+    # outlive that or it abandons a run it is still paying for and never learns
+    # the outcome — exactly what happened on 2026-08-06. Raise this only
+    # alongside the workflow's step timeouts; the two numbers are a pair.
+    timeout_sec = min(int(args.get("timeout_sec") or 420), 900)
 
     base = f"{GITHUB_API}/repos/{OWNER}/{SANDBOX_REPO}"
     started = time.time()
