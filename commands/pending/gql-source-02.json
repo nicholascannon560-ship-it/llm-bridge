@@ -1,1 +1,0 @@
-{"action": "railway_gql", "query": "query { deployment(id: \"0e065d37-a29d-48db-8c1b-bad15fbba7c8\") { id status meta } service(id: \"509d2aef-f1a5-4854-9a57-e44cf9c079a0\") { id name source { image repo } } }"}
