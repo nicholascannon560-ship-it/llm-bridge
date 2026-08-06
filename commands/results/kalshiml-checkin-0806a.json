@@ -1,0 +1,23 @@
+{
+  "id": "kalshiml-checkin-0806a",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "45a2551a-fca1-4d0d-a41d-f3c0ce6e7bf5",
+              "status": "SUCCESS",
+              "createdAt": "2026-08-05T21:01:28.052Z",
+              "updatedAt": "2026-08-05T21:04:38.317Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-06T02:48:41.853009+00:00"
+}
