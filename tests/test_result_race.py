@@ -247,3 +247,100 @@ def test_write_retries_on_stale_sha_409():
 
     assert hub.conflicts == 1, "expected the fake to reject one stale write"
     assert json.loads(hub.files["commands/results/x.json"])["status"] == "new"
+
+
+# ── journal (append-only per-turn log) ──────────────────────────────────────
+def test_journal_writes_one_entry_per_turn():
+    hub = FakeGitHub()
+
+    async def three_turn_agent(**kwargs):
+        on_turn = kwargs.get("on_turn")
+        for t in (1, 2, 3):
+            if on_turn:
+                on_turn({"turn": t, "type": "tool_loop",
+                         "tool_calls": [{"name": "github_commit"}]})
+        return {"turns_used": 3}
+
+    mod = load_module(hub, three_turn_agent)
+    _run_one(hub, mod, "journaled")
+
+    entries = sorted(k for k in hub.files if k.startswith("commands/journal/journaled/"))
+    assert entries == [
+        "commands/journal/journaled/0000.json",   # run start
+        "commands/journal/journaled/0001.json",
+        "commands/journal/journaled/0002.json",
+        "commands/journal/journaled/0003.json",
+    ], entries
+
+    start = json.loads(hub.files["commands/journal/journaled/0000.json"])
+    assert start["type"] == "run_start"
+    assert start["task"] == "boom"
+
+    turn2 = json.loads(hub.files["commands/journal/journaled/0002.json"])
+    assert turn2["turn"] == 2
+    assert turn2["tool_calls"][0]["name"] == "github_commit"
+
+
+def test_journal_entries_are_never_overwritten():
+    """Append-only means a repeated turn number is refused, not clobbered."""
+    hub = FakeGitHub()
+
+    async def repeating_agent(**kwargs):
+        on_turn = kwargs.get("on_turn")
+        on_turn({"turn": 1, "note": "first"})
+        on_turn({"turn": 1, "note": "second — must not land"})
+        return {"turns_used": 1}
+
+    mod = load_module(hub, repeating_agent)
+    _run_one(hub, mod, "dupe")
+
+    entry = json.loads(hub.files["commands/journal/dupe/0001.json"])
+    assert entry["note"] == "first", "an existing journal entry was overwritten"
+
+
+def test_journal_survives_a_crash_mid_run():
+    """Turns completed before the crash stay on disk, and so does the error."""
+    hub = FakeGitHub()
+
+    async def crash_on_turn_three(**kwargs):
+        on_turn = kwargs.get("on_turn")
+        on_turn({"turn": 1, "type": "tool_loop"})
+        on_turn({"turn": 2, "type": "tool_loop"})
+        raise RuntimeError("provider hung up")
+
+    mod = load_module(hub, crash_on_turn_three)
+    _run_one(hub, mod, "midcrash")
+
+    assert "commands/journal/midcrash/0001.json" in hub.files
+    assert "commands/journal/midcrash/0002.json" in hub.files
+    result = json.loads(hub.files["commands/results/midcrash.json"])
+    assert result["status"] == "error"
+    assert "provider hung up" in result["error"]
+
+
+def test_journal_write_failure_does_not_kill_the_run():
+    """Bookkeeping must never take down the work it is recording."""
+    hub = FakeGitHub()
+
+    class BrokenJournal(FakeGitHub):
+        def put(self, path, payload):
+            if "commands/journal/" in path:
+                return 500, {"message": "GitHub is having a day"}
+            return super().put(path, payload)
+
+    hub = BrokenJournal()
+
+    async def normal_agent(**kwargs):
+        on_turn = kwargs.get("on_turn")
+        try:
+            on_turn({"turn": 1, "type": "tool_loop"})
+        except Exception as e:            # the harness swallows this in _record
+            raise AssertionError(f"journal error reached the agent: {e}")
+        return {"turns_used": 1, "final": "done"}
+
+    mod = load_module(hub, normal_agent)
+    _run_one(hub, mod, "brokenjournal")
+
+    result = json.loads(hub.files["commands/results/brokenjournal.json"])
+    assert result["status"] == "ok", result
+    assert result["result"]["final"] == "done"

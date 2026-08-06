@@ -88,6 +88,7 @@ class AgentHarness:
         browser_auth: Optional["RunAuthorization"] = None,
         on_checkpoint=None,
         checkpoint_every: int = 0,
+        on_turn=None,
     ):
         self.task = task
         # resolve_tools refuses any set that pairs a browsing tool with a
@@ -108,6 +109,10 @@ class AgentHarness:
             (reasoning_effort or "low").lower(), 8192))
         self.on_checkpoint = on_checkpoint
         self.checkpoint_every = int(checkpoint_every or 0)
+        # Fired once per turn with that turn's record. Unlike on_checkpoint it
+        # is not rate-limited and carries only the turn, not the transcript —
+        # the journal is append-only, so each entry must stand alone.
+        self.on_turn = on_turn
         self.memory = MemoryStore(path=memory_path)
         self.task_id = task_id or f"agent-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
@@ -205,7 +210,7 @@ Rules:
                 )
                 turn_record["type"] = "llm_error"
                 turn_record["error"] = f"{type(exc).__name__}: {exc}"
-                self.transcript.append(turn_record)
+                self._record(turn_record)
                 break
 
             turn_record["llm"] = {
@@ -240,7 +245,7 @@ Rules:
                     status = "complete"
                     turn_record["type"] = "final"
                 turn_record["final_answer"] = final_answer[:500]
-                self.transcript.append(turn_record)
+                self._record(turn_record)
                 break
 
             prompt_tokens_last = llm_result.get("usage", {}).get("prompt_tokens", 0)
@@ -252,7 +257,7 @@ Rules:
                     "AGENT_CONTEXT_BUDGET_TOKENS."
                 )
                 turn_record["type"] = "budget_stop"
-                self.transcript.append(turn_record)
+                self._record(turn_record)
                 break
             if self.total_cost_cents >= COST_BUDGET_CENTS:
                 status = "cost_budget_reached"
@@ -261,7 +266,7 @@ Rules:
                     f"(budget {COST_BUDGET_CENTS}c)."
                 )
                 turn_record["type"] = "budget_stop"
-                self.transcript.append(turn_record)
+                self._record(turn_record)
                 break
 
             tool_results = await self._execute_tools(tool_calls)
@@ -274,7 +279,7 @@ Rules:
                 {"status": "ok" if "error" not in r else "error", "preview": str(r)[:300]}
                 for r in tool_results
             ]
-            self.transcript.append(turn_record)
+            self._record(turn_record)
 
             RUN_STATE.update({
                 "turn": turn,
@@ -320,6 +325,28 @@ Rules:
             pass
 
         return summary
+
+    def _record(self, turn_record: Dict[str, Any]) -> None:
+        """Append a turn to the transcript and journal it.
+
+        Every exit path from the turn loop goes through here, so a run that
+        dies mid-flight still leaves the turn that killed it on disk. A journal
+        write must never take the run down: it is bookkeeping, not the work.
+        """
+        self.transcript.append(turn_record)
+        if not self.on_turn:
+            return
+        try:
+            self.on_turn({
+                **turn_record,
+                "task_id": self.task_id,
+                "cost_cents_total": round(self.total_cost_cents, 4),
+                "tokens_total": dict(self.total_tokens),
+                "provider": self.provider,
+                "model": self.model,
+            })
+        except Exception as e:
+            print(f"[agent_loop] journal error on turn {turn_record.get('turn')}: {e}", flush=True)
 
     def _summary(self, status: str, final_answer: str) -> Dict[str, Any]:
         return {
@@ -416,6 +443,7 @@ async def run_agent(
     browser_auth: Optional["RunAuthorization"] = None,
     on_checkpoint=None,
     checkpoint_every: int = 0,
+    on_turn=None,
 ) -> Dict[str, Any]:
     """One-shot agent run. Creates a harness, runs it, returns result."""
     harness = AgentHarness(
@@ -432,5 +460,6 @@ async def run_agent(
         browser_auth=browser_auth,
         on_checkpoint=on_checkpoint,
         checkpoint_every=checkpoint_every,
+        on_turn=on_turn,
     )
     return await harness.run()
