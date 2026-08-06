@@ -1,0 +1,25 @@
+{
+  "id": "patch-learning-v3",
+  "status": "ok",
+  "action": "patch_file",
+  "result": {
+    "repo": "KalshiML",
+    "path": "learning.py",
+    "branch": "main",
+    "old_blob_sha": "4e9753f3c328b7bebf790758b460d117641b6c28",
+    "new_commit": "85c6dee4db343114263bd79e4b4acbacbac10a97",
+    "chars_after": 54509,
+    "ops_applied": [
+      {
+        "op": 0,
+        "type": "insert_after"
+      },
+      {
+        "op": 1,
+        "type": "replace"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-06T16:16:34.791607+00:00"
+}
