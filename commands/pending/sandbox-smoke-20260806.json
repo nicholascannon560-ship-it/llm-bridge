@@ -1,0 +1,10 @@
+{
+  "action": "agent_run",
+  "task": "Call the run_tests tool exactly once with command='pytest -q test_smoke.py' and setup='pip install pytest'. Report the tool's 'passed' value, 'conclusion', and the last few lines of pytest output. Do not call any other tool. Then stop.",
+  "tools": [
+    "run_tests"
+  ],
+  "max_turns": 4,
+  "reasoning_effort": "low",
+  "max_tokens": 4096
+}
