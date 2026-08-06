@@ -321,12 +321,14 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
         # Clear the in-progress marker last: while it exists the run is either
         # live or died without writing a result, and that distinction is the
         # whole point of the separate path. Failure here is cosmetic.
-        try:
-            _, running_sha = _read_file(f"{RUNNING_PATH}/{cmd_id}.json")
-            _delete_file(f"{RUNNING_PATH}/{cmd_id}.json", running_sha,
-                         f"agent run finished: {cmd_id}")
-        except Exception:
-            pass
+        for attempt in range(3):
+            try:
+                _, running_sha = _read_file(f"{RUNNING_PATH}/{cmd_id}.json")
+                _delete_file(f"{RUNNING_PATH}/{cmd_id}.json", running_sha,
+                             f"agent run finished: {cmd_id}")
+                break
+            except Exception:
+                time.sleep(0.5 * (attempt + 1))
 
     threading.Thread(target=_worker, name=f"agent-{cmd_id or 'run'}", daemon=True).start()
 
@@ -516,6 +518,27 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
         # here means failed probes, a restarted container, and a half-finished
         # run with no result. Start it on a background thread and return
         # immediately; the thread overwrites the result file when it is done.
+        started = {
+            "id": cmd_id,
+            "action": "agent_run",
+            "status": "running",
+            "result": {"status": "started", "task_id": cmd_id},
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+        # Write the marker BEFORE the thread exists. Writing it afterwards is a
+        # race the worker wins on a fast crash: it looks for a marker that has
+        # not been written yet, finds nothing to clear, and the marker lands
+        # after the run is already over and outlives it. Observed live on the
+        # first deploy of this fix.
+        try:
+            _write_file(
+                f"{RUNNING_PATH}/{cmd_id}.json",
+                json.dumps(started, indent=2, default=str),
+                f"agent started: {cmd_id}",
+            )
+        except Exception as e:
+            print(f"[agent_loop] could not write running marker for {cmd_id}: {e}", flush=True)
+
         try:
             _start_agent_run(cmd, cmd_id)
         except Exception:
@@ -587,15 +610,15 @@ def process_pending_commands() -> dict[str, Any]:
                 and res.get("status") == "started"
                 and res.get("task_id")
             )
-            result_path = (
-                f"{RUNNING_PATH}/{cmd_id}.json" if backgrounded
-                else f"{RESULTS_PATH}/{cmd_id}.json"
-            )
-            _write_file(
-                result_path,
-                json.dumps(result_payload, indent=2, default=str),
-                f"cmd result: {cmd_id}",
-            )
+            # A backgrounded run already wrote its own marker to
+            # commands/running before the worker started; writing anything here
+            # would either duplicate it or race the worker's final payload.
+            if not backgrounded:
+                _write_file(
+                    f"{RESULTS_PATH}/{cmd_id}.json",
+                    json.dumps(result_payload, indent=2, default=str),
+                    f"cmd result: {cmd_id}",
+                )
             _delete_file(path, sha, f"cmd processed: {cmd_id}")
 
             summary["processed"] += 1
