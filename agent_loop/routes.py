@@ -24,6 +24,23 @@ from .browser import (
 agent_router = APIRouter(tags=["agent"])
 
 
+@agent_router.get("/agent/status")
+async def get_agent_status():
+    """Live view of the agent run in progress.
+
+    The result file in commands/results is only written when a run finishes, so
+    before this endpoint the only way to tell a working run from a dead one was
+    to watch /llm/usage and guess. This reads an in-memory dict — no GitHub
+    call, no commit, safe to poll every few seconds.
+    """
+    from .harness import current_run_state
+
+    state = current_run_state()
+    if not state.get("task_id"):
+        return {"active": False, "note": "no agent run has started since this container booted"}
+    return state
+
+
 @agent_router.get("/agent/browser_budget")
 async def get_browser_budget():
     # Reconcile against Browserbase before answering: the local ledger is wiped

@@ -59,6 +59,17 @@ DEFAULT_MAX_TOKENS = {
 }
 
 
+# Live, in-memory view of the current run. The result file is only written at
+# the end, so without this a running agent and a dead one are indistinguishable
+# from outside — which is exactly how a healthy 10-minute run got read as hung.
+# Read it via GET /agent/status. No commits, no I/O.
+RUN_STATE: Dict[str, Any] = {"active": False, "task_id": None}
+
+
+def current_run_state() -> Dict[str, Any]:
+    return dict(RUN_STATE)
+
+
 class AgentHarness:
     """Stateful agent that runs a task to completion using tool calls."""
 
@@ -75,6 +86,8 @@ class AgentHarness:
         task_id: Optional[str] = None,
         tool_set: Optional[str] = None,
         browser_auth: Optional["RunAuthorization"] = None,
+        on_checkpoint=None,
+        checkpoint_every: int = 0,
     ):
         self.task = task
         # resolve_tools refuses any set that pairs a browsing tool with a
@@ -93,6 +106,8 @@ class AgentHarness:
         # let the caller override.
         self.max_tokens = int(max_tokens or DEFAULT_MAX_TOKENS.get(
             (reasoning_effort or "low").lower(), 8192))
+        self.on_checkpoint = on_checkpoint
+        self.checkpoint_every = int(checkpoint_every or 0)
         self.memory = MemoryStore(path=memory_path)
         self.task_id = task_id or f"agent-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
@@ -160,6 +175,20 @@ Rules:
 
         final_answer = ""
         status = "incomplete"
+
+        RUN_STATE.update({
+            "active": True,
+            "task_id": self.task_id,
+            "task": self.task[:200],
+            "status": "running",
+            "turn": 0,
+            "max_turns": self.max_turns,
+            "cost_cents": 0.0,
+            "last_tool": None,
+            "reasoning_effort": self.reasoning_effort,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
 
         for turn in range(1, self.max_turns + 1):
             turn_record = {"turn": turn, "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -247,11 +276,53 @@ Rules:
             ]
             self.transcript.append(turn_record)
 
+            RUN_STATE.update({
+                "turn": turn,
+                "cost_cents": round(self.total_cost_cents, 3),
+                "last_tool": (turn_record["tool_calls"][-1]["name"]
+                              if turn_record.get("tool_calls") else None),
+                "last_prompt_tokens": self.total_tokens.get("last_prompt", 0),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+            if self.on_checkpoint and self.checkpoint_every and turn % self.checkpoint_every == 0:
+                try:
+                    self.on_checkpoint(self._summary("running", ""))
+                except Exception as e:
+                    print(f"[agent_loop] checkpoint error: {e}", flush=True)
+
         else:
             status = "max_turns_reached"
             final_answer = "Max turns reached without a final answer."
 
-        summary = {
+        summary = self._summary(status, final_answer)
+
+        RUN_STATE.update({
+            "active": False,
+            "status": status,
+            "turn": len(self.transcript),
+            "cost_cents": round(self.total_cost_cents, 3),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+        if self.browser_auth is not None:
+            set_run_authorization(None)
+
+        try:
+            mem_entry = (
+                f"Task [{self.task_id}]: {self.task[:120]} — "
+                f"Status: {status}, Turns: {len(self.transcript)}, "
+                f"Cost: {self.total_cost_cents:.2f}c"
+            )
+            self.memory.append(mem_entry, tags=["agent_run", status, self.provider])
+        except Exception:
+            pass
+
+        return summary
+
+    def _summary(self, status: str, final_answer: str) -> Dict[str, Any]:
+        return {
             "status": status,
             "task_id": self.task_id,
             "task": self.task,
@@ -268,21 +339,6 @@ Rules:
             "last_prompt_tokens": self.total_tokens.get("last_prompt", 0),
             "max_tokens": self.max_tokens,
         }
-
-        if self.browser_auth is not None:
-            set_run_authorization(None)
-
-        try:
-            mem_entry = (
-                f"Task [{self.task_id}]: {self.task[:120]} — "
-                f"Status: {status}, Turns: {len(self.transcript)}, "
-                f"Cost: {self.total_cost_cents:.2f}c"
-            )
-            self.memory.append(mem_entry, tags=["agent_run", status, self.provider])
-        except Exception:
-            pass
-
-        return summary
 
     async def _call_llm(self) -> Dict[str, Any]:
         router = get_router()
@@ -358,6 +414,8 @@ async def run_agent(
     task_id: Optional[str] = None,
     tool_set: Optional[str] = None,
     browser_auth: Optional["RunAuthorization"] = None,
+    on_checkpoint=None,
+    checkpoint_every: int = 0,
 ) -> Dict[str, Any]:
     """One-shot agent run. Creates a harness, runs it, returns result."""
     harness = AgentHarness(
@@ -372,5 +430,7 @@ async def run_agent(
         task_id=task_id,
         tool_set=tool_set,
         browser_auth=browser_auth,
+        on_checkpoint=on_checkpoint,
+        checkpoint_every=checkpoint_every,
     )
     return await harness.run()
