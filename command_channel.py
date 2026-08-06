@@ -91,10 +91,10 @@ def _list_pending() -> list[dict[str, Any]]:
     url = f"{GITHUB_API}/repos/{OWNER}/{REPO}/contents/{PENDING_PATH}"
     with httpx.Client(timeout=20) as client:
         resp = client.get(url, headers=_github_headers(), params=_ref_params())
+    if resp.status_code != 200 and resp.status_code != 404:
+        raise RuntimeError(f"list pending failed: {resp.status_code} {resp.text[:300]}")
     if resp.status_code == 404:
         return []
-    if resp.status_code != 200:
-        raise RuntimeError(f"list pending failed: {resp.status_code} {resp.text[:300]}")
     items = resp.json()
     if not isinstance(items, list):
         return []
@@ -293,6 +293,111 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
     threading.Thread(target=_worker, name=f"agent-{cmd_id or 'run'}", daemon=True).start()
 
 
+# ── byte-exact repo file tools (2026-08-06) ─────────────────────────────────
+# LLM transcription of large files is lossy (observed: a 143792-byte dashboard.py
+# silently lost ~43KB in transit, caught only by blob-SHA check). These two
+# actions move the bytes with the bridge's own GitHub token and let the harness
+# write the results, so file content never passes through a model. patch_file
+# additionally fail-safes every op (anchor must match exactly once) and
+# compile-checks Python before committing, so a bad patch can never deploy.
+
+def _read_repo_file(repo: str, path: str, branch: str) -> tuple[str, str]:
+    """Read a file from ANY repo the bridge token can see. Returns (content, blob_sha)."""
+    url = f"{GITHUB_API}/repos/{OWNER}/{repo}/contents/{path}"
+    with httpx.Client(timeout=30) as client:
+        resp = client.get(url, headers=_github_headers(), params={"ref": branch})
+    if resp.status_code != 200:
+        raise RuntimeError(f"read {repo}/{path} failed: {resp.status_code}")
+    data = resp.json()
+    return base64.b64decode(data["content"]).decode("utf-8"), data["sha"]
+
+
+def _read_file_window(cmd: dict[str, Any]) -> dict[str, Any]:
+    repo = cmd.get("repo") or REPO
+    branch = cmd.get("branch") or BRANCH or "main"
+    path = cmd.get("path")
+    if not path:
+        raise ValueError("read_file_window requires 'path'")
+    content, sha = _read_repo_file(repo, path, branch)
+    if cmd.get("find") is not None:
+        needle = str(cmd["find"])
+        offs = []
+        start = 0
+        while len(offs) < 50:
+            i = content.find(needle, start)
+            if i < 0:
+                break
+            offs.append(i)
+            start = i + 1
+        return {"repo": repo, "path": path, "branch": branch, "sha": sha,
+                "total_chars": len(content), "find": needle, "offsets": offs}
+    offset = max(0, int(cmd.get("offset", 0)))
+    max_chars = min(40000, max(1, int(cmd.get("max_chars", 8000))))
+    window = content[offset:offset + max_chars]
+    return {"repo": repo, "path": path, "branch": branch, "sha": sha,
+            "total_chars": len(content), "offset": offset,
+            "returned_chars": len(window),
+            "truncated": (offset + len(window)) < len(content),
+            "next_offset": offset + len(window),
+            "content": window}
+
+
+def _patch_file(cmd: dict[str, Any]) -> dict[str, Any]:
+    repo = cmd.get("repo") or REPO
+    branch = cmd.get("branch") or BRANCH or "main"
+    path = cmd.get("path")
+    ops = cmd.get("ops") or []
+    message = cmd.get("message") or f"patch_file: {path}"
+    if not path or not ops:
+        raise ValueError("patch_file requires 'path' and non-empty 'ops'")
+    content, sha = _read_repo_file(repo, path, branch)
+    applied = []
+    for i, op in enumerate(ops):
+        if "replace" in op:
+            old = op["replace"]["old"]
+            new = op["replace"]["new"]
+            n = content.count(old)
+            if n != 1:
+                raise ValueError(f"op {i}: replace anchor occurs {n}x (need exactly 1); nothing committed")
+            content = content.replace(old, new, 1)
+            applied.append({"op": i, "type": "replace"})
+        elif "insert_before" in op:
+            anchor = op["insert_before"]["anchor"]
+            text = op["insert_before"]["text"]
+            n = content.count(anchor)
+            if n != 1:
+                raise ValueError(f"op {i}: insert_before anchor occurs {n}x (need exactly 1); nothing committed")
+            content = content.replace(anchor, text + anchor, 1)
+            applied.append({"op": i, "type": "insert_before"})
+        elif "insert_after" in op:
+            anchor = op["insert_after"]["anchor"]
+            text = op["insert_after"]["text"]
+            n = content.count(anchor)
+            if n != 1:
+                raise ValueError(f"op {i}: insert_after anchor occurs {n}x (need exactly 1); nothing committed")
+            content = content.replace(anchor, anchor + text, 1)
+            applied.append({"op": i, "type": "insert_after"})
+        else:
+            raise ValueError(f"op {i}: unknown op shape; nothing committed")
+    if path.endswith(".py"):
+        compile(content, path, "exec")  # raises BEFORE commit on any syntax error
+    url = f"{GITHUB_API}/repos/{OWNER}/{repo}/contents/{path}"
+    payload: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+        "branch": branch,
+        "sha": sha,
+    }
+    with httpx.Client(timeout=30) as client:
+        w = client.put(url, headers=_github_headers(), json=payload)
+    if w.status_code not in (200, 201):
+        raise RuntimeError(f"commit failed: {w.status_code} {w.text[:300]}")
+    return {"repo": repo, "path": path, "branch": branch,
+            "old_blob_sha": sha,
+            "new_commit": (w.json().get("commit") or {}).get("sha"),
+            "chars_after": len(content), "ops_applied": applied}
+
+
 def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
     action = cmd.get("action")
     if not action:
@@ -300,6 +405,12 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
 
     if action == "llm_chat":
         return _llm_chat(cmd)
+
+    if action == "read_file_window":
+        return _read_file_window(cmd)
+
+    if action == "patch_file":
+        return _patch_file(cmd)
 
     if action == "railway_gql":
         query = cmd.get("query")
