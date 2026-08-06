@@ -1,0 +1,9 @@
+{
+  "id": "patch-dashboard-v3",
+  "status": "error",
+  "action": "patch_file",
+  "result": null,
+  "error": "op 0: unknown op shape; nothing committed",
+  "processed_at": "2026-08-06T16:26:07.642998+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 534, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd, cmd_id)\n                               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 413, in _execute\n    return _patch_file(cmd)\n           ^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 381, in _patch_file\n    raise ValueError(f\"op {i}: unknown op shape; nothing committed\")\nValueError: op 0: unknown op shape; nothing committed\n"
+}
