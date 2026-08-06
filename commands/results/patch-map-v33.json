@@ -1,0 +1,9 @@
+{
+  "id": "patch-map-v33",
+  "status": "error",
+  "action": "patch_file",
+  "result": null,
+  "error": "patch_file requires 'path' and non-empty 'ops'",
+  "processed_at": "2026-08-06T22:48:15.579781+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 692, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd, cmd_id)\n                               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 547, in _execute\n    return _patch_file(cmd)\n           ^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 486, in _patch_file\n    raise ValueError(\"patch_file requires 'path' and non-empty 'ops'\")\nValueError: patch_file requires 'path' and non-empty 'ops'\n"
+}
