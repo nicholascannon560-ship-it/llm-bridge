@@ -78,11 +78,16 @@ def list_services(project_id: str):
 
 @router.get("/service/{service_id}/deployments")
 def list_deployments(service_id: str, limit: int = 10):
-    """List recent deployments for a service."""
+    """List recent deployments for a service, newest first.
+
+    Railway orders this connection newest-first, so `first: N` is the recent
+    window and `last: N` returns the OLDEST N. This read `last` until
+    2026-08-06 and reported deployments from weeks earlier as current.
+    """
     query = """
     query($id: String!, $limit: Int!) {
         service(id: $id) {
-            deployments(last: $limit) {
+            deployments(first: $limit) {
                 edges {
                     node {
                         id
@@ -117,13 +122,16 @@ def get_logs(deployment_id: str, limit: int = 100):
 def get_service_status(service_id: str):
     """Get current deployment status for a service.
 
-    Queries the last 20 deployments and returns the most recent one
-    by createdAt, avoiding stale FAILED results from `last: 1`.
+    Queries the 20 most recent deployments and returns the newest by
+    createdAt. NOTE: Railway orders this connection newest-first, so the
+    recent window is `first: 20`, not `last: 20`. The createdAt sort below
+    was already correct; it was being applied to the OLDEST 20 rows, which
+    is why this returned a weeks-old FAILED for a healthy service.
     """
     query = """
     query($id: String!) {
         service(id: $id) {
-            deployments(last: 20) {
+            deployments(first: 20) {
                 edges {
                     node {
                         id
