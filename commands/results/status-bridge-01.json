@@ -1,0 +1,23 @@
+{
+  "id": "status-bridge-01",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "0e065d37-a29d-48db-8c1b-bad15fbba7c8",
+              "status": "SUCCESS",
+              "createdAt": "2026-08-06T15:40:08.748Z",
+              "updatedAt": "2026-08-06T15:41:17.565Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-06T15:47:58.074185+00:00"
+}
