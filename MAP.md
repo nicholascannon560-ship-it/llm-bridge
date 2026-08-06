@@ -80,7 +80,6 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
-- 2026-08-03 | revenue_agents/: prompt-only idea pipeline (scout/generator/redteam/ranker), no code wired | files: revenue_agents/
 - 2026-08-03 | Browser tool via Browserbase REST (no browser-use: pydantic pin clash); free-tier budgets | files: agent_loop/browser.py
 - 2026-08-03 | Tool-set split: browsing never shares a loop with commit/set_env/write_memory | files: agent_loop/tools.py, harness.py
 - 2026-08-03 | agent_run now runs off the health probe on a background thread; AGENT_LOOP_ENABLED kill switch | files: command_channel.py
@@ -96,3 +95,5 @@
 - 2026-07-28 | Added task slices section | files: MAP.md
 - 2026-07-28 | Added /issues endpoints (list, create, list+add comments) so agents can close the change-log loop | files: main.py
 - 2026-07-28 | Added GET /map_freshness: runs change-log's per-slice gate with the bridge's token | files: main.py
+- 2026-08-06 | Railway deployments connection is newest-first: use first: not last: | files: railway_extension.py
+- 2026-08-06 | llm-bridge-v2 service DELETED (was consuming queue commands) | files: none
