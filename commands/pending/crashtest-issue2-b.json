@@ -1,9 +1,0 @@
-{
-  "action": "agent_run",
-  "task": "expected to crash before turn 1",
-  "tools": [
-    "run_tests"
-  ],
-  "max_turns": 2,
-  "reasoning_effort": "low"
-}
