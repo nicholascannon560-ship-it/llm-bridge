@@ -1,0 +1,18 @@
+{
+  "id": "probe-rfw-04",
+  "status": "ok",
+  "action": "read_file_window",
+  "result": {
+    "repo": "KalshiML",
+    "path": "dashboard.py",
+    "branch": "main",
+    "sha": "1e6f73772f718bcf9e1dae011b64e2d2ba025cf2",
+    "total_chars": 142981,
+    "find": "if __name__",
+    "offsets": [
+      142720
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-06T16:11:31.576243+00:00"
+}
