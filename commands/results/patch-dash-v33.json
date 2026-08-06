@@ -1,0 +1,33 @@
+{
+  "id": "patch-dash-v33",
+  "status": "ok",
+  "action": "patch_file",
+  "result": {
+    "repo": "KalshiML",
+    "path": "dashboard.py",
+    "branch": "main",
+    "old_blob_sha": "a371c4dbbbd464fdd875c89d6cab5b7a4f04254d",
+    "new_commit": "9eaa1f2da6eaaab0ed78acc2aaf267d1f8d256e5",
+    "chars_after": 151399,
+    "ops_applied": [
+      {
+        "op": 0,
+        "type": "replace"
+      },
+      {
+        "op": 1,
+        "type": "replace"
+      },
+      {
+        "op": 2,
+        "type": "replace"
+      },
+      {
+        "op": 3,
+        "type": "replace"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-06T22:41:22.949758+00:00"
+}
