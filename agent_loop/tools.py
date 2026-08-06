@@ -8,10 +8,14 @@ All handlers assume they are running inside the bridge process where
 llm_gateway and railway_extension are importable.
 """
 
+import asyncio
 import base64
+import io
 import json
 import os
+import time
 import traceback
+import zipfile
 from typing import Any, Dict, List
 
 # Import bridge modules when running inside the bridge
@@ -304,7 +308,32 @@ TOOL_SCHEMAS = [
                 "required": []
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_tests",
+            "description": (
+                "Execute a shell command (pytest, python, linters) in a clean throwaway "
+                "GitHub Actions container and return its exit status and output. This is "
+                "the ONLY way to actually run code — you have no shell otherwise, so never "
+                "claim code works because it looks correct. Commit what you want to test to "
+                "the sandbox repo FIRST (github_commit, repo='agent-sandbox'), then call "
+                "this. The sandbox holds no secrets and cannot reach other private repos, so "
+                "copy in any module under test alongside its tests. Takes 1-3 minutes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Command to run, e.g. 'pytest -q test_journal.py'"},
+                    "setup": {"type": "string", "description": "Optional command run first, e.g. 'pip install pytest httpx'"},
+                    "workdir": {"type": "string", "description": "Directory relative to repo root (default '.')"},
+                    "timeout_sec": {"type": "integer", "description": "Max seconds to wait for completion (default 300, max 900)"},
+                },
+                "required": ["command"],
+            },
+        },
+    },
 ]
 
 # ── Tool sets and the separation rule ────────────────────────────────────────
@@ -327,6 +356,7 @@ except Exception as _browser_import_err:  # pragma: no cover
 
 WRITE_TOOL_NAMES = {
     "github_commit",
+    "run_tests",
     "railway_set_env",
     "railway_redeploy",
     "write_memory",
@@ -652,6 +682,113 @@ async def _tool_railway_list(args: Dict) -> Dict:
     return {"projects": await list_projects()}
 
 
+
+SANDBOX_REPO = os.getenv("AGENT_SANDBOX_REPO", "agent-sandbox")
+SANDBOX_WORKFLOW = os.getenv("AGENT_SANDBOX_WORKFLOW", "sandbox.yml")
+
+
+async def _tool_run_tests(args: Dict) -> Dict:
+    """Dispatch the sandbox workflow, poll for completion, return logs.
+
+    Deliberately scoped to one hardcoded repo. The bridge's GITHUB_TOKEN has
+    `workflow` scope, so a caller-supplied repo here would let an agent run
+    arbitrary code in a repo that DOES hold secrets. The sandbox repo holds
+    none, which is the entire safety property — do not parameterise it.
+    """
+    import httpx
+
+    command = args["command"]
+    setup = args.get("setup", "") or ""
+    workdir = args.get("workdir", ".") or "."
+    timeout_sec = min(int(args.get("timeout_sec") or 300), 900)
+
+    base = f"{GITHUB_API}/repos/{OWNER}/{SANDBOX_REPO}"
+    started = time.time()
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Record the newest existing run id so we can tell ours apart. GitHub's
+        # dispatch endpoint returns 204 with no body -- it does not tell you
+        # which run it created.
+        before = await client.get(
+            f"{base}/actions/workflows/{SANDBOX_WORKFLOW}/runs",
+            headers=_github_headers(), params={"per_page": 1},
+        )
+        prior_id = 0
+        if before.status_code == 200:
+            runs = before.json().get("workflow_runs") or []
+            if runs:
+                prior_id = runs[0].get("id", 0)
+
+        dispatch = await client.post(
+            f"{base}/actions/workflows/{SANDBOX_WORKFLOW}/dispatches",
+            headers=_github_headers(),
+            json={"ref": "main", "inputs": {
+                "command": command, "setup": setup, "workdir": workdir,
+            }},
+        )
+        if dispatch.status_code not in (201, 204):
+            return {"error": f"dispatch failed: {dispatch.status_code} {dispatch.text[:300]}"}
+
+        run_id = None
+        while time.time() - started < timeout_sec:
+            await asyncio.sleep(5)
+            listing = await client.get(
+                f"{base}/actions/workflows/{SANDBOX_WORKFLOW}/runs",
+                headers=_github_headers(), params={"per_page": 5},
+            )
+            if listing.status_code != 200:
+                continue
+            for run in listing.json().get("workflow_runs") or []:
+                if run.get("id", 0) > prior_id:
+                    run_id = run["id"]
+                    break
+            if run_id:
+                break
+        if not run_id:
+            return {"error": "dispatched but no new run appeared", "waited_sec": round(time.time() - started)}
+
+        conclusion = None
+        while time.time() - started < timeout_sec:
+            detail = await client.get(f"{base}/actions/runs/{run_id}", headers=_github_headers())
+            if detail.status_code == 200:
+                body = detail.json()
+                if body.get("status") == "completed":
+                    conclusion = body.get("conclusion")
+                    break
+            await asyncio.sleep(5)
+
+        if conclusion is None:
+            return {
+                "error": "timed out waiting for completion",
+                "run_id": run_id, "waited_sec": round(time.time() - started),
+                "hint": "raise timeout_sec, or the command may be hanging",
+            }
+
+        logs_text = ""
+        logs = await client.get(f"{base}/actions/runs/{run_id}/logs",
+                                headers=_github_headers(), follow_redirects=True)
+        if logs.status_code == 200:
+            try:
+                with zipfile.ZipFile(io.BytesIO(logs.content)) as z:
+                    parts = [z.read(n).decode("utf-8", "replace")
+                             for n in sorted(z.namelist()) if n.endswith(".txt")]
+                logs_text = "\n".join(parts)
+            except Exception as exc:  # noqa: BLE001
+                logs_text = f"(could not unpack logs: {exc})"
+
+        if len(logs_text) > 40000:
+            logs_text = logs_text[:20000] + "\n...[truncated]...\n" + logs_text[-20000:]
+
+        return {
+            "passed": conclusion == "success",
+            "conclusion": conclusion,
+            "run_id": run_id,
+            "elapsed_sec": round(time.time() - started),
+            "command": command,
+            "logs": logs_text,
+        }
+
+
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
@@ -666,6 +803,7 @@ _TOOL_HANDLERS = {
     "kml_data_read": _tool_kml_data_read,
     "kml_app_logs": _tool_kml_app_logs,
     "github_list_repos": _tool_github_list_repos,
+    "run_tests": _tool_run_tests,
     "railway_list": _tool_railway_list,
 }
 
