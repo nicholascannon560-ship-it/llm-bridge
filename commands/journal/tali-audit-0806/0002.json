@@ -1,0 +1,45 @@
+{
+  "turn": 2,
+  "timestamp": "2026-08-06T23:18:17.552124+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 2,
+    "cost_cents": 0.44184,
+    "usage": {
+      "prompt_tokens": 3803,
+      "completion_tokens": 133,
+      "cached_tokens": 3328
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "github_read",
+      "args_preview": "{\"path\":\"tali\",\"repo\":\"tali\"}"
+    },
+    {
+      "name": "github_read",
+      "args_preview": "{\"max_chars\":12000,\"path\":\"MAP.md\",\"repo\":\"tali\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'type': 'directory', 'entries': [{'name': '__init__.py', 'type': 'file'}, {'name': 'engine', 'type': 'dir'}, {'name': 'horary', 'type': 'dir'}, {'name': 'timing', 'type': 'dir'}, {'name': 'tradition', 'type': 'dir'}]}"
+    },
+    {
+      "status": "ok",
+      "preview": "{'type': 'file', 'path': 'MAP.md', 'sha': '3afd5a0cc4a7f15ea2ec0dafdabdf3ba057d4850', 'size': 4747, 'offset': 0, 'total_chars': 4653, 'returned_chars': 4653, 'truncated': False, 'next_offset': None, 'content': '# MAP: tali\\n\\n**purpose:** Deterministic Hellenistic astrology engine + web app (asktali"
+    }
+  ],
+  "task_id": "tali-audit-0806",
+  "cost_cents_total": 1.6019,
+  "tokens_total": {
+    "prompt": 7305,
+    "completion": 206,
+    "last_prompt": 3803
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
