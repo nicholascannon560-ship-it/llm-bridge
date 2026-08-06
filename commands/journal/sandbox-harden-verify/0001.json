@@ -1,0 +1,37 @@
+{
+  "turn": 1,
+  "timestamp": "2026-08-06T20:37:50.088852+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 1,
+    "cost_cents": 1.0572,
+    "usage": {
+      "prompt_tokens": 3019,
+      "completion_tokens": 101,
+      "cached_tokens": 0
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "run_tests",
+      "args_preview": "{\"command\":\"pytest -q test_smoke.py\",\"setup\":\"pip install pytest\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "error",
+      "preview": "{'error': 'timed out waiting for completion', 'run_id': 31127750727, 'waited_sec': 424, 'hint': 'raise timeout_sec, or the command may be hanging. GET /sandbox/run/<run_id> on the bridge shows queue vs run time.', 'html_url': 'https://github.com/nicholascannon560-ship-it/agent-sandbox/actions/runs/3"
+    }
+  ],
+  "task_id": "sandbox-harden-verify",
+  "cost_cents_total": 1.0572,
+  "tokens_total": {
+    "prompt": 3019,
+    "completion": 101,
+    "last_prompt": 3019
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
