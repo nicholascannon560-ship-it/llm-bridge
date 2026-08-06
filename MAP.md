@@ -80,6 +80,9 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-06 | DELETE /contents added (guarded to commands/* prefixes) | files: main.py, tests/test_delete_guard.py
+- 2026-08-06 | OPERATING NOTE: a commit may not auto-deploy; always POST /railway/service/{id}/redeploy after committing | files: -
+
 - 2026-08-06 | issue #2 fix drafted: in-progress state -> commands/running/, results single-writer | files: command_channel.py, tests/test_result_race.py
 - 2026-08-06 | MAP has no agent_loop/ coverage (harness, tools, routes, browser, memory, validate) | files: agent_loop/*
 
