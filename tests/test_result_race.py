@@ -205,6 +205,10 @@ def test_fast_crash_result_survives():
     assert "tools must be a list" in (result.get("error") or ""), result
     assert result.get("traceback"), "traceback was lost"
     assert "commands/pending/fastcrash.json" not in hub.files
+    # Regression: the marker must be written before the worker exists, or a
+    # fast crash leaves it behind forever (observed live, 2026-08-06).
+    assert "commands/running/fastcrash.json" not in hub.files, \
+        "running marker outlived the run"
 
 
 def test_results_path_has_one_writer():
