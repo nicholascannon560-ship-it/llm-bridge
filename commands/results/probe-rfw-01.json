@@ -1,0 +1,9 @@
+{
+  "id": "probe-rfw-01",
+  "status": "error",
+  "action": "read_file_window",
+  "result": null,
+  "error": "unknown action: read_file_window",
+  "processed_at": "2026-08-06T15:37:51.957133+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 423, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd, cmd_id)\n                               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 382, in _execute\n    raise ValueError(f\"unknown action: {action}\")\nValueError: unknown action: read_file_window\n"
+}
