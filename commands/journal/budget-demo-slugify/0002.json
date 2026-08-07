@@ -1,0 +1,37 @@
+{
+  "turn": 2,
+  "timestamp": "2026-08-07T02:07:47.776423+00:00",
+  "llm": {
+    "content_preview": "",
+    "tool_calls_count": 1,
+    "cost_cents": 0.40236,
+    "usage": {
+      "prompt_tokens": 3731,
+      "completion_tokens": 75,
+      "cached_tokens": 3072
+    },
+    "finish_reason": "tool_calls"
+  },
+  "type": "tool_loop",
+  "tool_calls": [
+    {
+      "name": "run_tests",
+      "args_preview": "{\"command\":\"pytest -q test_slugify.py\",\"setup\":\"pip install pytest\"}"
+    }
+  ],
+  "tool_results": [
+    {
+      "status": "ok",
+      "preview": "{'passed': True, 'conclusion': 'success', 'run_id': 31140249222, 'elapsed_sec': 24, 'command': 'pytest -q test_slugify.py', 'logs': '\\ufeff2026-08-07T02:07:58.1882764Z Current runner version: \\'2.336.0\\'\\n2026-08-07T02:07:58.1930570Z ##[group]Runner Image Provisioner\\n2026-08-07T02:07:58.1932071Z Ho"
+    }
+  ],
+  "task_id": "budget-demo-slugify",
+  "cost_cents_total": 1.9543,
+  "tokens_total": {
+    "prompt": 6934,
+    "completion": 469,
+    "last_prompt": 3731
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
