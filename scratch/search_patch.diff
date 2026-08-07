@@ -1,0 +1,25 @@
+diff --git a/main.py b/main.py
+index d8c7b13..7d41a2b 100644
+--- a/main.py
++++ b/main.py
+@@ -76,7 +76,7 @@ app = FastAPI(
+         "repos, list repos and read file contents using a single "
+         "GITHUB_TOKEN."
+     ),
+-    version="1.5.0",
++    version="1.6.0",
+     lifespan=lifespan,
+ )
+ 
+@@ -95,6 +95,12 @@ app.include_router(skills_router)
+ from fetch_routes import fetch_router
+ app.include_router(fetch_router)
+ 
++# Web search: caller supplies a query, never a URL, and the upstream host is
++# hardcoded in search_routes.py — no SSRF surface. Result URLs still go
++# through /fetch's allowlist before they can be read.
++from search_routes import search_router
++app.include_router(search_router)
++
+ # Watchdog status / manual-trigger routes (auth-gated like everything else).
+ app.include_router(watchdog_router)
