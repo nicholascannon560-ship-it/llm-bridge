@@ -1057,6 +1057,17 @@ textarea::placeholder{color:var(--faint)}
               <button data-v="claude-opus-5" style="display:none">claude-opus-5</button>
               <button data-v="claude-sonnet-5" style="display:none">claude-sonnet-5</button>
               <button data-v="claude-haiku-4-5-20251001" style="display:none">claude-haiku</button></div></div>
+          <div class="group"><span class="glabel">Exec Provider</span>
+            <div class="seg" id="exec_provider">
+              <button data-v="moonshot" class="on">moonshot</button>
+              <button data-v="anthropic">anthropic</button></div></div>
+          <div class="group"><span class="glabel">Exec Model</span>
+            <div class="seg" id="exec_model">
+              <button data-v="kimi-k3" class="on">kimi-k3</button>
+              <button data-v="kimi-k2.6">k2.6</button>
+              <button data-v="claude-opus-5" style="display:none">claude-opus-5</button>
+              <button data-v="claude-sonnet-5" style="display:none">claude-sonnet-5</button>
+              <button data-v="claude-haiku-4-5-20251001" style="display:none">claude-haiku</button></div></div>
         </div>
         <div class="composer">
           <textarea id="box" rows="1" placeholder="Message — the bridge decides if it needs tools…"></textarea>
@@ -1086,15 +1097,14 @@ const MODELS_BY_PROVIDER = {
   moonshot: ['kimi-k3','kimi-k2.6'],
   anthropic: ['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001']
 };
-function updateModels(){
-  const prov = setting('provider');
-  const seg = $('model');
+function updateModels(segId, provId){
+  const prov = setting(provId);
+  const seg = $(segId);
   seg.querySelectorAll('button').forEach(b=>{
     b.style.display = MODELS_BY_PROVIDER[prov].includes(b.dataset.v) ? '' : 'none';
     b.classList.remove('on');
   });
-  // pick first visible
-  const first = seg.querySelector('button[style=""]') || seg.querySelector('button:not([style*="none"])');
+  const first = seg.querySelector('button:not([style*="none"])');
   if(first) first.classList.add('on');
 }
 document.querySelectorAll('.seg').forEach(seg=>{
@@ -1103,7 +1113,8 @@ document.querySelectorAll('.seg').forEach(seg=>{
     seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');
     if(seg.id==='mode') modeHint();
-    if(seg.id==='provider') updateModels();
+    if(seg.id==='provider') updateModels('model','provider');
+    if(seg.id==='exec_provider') updateModels('exec_model','exec_provider');
   });
 });
 const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
@@ -1261,8 +1272,11 @@ async function send(forceMode){
   addUser(text);
   const think = addThinking();
   busy(true);
-  const base={session_id:SID,message:text,model:setting('model'),
-              provider:setting('provider'),reasoning_effort:setting('effort')};
+  const isChat = mode==='chat';
+  const prov = isChat ? setting('provider') : setting('exec_provider');
+  const mod  = isChat ? setting('model')    : setting('exec_model');
+  const base={session_id:SID,message:text,model:mod,
+              provider:prov,reasoning_effort:setting('effort')};
   try{
     if(mode==='chat'){
       const r=await api('/ui/chat',{method:'POST',body:JSON.stringify(base)});
