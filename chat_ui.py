@@ -1356,7 +1356,7 @@ async function poll(){
 }
 
 /* reconnect to a run still going when the page was closed */
-function boot(){
+async function boot(){
   load();
   try{
     const p=await api('/ui/progress');
