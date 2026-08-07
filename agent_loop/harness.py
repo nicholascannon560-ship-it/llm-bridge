@@ -50,7 +50,14 @@ except Exception:  # pragma: no cover
 # Without them the stop condition is whichever provider error fires first —
 # a 400 for context overflow, which is not retried and kills the run.
 CONTEXT_BUDGET_TOKENS = int(os.environ.get("AGENT_CONTEXT_BUDGET_TOKENS", "180000"))
+# Default spend cap when a run does not pass its own. A run may override this
+# per task via cost_budget_cents — the whole point is that the caller says how
+# much this loop is allowed to spend, and the loop runs until it gets there.
 COST_BUDGET_CENTS = float(os.environ.get("AGENT_COST_BUDGET_CENTS", "400"))
+# Turn ceiling when the caller does not pass max_turns. This is a safety net,
+# not the intended stop: on a budgeted run the cost cap should be what ends it,
+# so the default is generous enough that spend, not turn count, governs length.
+DEFAULT_MAX_TURNS = int(os.environ.get("AGENT_DEFAULT_MAX_TURNS", "100"))
 
 DEFAULT_MAX_TOKENS = {
     "low": int(os.environ.get("AGENT_MAX_TOKENS_LOW", "4096")),
@@ -77,7 +84,7 @@ class AgentHarness:
         self,
         task: str,
         tools: Optional[List[Dict]] = None,
-        max_turns: int = 10,
+        max_turns: Optional[int] = None,
         provider: str = "moonshot",
         model: str = "kimi-k3",
         reasoning_effort: str = "low",
@@ -89,6 +96,7 @@ class AgentHarness:
         on_checkpoint=None,
         checkpoint_every: int = 0,
         on_turn=None,
+        cost_budget_cents: Optional[float] = None,
     ):
         self.task = task
         # resolve_tools refuses any set that pairs a browsing tool with a
@@ -96,7 +104,13 @@ class AgentHarness:
         self.tools = resolve_tools(tools, tool_set)
         self.tool_set = tool_set or ("custom" if tools else "build")
         self.browser_auth = browser_auth
-        self.max_turns = max(max_turns, 1)
+        self.max_turns = max(max_turns if max_turns is not None else DEFAULT_MAX_TURNS, 1)
+        # Per-run spend cap in cents. None means "use the service default"
+        # (COST_BUDGET_CENTS). This is how the caller says how much this one
+        # loop is allowed to spend; the loop stops once it reaches it.
+        self.cost_budget_cents = (
+            float(cost_budget_cents) if cost_budget_cents is not None else COST_BUDGET_CENTS
+        )
         self.provider = provider
         self.model = model
         self.reasoning_effort = reasoning_effort
@@ -189,6 +203,7 @@ Rules:
             "turn": 0,
             "max_turns": self.max_turns,
             "cost_cents": 0.0,
+            "cost_budget_cents": self.cost_budget_cents,
             "last_tool": None,
             "reasoning_effort": self.reasoning_effort,
             "started_at": datetime.now(timezone.utc).isoformat(),
@@ -259,11 +274,11 @@ Rules:
                 turn_record["type"] = "budget_stop"
                 self._record(turn_record)
                 break
-            if self.total_cost_cents >= COST_BUDGET_CENTS:
+            if self.total_cost_cents >= self.cost_budget_cents:
                 status = "cost_budget_reached"
                 final_answer = (
                     f"Stopped at turn {turn}: spent {self.total_cost_cents:.1f}c "
-                    f"(budget {COST_BUDGET_CENTS}c)."
+                    f"(budget {self.cost_budget_cents:.1f}c)."
                 )
                 turn_record["type"] = "budget_stop"
                 self._record(turn_record)
@@ -358,6 +373,7 @@ Rules:
             "turns_used": len(self.transcript),
             "max_turns": self.max_turns,
             "total_cost_cents": round(self.total_cost_cents, 4),
+            "cost_budget_cents": self.cost_budget_cents,
             "total_tokens": self.total_tokens,
             "provider": self.provider,
             "model": self.model,
@@ -432,7 +448,7 @@ Rules:
 async def run_agent(
     task: str,
     tools: Optional[List[Dict]] = None,
-    max_turns: int = 10,
+    max_turns: Optional[int] = None,
     provider: str = "moonshot",
     model: str = "kimi-k3",
     reasoning_effort: str = "low",
@@ -444,6 +460,7 @@ async def run_agent(
     on_checkpoint=None,
     checkpoint_every: int = 0,
     on_turn=None,
+    cost_budget_cents: Optional[float] = None,
 ) -> Dict[str, Any]:
     """One-shot agent run. Creates a harness, runs it, returns result."""
     harness = AgentHarness(
@@ -461,5 +478,6 @@ async def run_agent(
         on_checkpoint=on_checkpoint,
         checkpoint_every=checkpoint_every,
         on_turn=on_turn,
+        cost_budget_cents=cost_budget_cents,
     )
     return await harness.run()

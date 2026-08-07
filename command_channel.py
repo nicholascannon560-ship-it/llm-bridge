@@ -236,7 +236,8 @@ def _journal_run_start(cmd_id: str, cmd: dict[str, Any]) -> None:
             if isinstance(tools, list) else None
         ),
         "tool_set": cmd.get("tool_set"),
-        "max_turns": cmd.get("max_turns", 10),
+        "max_turns": cmd.get("max_turns"),
+        "cost_budget_cents": _resolve_budget_cents(cmd),
         "provider": cmd.get("provider", "moonshot"),
         "model": cmd.get("model", "kimi-k3"),
         "reasoning_effort": cmd.get("reasoning_effort", "low"),
@@ -335,6 +336,21 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resolve_budget_cents(cmd: dict[str, Any]) -> float | None:
+    """Per-task spend cap, in cents, from the command payload.
+
+    The caller says how much this one loop may spend. Two spellings are
+    accepted: `budget_usd` (friendly dollars, e.g. 5 or 2.50) or
+    `cost_budget_cents` (raw cents). budget_usd wins if both are present.
+    None means "use the service default" (AGENT_COST_BUDGET_CENTS).
+    """
+    if cmd.get("budget_usd") is not None:
+        return float(cmd["budget_usd"]) * 100.0
+    if cmd.get("cost_budget_cents") is not None:
+        return float(cmd["cost_budget_cents"])
+    return None
+
+
 def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
     """Run an agent on a background thread and write its result when done.
 
@@ -383,11 +399,12 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
                     task=cmd["task"],
                     tools=cmd.get("tools"),
                     tool_set=cmd.get("tool_set"),
-                    max_turns=int(cmd.get("max_turns", 10)),
+                    max_turns=(int(cmd["max_turns"]) if cmd.get("max_turns") else None),
                     provider=cmd.get("provider", "moonshot"),
                     model=cmd.get("model", "kimi-k3"),
                     reasoning_effort=cmd.get("reasoning_effort", "low"),
                     max_tokens=(int(cmd["max_tokens"]) if cmd.get("max_tokens") else None),
+                    cost_budget_cents=_resolve_budget_cents(cmd),
                     on_checkpoint=(_checkpoint if checkpoint_every > 0 else None),
                     checkpoint_every=checkpoint_every,
                     task_id=cmd_id or cmd.get("id"),

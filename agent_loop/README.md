@@ -90,8 +90,16 @@ agent uses `%acme_password%` — our model never sees the values.
 `agent_run` through the command channel:
 
 ```json
-{"action": "agent_run", "task": "...", "tool_set": "research", "max_turns": 8}
+{"action": "agent_run", "task": "...", "tool_set": "research", "budget_usd": 5}
 ```
+
+The run stops when the task is done, the context budget is hit, or it has spent
+its cash budget — whichever comes first. Set the cash budget **per task** with
+`budget_usd` (dollars, e.g. `5` or `2.50`) or `cost_budget_cents` (raw cents);
+`budget_usd` wins if both are given. Omit both to fall back to the service
+default (`AGENT_COST_BUDGET_CENTS`, 400c). `max_turns` is a safety net, not the
+intended stop — omit it and the loop runs up to `AGENT_DEFAULT_MAX_TURNS` (100)
+so spend, not turn count, governs how long a budgeted run goes.
 
 It returns immediately with `status: "started"`. The run happens on a
 background thread — `_execute` is called from `GET /health`, which is
