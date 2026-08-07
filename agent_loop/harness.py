@@ -97,8 +97,21 @@ class AgentHarness:
         checkpoint_every: int = 0,
         on_turn=None,
         cost_budget_cents: Optional[float] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
+        system_prompt: Optional[str] = None,
     ):
         self.task = task
+        # Prior conversation, replayed verbatim ahead of the new task. Chat and
+        # "do it" share one thread: you plan in conversation, then execute with
+        # that context already in the model's head.
+        self.history = list(history or [])
+        # A caller-supplied system prompt is used EXACTLY as given. Moonshot
+        # caching is implicit prefix matching, so the prefix must be
+        # byte-identical between calls or every turn re-pays full input price.
+        # _build_system_prompt() interpolates task_id and a rolling memory
+        # block, both of which change per run — fine for one-shot jobs, cache
+        # poison for a conversation. Sessions pass a fixed string instead.
+        self.system_prompt = system_prompt
         # resolve_tools refuses any set that pairs a browsing tool with a
         # write tool. Raising here is deliberate: the run should not start.
         self.tools = resolve_tools(tools, tool_set)
@@ -133,7 +146,7 @@ class AgentHarness:
         self.messages: List[Dict[str, Any]] = []
         self.transcript: List[Dict[str, Any]] = []
         self.total_cost_cents = 0.0
-        self.total_tokens = {"prompt": 0, "completion": 0}
+        self.total_tokens = {"prompt": 0, "completion": 0, "cached": 0}
 
     def _build_system_prompt(self) -> str:
         tool_names = [t["function"]["name"] for t in self.tools]
@@ -185,7 +198,13 @@ Rules:
         if self.browser_auth is not None:
             set_run_authorization(self.browser_auth)
 
-        self.messages.append({"role": "system", "content": self._build_system_prompt()})
+        self.messages.append({
+            "role": "system",
+            "content": self.system_prompt or self._build_system_prompt(),
+        })
+        # History goes between the system prompt and the new task so the cached
+        # prefix keeps growing; only the final user message is ever new.
+        self.messages.extend(self.history)
         self.messages.append({
             "role": "user",
             "content": f"Task: {self.task}\n\nExecute this task using the available tools. "
@@ -238,6 +257,7 @@ Rules:
             self.total_cost_cents += llm_result.get("cost_cents", 0)
             self.total_tokens["prompt"] += llm_result.get("usage", {}).get("prompt_tokens", 0)
             self.total_tokens["completion"] += llm_result.get("usage", {}).get("completion_tokens", 0)
+            self.total_tokens["cached"] += llm_result.get("usage", {}).get("cached_tokens", 0)
             self.total_tokens["last_prompt"] = llm_result.get("usage", {}).get("prompt_tokens", 0)
 
             tool_calls = llm_result.get("tool_calls")
@@ -381,6 +401,10 @@ Rules:
             "reasoning_effort": self.reasoning_effort,
             "last_prompt_tokens": self.total_tokens.get("last_prompt", 0),
             "max_tokens": self.max_tokens,
+            # Everything after the system prompt, exactly as it was sent. A
+            # session stores this verbatim and replays it next turn — rewriting
+            # or trimming it here would change the prefix and cost a cache miss.
+            "messages": self.messages[1:],
         }
 
     async def _call_llm(self) -> Dict[str, Any]:
@@ -461,6 +485,8 @@ async def run_agent(
     checkpoint_every: int = 0,
     on_turn=None,
     cost_budget_cents: Optional[float] = None,
+    history: Optional[List[Dict[str, Any]]] = None,
+    system_prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """One-shot agent run. Creates a harness, runs it, returns result."""
     harness = AgentHarness(
@@ -479,5 +505,7 @@ async def run_agent(
         checkpoint_every=checkpoint_every,
         on_turn=on_turn,
         cost_budget_cents=cost_budget_cents,
+        history=history,
+        system_prompt=system_prompt,
     )
     return await harness.run()

@@ -80,6 +80,8 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-07 | chat console at /ui: Chat (tool_choice=none) vs Do it (agent+budget); cookie auth, no bridge key in browser | files: chat_ui.py, main.py
+- 2026-08-07 | prefix caching: session-stable system prompt + verbatim history; harness takes history/system_prompt | files: agent_loop/harness.py, chat_ui.py
 - 2026-08-07 | agent_run: per-task budget via budget_usd/cost_budget_cents; max_turns default 10->100 (AGENT_DEFAULT_MAX_TURNS) so spend governs | files: agent_loop/harness.py, command_channel.py
 - 2026-08-03 | Browser tool via Browserbase REST (no browser-use: pydantic pin clash); free-tier budgets | files: agent_loop/browser.py
 - 2026-08-03 | Tool-set split: browsing never shares a loop with commit/set_env/write_memory | files: agent_loop/tools.py, harness.py

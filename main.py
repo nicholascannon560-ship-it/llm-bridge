@@ -123,13 +123,23 @@ try:
 except Exception as _agent_routes_err:  # pragma: no cover
     print(f"[agent_loop] routes not mounted: {_agent_routes_err}", flush=True)
 
+# Operator chat console. Optional, like the agent routes: a broken console must
+# not take the bridge down.
+try:
+    from chat_ui import ui_router
+    app.include_router(ui_router)
+except Exception as _ui_routes_err:  # pragma: no cover
+    print(f"[chat_ui] routes not mounted: {_ui_routes_err}", flush=True)
+
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
 # --------------------------------------------------------------------------- #
 BRIDGE_KEY_TTL_SECONDS = float(os.getenv("BRIDGE_KEY_TTL_HOURS", "24")) * 3600
 BRIDGE_KEY_GRACE_SECONDS = float(os.getenv("BRIDGE_KEY_GRACE_HOURS", "2")) * 3600
-_EXEMPT_PATHS = {"/health"}
+# /ui serves only the shell HTML (it renders a password form and holds no data)
+# and /ui/login must be reachable to authenticate in the first place.
+_EXEMPT_PATHS = {"/health", "/ui", "/ui/", "/ui/login"}
 
 
 class _KeyState:
@@ -149,6 +159,19 @@ class BridgeAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not _auth_enabled() or request.url.path in _EXEMPT_PATHS:
             return await call_next(request)
+
+        # Console routes additionally accept a signed, expiring cookie. This is
+        # purely additive — header auth still works everywhere — and it exists
+        # so the browser never holds the bridge key, which would otherwise be
+        # readable in devtools and replayable against GitHub and Railway.
+        if request.url.path.startswith("/ui/"):
+            try:
+                from chat_ui import request_is_authed
+
+                if request_is_authed(request):
+                    return await call_next(request)
+            except Exception:
+                pass
 
         supplied = request.headers.get("x-bridge-key")
         if supplied != KEY_STATE.key:
