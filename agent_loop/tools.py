@@ -13,6 +13,7 @@ import base64
 import io
 import json
 import os
+import re
 import time
 import traceback
 import zipfile
@@ -94,6 +95,50 @@ TOOL_SCHEMAS = [
                     "branch": {"type": "string", "description": "Branch (default: repo default)"}
                 },
                 "required": ["repo", "path", "content", "message"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "github_create_repo",
+            "description": (
+                "Create a NEW GitHub repository under the operator's account (owner is fixed). "
+                "Use this to start a new project. After it succeeds, commit files into it with "
+                "github_commit. Defaults to private with an initial commit on 'main' so the repo "
+                "is immediately writable."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Repo name: letters, digits, -, _, . only"},
+                    "description": {"type": "string", "description": "Short description"},
+                    "private": {"type": "boolean", "description": "Default true"},
+                    "gitignore_template": {"type": "string", "description": "e.g. 'Python', 'Node' (optional)"},
+                    "readme": {"type": "string", "description": "Optional README.md content for the initial commit"}
+                },
+                "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "github_create_branch",
+            "description": (
+                "Create a new branch in a repository, from a given base branch (default: the "
+                "repo's default branch). Safe to call when the branch already exists — it then "
+                "just reports the existing head."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "owner": {"type": "string", "description": "Repo owner (default: operator account)"},
+                    "repo": {"type": "string", "description": "Repo name"},
+                    "branch": {"type": "string", "description": "New branch name"},
+                    "from_branch": {"type": "string", "description": "Base branch/ref (default: repo default branch)"}
+                },
+                "required": ["repo", "branch"]
             }
         }
     },
@@ -356,6 +401,8 @@ except Exception as _browser_import_err:  # pragma: no cover
 
 WRITE_TOOL_NAMES = {
     "github_commit",
+    "github_create_repo",
+    "github_create_branch",
     "run_tests",
     "railway_set_env",
     "railway_redeploy",
@@ -534,6 +581,103 @@ async def _tool_github_commit(args: Dict) -> Dict:
         "commit_sha": data.get("commit", {}).get("sha"),
         "updated": existing_sha is not None
     }
+
+
+_REPO_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+
+
+async def _tool_github_create_repo(args: Dict) -> Dict:
+    """Create a repo under the operator's account only. The owner is NOT a
+    parameter — an agent must never be able to plant code under someone else's
+    namespace."""
+    import httpx
+
+    name = (args.get("name") or "").strip()
+    if not _REPO_NAME_RE.match(name) or name.startswith((".", "-")):
+        return {"error": f"invalid repo name {name!r}: use letters, digits, -, _, . (not leading . or -)"}
+
+    payload: Dict[str, Any] = {
+        "name": name,
+        "description": (args.get("description") or "")[:350],
+        "private": bool(args.get("private", True)),
+        # auto_init gives the repo an initial commit on 'main', which makes it
+        # immediately writable through the contents API (empty repos reject PUTs).
+        "auto_init": True,
+    }
+    if args.get("gitignore_template"):
+        payload["gitignore_template"] = str(args["gitignore_template"])
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        resp = await client.post(f"{GITHUB_API}/user/repos",
+                                 headers=_github_headers(), json=payload)
+        if resp.status_code == 422 and "name already exists" in resp.text:
+            return {"error": f"repo {name!r} already exists",
+                    "hint": "commit into it with github_commit, or pick another name"}
+        if resp.status_code not in (200, 201):
+            return {"error": f"GitHub API {resp.status_code}", "detail": resp.text[:300]}
+
+        data = resp.json()
+        out = {
+            "created": True,
+            "full_name": data.get("full_name"),
+            "html_url": data.get("html_url"),
+            "private": data.get("private"),
+            "default_branch": data.get("default_branch"),
+        }
+
+        readme = args.get("readme")
+        if readme:
+            put = await client.put(
+                f"{GITHUB_API}/repos/{OWNER}/{name}/contents/README.md",
+                headers=_github_headers(),
+                json={
+                    "message": "Initial README",
+                    "content": base64.b64encode(str(readme).encode("utf-8")).decode("ascii"),
+                },
+            )
+            out["readme_committed"] = put.status_code in (200, 201)
+        return out
+
+
+async def _tool_github_create_branch(args: Dict) -> Dict:
+    import httpx
+
+    owner = args.get("owner", OWNER)
+    repo = args["repo"]
+    branch = (args.get("branch") or "").strip()
+    if not branch or branch.startswith(("-", ".")) or ".." in branch or " " in branch:
+        return {"error": f"invalid branch name {branch!r}"}
+    from_branch = (args.get("from_branch") or "").strip() or None
+
+    base = f"{GITHUB_API}/repos/{owner}/{repo}"
+    async with httpx.AsyncClient(timeout=20) as client:
+        if not from_branch:
+            meta = await client.get(base, headers=_github_headers())
+            if meta.status_code != 200:
+                return {"error": f"GitHub API {meta.status_code}", "detail": meta.text[:300]}
+            from_branch = meta.json().get("default_branch") or "main"
+
+        head = await client.get(f"{base}/git/ref/heads/{from_branch}",
+                                headers=_github_headers())
+        if head.status_code != 200:
+            return {"error": f"base branch {from_branch!r} not found (HTTP {head.status_code})",
+                    "detail": head.text[:300]}
+        sha = head.json()["object"]["sha"]
+
+        create = await client.post(f"{base}/git/refs", headers=_github_headers(),
+                                   json={"ref": f"refs/heads/{branch}", "sha": sha})
+        if create.status_code == 422:
+            # Already exists — report the current head rather than failing.
+            existing = await client.get(f"{base}/git/ref/heads/{branch}",
+                                        headers=_github_headers())
+            if existing.status_code == 200:
+                return {"created": False, "already_existed": True,
+                        "branch": branch, "sha": existing.json()["object"]["sha"]}
+            return {"error": f"GitHub API 422", "detail": create.text[:300]}
+        if create.status_code not in (200, 201):
+            return {"error": f"GitHub API {create.status_code}", "detail": create.text[:300]}
+
+        return {"created": True, "branch": branch, "from": from_branch, "sha": sha}
 
 
 async def _tool_railway_redeploy(args: Dict) -> Dict:
@@ -812,6 +956,8 @@ async def _tool_run_tests(args: Dict) -> Dict:
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
+    "github_create_repo": _tool_github_create_repo,
+    "github_create_branch": _tool_github_create_branch,
     "railway_redeploy": _tool_railway_redeploy,
     "railway_set_env": _tool_railway_set_env,
     "railway_get_status": _tool_railway_get_status,
