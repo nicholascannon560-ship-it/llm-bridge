@@ -1,0 +1,25 @@
+{
+  "id": "patch-main-search",
+  "status": "ok",
+  "action": "patch_file",
+  "result": {
+    "repo": "llm-bridge",
+    "path": "main.py",
+    "branch": "main",
+    "old_blob_sha": "d8c7b1355613baddc077d7e17bc7d0308e7b77b7",
+    "new_commit": "b40f89e23133941062628b819effed1a5725970e",
+    "chars_after": 33389,
+    "ops_applied": [
+      {
+        "op": 0,
+        "type": "replace"
+      },
+      {
+        "op": 1,
+        "type": "insert_after"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-07T03:02:07.427455+00:00"
+}
