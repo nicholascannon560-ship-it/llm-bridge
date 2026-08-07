@@ -1,0 +1,10 @@
+{
+  "id": "tools-v2-redeploy",
+  "status": "ok",
+  "action": "redeploy",
+  "result": {
+    "serviceInstanceDeploy": true
+  },
+  "error": null,
+  "processed_at": "2026-08-07T15:14:16.046941+00:00"
+}
