@@ -1,0 +1,23 @@
+{
+  "id": "ui-v2-deploy-check",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a99e5bd9-d7df-4170-9868-851be5dd29a8",
+              "status": "SUCCESS",
+              "createdAt": "2026-08-07T03:02:44.141Z",
+              "updatedAt": "2026-08-07T03:03:30.551Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-07T14:04:37.746782+00:00"
+}
