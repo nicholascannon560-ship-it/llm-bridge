@@ -65,6 +65,30 @@ DEFAULT_MAX_TOKENS = {
     "max": int(os.environ.get("AGENT_MAX_TOKENS_MAX", "32768")),
 }
 
+# Rough prompt-size estimator: chars / 4 ≈ tokens. Used only to stop a run
+# BEFORE paying for a call that cannot fit or cannot be afforded — a late
+# check used to fire after the money was already spent, so a raised budget
+# was immediately re-consumed by one oversized turn.
+CHARS_PER_TOKEN = 4.0
+# Headroom kept below the provider's hard context window: the completion has
+# to fit in the same window as the prompt.
+CONTEXT_SAFETY_MARGIN_TOKENS = int(
+    os.environ.get("AGENT_CONTEXT_SAFETY_MARGIN_TOKENS", "8192"))
+# Cap on how much history is replayed per LLM call. Without this, every turn
+# re-sends every prior turn, so cost-per-turn grows linearly with the run's
+# age and any budget is eventually eaten by replay rather than by new work.
+# Oldest tool exchanges are dropped first, at clean boundaries (an orphaned
+# tool message is a provider protocol error). Set to 0 to disable.
+HISTORY_TOKEN_BUDGET = int(os.environ.get("AGENT_HISTORY_TOKEN_BUDGET", "120000"))
+# Reserve for the wrap-up call when a budget/turn/context stop fires: the run
+# ends with a written summary of what was found instead of a bare error line.
+WRAP_UP_MAX_TOKENS = int(os.environ.get("AGENT_WRAP_UP_MAX_TOKENS", "2048"))
+# Estimated marginal cost of one more prompt token, in cents. Used only as a
+# floor for the next-turn projection; the real guard is the observed cost of
+# the previous turn (see _projected_next_cost_cents), because a provider can
+# charge far more per turn than raw token math suggests.
+CENTS_PER_PROMPT_TOKEN = float(os.environ.get("AGENT_CENTS_PER_PROMPT_TOKEN", "0.001"))
+
 
 # Live, in-memory view of the current run. The result file is only written at
 # the end, so without this a running agent and a dead one are indistinguishable
@@ -75,6 +99,48 @@ RUN_STATE: Dict[str, Any] = {"active": False, "task_id": None}
 
 def current_run_state() -> Dict[str, Any]:
     return dict(RUN_STATE)
+
+
+def _msg_chars(m: Dict[str, Any]) -> int:
+    """Approximate the wire size of one stored message."""
+    n = len(str(m.get("content") or ""))
+    for tc in m.get("tool_calls") or []:
+        try:
+            n += len(str(tc.get("function", {}).get("arguments") or ""))
+        except AttributeError:
+            pass
+    return n
+
+
+def _est_prompt_tokens(messages: List[Dict[str, Any]]) -> int:
+    return int(sum(_msg_chars(m) for m in messages) / CHARS_PER_TOKEN)
+
+
+def _est_turn_cost_cents(est_prompt_tokens: int, max_completion_tokens: int) -> float:
+    """Token-based floor for the cost of one turn (prompt + worst-case completion)."""
+    return (est_prompt_tokens + max_completion_tokens) * CENTS_PER_PROMPT_TOKEN
+
+
+def _trim_history_to_budget(
+    messages: List[Dict[str, Any]], budget_tokens: int
+) -> List[Dict[str, Any]]:
+    """Drop oldest messages until the estimated prompt fits `budget_tokens`.
+
+    messages[0] is the system prompt and is never dropped. Cutting a
+    tool_calls/tool pair mid-pair produces an orphaned tool message, which
+    providers reject outright — so after any cut we walk forward past any
+    orphaned tool messages (and the assistant message that called them, when
+    it is now the head and calls tools whose results were dropped).
+    """
+    if budget_tokens <= 0:
+        return messages
+    msgs = list(messages)
+    while len(msgs) > 1 and _est_prompt_tokens(msgs) > budget_tokens:
+        del msgs[1]
+        # Clean the boundary: no leading orphan tool messages.
+        while len(msgs) > 1 and msgs[1].get("role") == "tool":
+            del msgs[1]
+    return msgs
 
 
 class AgentHarness:
@@ -147,6 +213,10 @@ class AgentHarness:
         self.transcript: List[Dict[str, Any]] = []
         self.total_cost_cents = 0.0
         self.total_tokens = {"prompt": 0, "completion": 0, "cached": 0}
+        # Real cost of the most recent completed turn. Used to project the
+        # next turn's cost, because the observed per-turn cost is the only
+        # signal that tracks a provider charging far above raw token math.
+        self._last_turn_cost_cents = 0.0
 
     def _build_system_prompt(self) -> str:
         tool_names = [t["function"]["name"] for t in self.tools]
@@ -232,6 +302,42 @@ Rules:
         for turn in range(1, self.max_turns + 1):
             turn_record = {"turn": turn, "timestamp": datetime.now(timezone.utc).isoformat()}
 
+            # Pre-flight checks: stop BEFORE paying for a call that cannot fit
+            # or cannot be afforded. The old post-call check let one oversized
+            # turn consume an entire (possibly newly raised) budget, after
+            # which every retry did the same — the run looked permanently
+            # broken when it was just permanently oversized.
+            self.messages = _trim_history_to_budget(self.messages, HISTORY_TOKEN_BUDGET)
+            est_tokens = _est_prompt_tokens(self.messages)
+            context_ceiling = CONTEXT_BUDGET_TOKENS - CONTEXT_SAFETY_MARGIN_TOKENS
+            if est_tokens >= context_ceiling:
+                status = "context_budget_reached"
+                final_answer = (
+                    f"Stopped before turn {turn}: estimated prompt {est_tokens} tokens "
+                    f"reached the context ceiling ({context_ceiling} of "
+                    f"{CONTEXT_BUDGET_TOKENS} budget). Narrow the task or raise "
+                    "AGENT_CONTEXT_BUDGET_TOKENS."
+                )
+                turn_record["type"] = "budget_stop"
+                turn_record["note"] = final_answer
+                self._record(turn_record)
+                final_answer = await self._wrap_up(status, final_answer)
+                break
+            projected = self._projected_next_cost_cents(est_tokens)
+            if (self.total_cost_cents >= self.cost_budget_cents
+                    or self.total_cost_cents + projected >= self.cost_budget_cents):
+                status = "cost_budget_reached"
+                final_answer = (
+                    f"Stopped before turn {turn}: spent {self.total_cost_cents:.1f}c "
+                    f"of {self.cost_budget_cents:.1f}c and the next call "
+                    f"(~{projected:.1f}c projected) would pass the budget."
+                )
+                turn_record["type"] = "budget_stop"
+                turn_record["note"] = final_answer
+                self._record(turn_record)
+                final_answer = await self._wrap_up(status, final_answer)
+                break
+
             try:
                 llm_result = await self._call_llm()
             except Exception as exc:
@@ -245,6 +351,7 @@ Rules:
                 turn_record["type"] = "llm_error"
                 turn_record["error"] = f"{type(exc).__name__}: {exc}"
                 self._record(turn_record)
+                final_answer = await self._wrap_up(status, final_answer)
                 break
 
             turn_record["llm"] = {
@@ -259,6 +366,7 @@ Rules:
             self.total_tokens["completion"] += llm_result.get("usage", {}).get("completion_tokens", 0)
             self.total_tokens["cached"] += llm_result.get("usage", {}).get("cached_tokens", 0)
             self.total_tokens["last_prompt"] = llm_result.get("usage", {}).get("prompt_tokens", 0)
+            self._last_turn_cost_cents = llm_result.get("cost_cents", 0) or 0.0
 
             tool_calls = llm_result.get("tool_calls")
 
@@ -283,6 +391,10 @@ Rules:
                 self._record(turn_record)
                 break
 
+            # Post-call checks: the call already happened, so these guard the
+            # NEXT turn, not this one. The pre-flight checks above are what
+            # actually prevent overspend; these stay so the recorded status
+            # names the real reason the run ended.
             prompt_tokens_last = llm_result.get("usage", {}).get("prompt_tokens", 0)
             if prompt_tokens_last >= CONTEXT_BUDGET_TOKENS:
                 status = "context_budget_reached"
@@ -293,6 +405,7 @@ Rules:
                 )
                 turn_record["type"] = "budget_stop"
                 self._record(turn_record)
+                final_answer = await self._wrap_up(status, final_answer)
                 break
             if self.total_cost_cents >= self.cost_budget_cents:
                 status = "cost_budget_reached"
@@ -302,6 +415,7 @@ Rules:
                 )
                 turn_record["type"] = "budget_stop"
                 self._record(turn_record)
+                final_answer = await self._wrap_up(status, final_answer)
                 break
 
             tool_results = await self._execute_tools(tool_calls)
@@ -333,7 +447,8 @@ Rules:
 
         else:
             status = "max_turns_reached"
-            final_answer = "Max turns reached without a final answer."
+            final_answer = await self._wrap_up(
+                status, "Max turns reached without a final answer.")
 
         summary = self._summary(status, final_answer)
 
@@ -360,6 +475,67 @@ Rules:
             pass
 
         return summary
+
+    async def _wrap_up(self, status: str, stop_reason: str) -> str:
+        """Best-effort final summary when the run ends without one.
+
+        A run that hits a budget, context, or turn wall used to return only a
+        bare stop line, discarding every finding it had accumulated — a 37-turn
+        audit once returned "prompt reached 181415 tokens" and nothing else.
+        This spends a small, capped call (no tools) to write up what the run
+        learned. Any failure falls back to the stop line: the wrap-up is a
+        courtesy, never a new way to break the run.
+        """
+        if status == "complete" or not self.transcript:
+            return stop_reason
+        try:
+            self.messages.append({
+                "role": "user",
+                "content": (
+                    "The run is stopping now "
+                    f"({stop_reason}). Do NOT call any tools. In at most a few "
+                    "hundred words, summarize: what you did, what you found, "
+                    "what state you left things in, and the single most useful "
+                    "next step."
+                ),
+            })
+            router = get_router()
+            chat_messages = [
+                ChatMessage(
+                    role=m["role"],
+                    content=m.get("content"),
+                    tool_calls=m.get("tool_calls"),
+                    tool_call_id=m.get("tool_call_id"),
+                )
+                for m in self.messages
+            ]
+            resp = await router.chat(ChatRequest(
+                provider=self.provider,
+                model=self.model,
+                messages=chat_messages,
+                max_tokens=WRAP_UP_MAX_TOKENS,
+                temperature=1.0,
+                tools=None,
+                tool_choice="none",
+                reasoning_effort="low",
+            ))
+            self.total_cost_cents += resp.cost_cents or 0.0
+            usage = resp.usage or {}
+            self.total_tokens["prompt"] += usage.get("prompt_tokens", 0)
+            self.total_tokens["completion"] += usage.get("completion_tokens", 0)
+            self.total_tokens["cached"] += usage.get("cached_tokens", 0)
+            self._record({
+                "turn": len(self.transcript) + 1,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "type": "wrap_up",
+                "final_answer": (resp.content or "")[:500],
+            })
+            body = (resp.content or "").strip()
+            if body:
+                return f"{stop_reason}\n\n---\nPartial findings:\n{body}"
+        except Exception as e:
+            print(f"[agent_loop] wrap-up call failed: {e}", flush=True)
+        return stop_reason
 
     def _record(self, turn_record: Dict[str, Any]) -> None:
         """Append a turn to the transcript and journal it.
@@ -406,6 +582,20 @@ Rules:
             # or trimming it here would change the prefix and cost a cache miss.
             "messages": self.messages[1:],
         }
+
+    def _projected_next_cost_cents(self, est_prompt_tokens: int) -> float:
+        """Project the next turn's cost as the larger of a token-based floor
+        and the last turn's observed cost.
+
+        The observed-cost term is what actually stops the runaway: a provider
+        that charges 90c for a turn makes the next projection >= 90c regardless
+        of how small the prompt looks, so a 100c budget stops after the first
+        such turn instead of paying for a second.
+        """
+        return max(
+            _est_turn_cost_cents(est_prompt_tokens, self.max_tokens),
+            self._last_turn_cost_cents,
+        )
 
     async def _call_llm(self) -> Dict[str, Any]:
         router = get_router()
