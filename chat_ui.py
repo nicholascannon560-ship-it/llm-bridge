@@ -782,7 +782,10 @@ async def ui_page():
 
 
 PAGE = r"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en"><head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>bridge console</title>
 <style>
@@ -1001,7 +1004,7 @@ textarea::placeholder{color:var(--faint)}
     <div class="brand"><span class="dot"></span> bridge console</div>
     <input id="pw" type="password" placeholder="password" autofocus
       onkeydown="if(event.key==='Enter')login()">
-    <button class="btn primary" onclick="login()">Unlock</button>
+    <button class="btn primary" onclick="login()">Unlock v2</button>
     <div class="err" id="lerr"></div>
   </div>
 </div>
@@ -1089,6 +1092,7 @@ textarea::placeholder{color:var(--faint)}
 </div>
 
 <script>
+console.log('=== BRIDGE UI v2 LOADED ===');
 let SID = localStorage.getItem('bridge_sid') || null;
 const $ = i => document.getElementById(i);
 
