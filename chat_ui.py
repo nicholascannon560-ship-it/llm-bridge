@@ -1012,7 +1012,6 @@ textarea::placeholder{color:var(--faint)}
   <div class="spacer"></div>
   <div class="stat">spent <b id="cost">0.00</b>¢</div>
   <div class="stat">cache <b id="hit">0</b>%</div>
-  <button class="iconbtn" onclick="doLogout()" title="logout">↪</button>
 </header>
 
 <div id="shell">
@@ -1157,16 +1156,8 @@ function md(src){
 async function api(path, opts={}){
   const r = await fetch(path,{credentials:'same-origin',
     headers:{'Content-Type':'application/json'},...opts});
-  if(r.status===401){ 
-    // Auto-clear stale cookie and force re-login
-    try{ await fetch('/ui/logout',{method:'POST',credentials:'same-origin'}); }catch(_){}
-    $('login').style.display='flex'; 
-    throw new Error('Session expired — please unlock again'); 
-  }
-  if(!r.ok){
-    const detail = (await r.json().catch(()=>({}))).detail || r.statusText;
-    throw new Error(`HTTP ${r.status}: ${detail}`);
-  }
+  if(r.status===401){ $('login').style.display='flex'; throw new Error('please unlock'); }
+  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText);
   return r.json();
 }
 async function login(){
@@ -1354,13 +1345,8 @@ async function poll(){
 }
 
 /* reconnect to a run still going when the page was closed */
-async function doLogout(){
-  try{ await fetch('/ui/logout',{method:'POST',credentials:'same-origin'}); }catch(_){}
-  localStorage.removeItem('bridge_sid'); SID=null;
-  $('log').innerHTML=''; $('login').style.display='flex';
-}
-async function boot(){
-  await load();
+function boot(){
+  load();
   try{
     const p=await api('/ui/progress');
     if(p.run && p.run.active && (!SID || p.run.session_id===SID)) poll();
