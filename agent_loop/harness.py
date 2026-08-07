@@ -83,6 +83,11 @@ HISTORY_TOKEN_BUDGET = int(os.environ.get("AGENT_HISTORY_TOKEN_BUDGET", "120000"
 # Reserve for the wrap-up call when a budget/turn/context stop fires: the run
 # ends with a written summary of what was found instead of a bare error line.
 WRAP_UP_MAX_TOKENS = int(os.environ.get("AGENT_WRAP_UP_MAX_TOKENS", "2048"))
+# Estimated marginal cost of one more prompt token, in cents. Used only as a
+# floor for the next-turn projection; the real guard is the observed cost of
+# the previous turn (see _projected_next_cost_cents), because a provider can
+# charge far more per turn than raw token math suggests.
+CENTS_PER_PROMPT_TOKEN = float(os.environ.get("AGENT_CENTS_PER_PROMPT_TOKEN", "0.001"))
 
 
 # Live, in-memory view of the current run. The result file is only written at
@@ -109,6 +114,11 @@ def _msg_chars(m: Dict[str, Any]) -> int:
 
 def _est_prompt_tokens(messages: List[Dict[str, Any]]) -> int:
     return int(sum(_msg_chars(m) for m in messages) / CHARS_PER_TOKEN)
+
+
+def _est_turn_cost_cents(est_prompt_tokens: int, max_completion_tokens: int) -> float:
+    """Token-based floor for the cost of one turn (prompt + worst-case completion)."""
+    return (est_prompt_tokens + max_completion_tokens) * CENTS_PER_PROMPT_TOKEN
 
 
 def _trim_history_to_budget(
@@ -203,6 +213,10 @@ class AgentHarness:
         self.transcript: List[Dict[str, Any]] = []
         self.total_cost_cents = 0.0
         self.total_tokens = {"prompt": 0, "completion": 0, "cached": 0}
+        # Real cost of the most recent completed turn. Used to project the
+        # next turn's cost, because the observed per-turn cost is the only
+        # signal that tracks a provider charging far above raw token math.
+        self._last_turn_cost_cents = 0.0
 
     def _build_system_prompt(self) -> str:
         tool_names = [t["function"]["name"] for t in self.tools]
@@ -309,11 +323,14 @@ Rules:
                 self._record(turn_record)
                 final_answer = await self._wrap_up(status, final_answer)
                 break
-            if self.total_cost_cents >= self.cost_budget_cents:
+            projected = self._projected_next_cost_cents(est_tokens)
+            if (self.total_cost_cents >= self.cost_budget_cents
+                    or self.total_cost_cents + projected >= self.cost_budget_cents):
                 status = "cost_budget_reached"
                 final_answer = (
-                    f"Stopped before turn {turn}: already spent "
-                    f"{self.total_cost_cents:.1f}c of {self.cost_budget_cents:.1f}c."
+                    f"Stopped before turn {turn}: spent {self.total_cost_cents:.1f}c "
+                    f"of {self.cost_budget_cents:.1f}c and the next call "
+                    f"(~{projected:.1f}c projected) would pass the budget."
                 )
                 turn_record["type"] = "budget_stop"
                 turn_record["note"] = final_answer
@@ -349,6 +366,7 @@ Rules:
             self.total_tokens["completion"] += llm_result.get("usage", {}).get("completion_tokens", 0)
             self.total_tokens["cached"] += llm_result.get("usage", {}).get("cached_tokens", 0)
             self.total_tokens["last_prompt"] = llm_result.get("usage", {}).get("prompt_tokens", 0)
+            self._last_turn_cost_cents = llm_result.get("cost_cents", 0) or 0.0
 
             tool_calls = llm_result.get("tool_calls")
 
@@ -564,6 +582,20 @@ Rules:
             # or trimming it here would change the prefix and cost a cache miss.
             "messages": self.messages[1:],
         }
+
+    def _projected_next_cost_cents(self, est_prompt_tokens: int) -> float:
+        """Project the next turn's cost as the larger of a token-based floor
+        and the last turn's observed cost.
+
+        The observed-cost term is what actually stops the runaway: a provider
+        that charges 90c for a turn makes the next projection >= 90c regardless
+        of how small the prompt looks, so a 100c budget stops after the first
+        such turn instead of paying for a second.
+        """
+        return max(
+            _est_turn_cost_cents(est_prompt_tokens, self.max_tokens),
+            self._last_turn_cost_cents,
+        )
 
     async def _call_llm(self) -> Dict[str, Any]:
         router = get_router()
