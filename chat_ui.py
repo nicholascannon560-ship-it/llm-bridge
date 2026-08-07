@@ -21,13 +21,17 @@ byte-identical prefix — which drives two rules everything here obeys:
 
 Kimi K3 input is 0.30c/1k fresh vs 0.03c/1k cached, so a hit is 90% off.
 
-Sessions live in memory and mirror to disk. A redeploy wipes them; that is a
-deliberate v1 tradeoff over committing chat history to git, where every
-message would be a commit and would trigger a build.
+Sessions live in memory, mirror to disk, and mirror again to a private git
+repo (default: the change-log repo, under bridge-sessions/). The git mirror
+is what makes long interrupted sessions survive a redeploy: a flusher thread
+batches dirty sessions and PUTs one file per session every few seconds. The
+mirror goes to a DIFFERENT repo than the one Railway builds, so session
+writes never trigger a deploy.
 """
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -53,6 +57,152 @@ UI_TTL_SECONDS = float(os.getenv("UI_SESSION_TTL_HOURS", "12")) * 3600
 # Trimming DOES cost a cache miss on the next call, so it is a backstop, not a
 # routine: the number is high enough that normal use never reaches it.
 MAX_HISTORY_MESSAGES = int(os.getenv("UI_MAX_HISTORY_MESSAGES", "400"))
+
+# ── durable session mirror (survives redeploys) ─────────────────────────────
+# Sessions are mirrored to a git repo that Railway does NOT build, so writes
+# never trigger a deploy. Default is the change-log repo.
+MIRROR_REPO = os.getenv("UI_SESSION_MIRROR_REPO", "nicholascannon560-ship-it/change-log")
+MIRROR_PREFIX = os.getenv("UI_SESSION_MIRROR_PREFIX", "bridge-sessions")
+MIRROR_FLUSH_SECONDS = float(os.getenv("UI_MIRROR_FLUSH_SECONDS", "12"))
+_MIRROR_ENABLED = os.getenv("UI_SESSION_MIRROR", "on").lower() not in ("off", "0", "false")
+
+# Auto-routing caps. A "small" task gets a small budget and few turns so it
+# feels like a quick command, not a committed agent run.
+AUTO_SMALL_BUDGET_USD = float(os.getenv("UI_AUTO_SMALL_BUDGET_USD", "0.15"))
+AUTO_SMALL_TURNS = int(os.getenv("UI_AUTO_SMALL_TURNS", "8"))
+
+_DIRTY: set = set()
+_DIRTY_LOCK = threading.Lock()
+_MIRROR_LIST_CACHE: Dict[str, Any] = {"at": 0.0, "data": []}
+
+
+def _gh_headers() -> Dict[str, str]:
+    tok = os.getenv("GITHUB_TOKEN")
+    return {
+        "Authorization": f"Bearer {tok}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _mark_dirty(session_id: str) -> None:
+    if not _MIRROR_ENABLED or not os.getenv("GITHUB_TOKEN"):
+        return
+    with _DIRTY_LOCK:
+        _DIRTY.add(session_id)
+
+
+def _session_payload(s: "Session") -> str:
+    return json.dumps(
+        {
+            "id": s.id,
+            "system_prompt": s.system_prompt,
+            "messages": s.messages,
+            "created_at": s.created_at,
+            "cost_cents": s.cost_cents,
+            "cached_tokens": s.cached_tokens,
+            "prompt_tokens": s.prompt_tokens,
+            "title": s.title,
+        },
+        default=str,
+    )
+
+
+def _mirror_write(s: "Session") -> None:
+    """One PUT per session file. Get the blob sha first if it exists."""
+    import httpx
+
+    path = f"{MIRROR_PREFIX}/{s.id}.json"
+    url = f"https://api.github.com/repos/{MIRROR_REPO}/contents/{path}"
+    try:
+        with httpx.Client(timeout=25) as c:
+            sha = None
+            r = c.get(url, headers=_gh_headers())
+            if r.status_code == 200:
+                sha = r.json().get("sha")
+            body = {
+                "message": f"bridge session {s.id} ({len(s.messages)} msgs)",
+                "content": base64.b64encode(_session_payload(s).encode()).decode(),
+            }
+            if sha:
+                body["sha"] = sha
+            put = c.put(url, headers=_gh_headers(), json=body)
+            if put.status_code not in (200, 201):
+                print(f"[chat_ui] mirror write {s.id}: HTTP {put.status_code}", flush=True)
+    except Exception as e:
+        print(f"[chat_ui] mirror write {s.id} failed: {e}", flush=True)
+
+
+def _mirror_read(session_id: str) -> Optional[Dict[str, Any]]:
+    import httpx
+
+    url = f"https://api.github.com/repos/{MIRROR_REPO}/contents/{MIRROR_PREFIX}/{session_id}.json"
+    try:
+        with httpx.Client(timeout=20) as c:
+            r = c.get(url, headers=_gh_headers())
+            if r.status_code != 200:
+                return None
+            return json.loads(base64.b64decode(r.json()["content"]).decode())
+    except Exception:
+        return None
+
+
+def _mirror_delete(session_id: str) -> None:
+    import httpx
+
+    url = f"https://api.github.com/repos/{MIRROR_REPO}/contents/{MIRROR_PREFIX}/{session_id}.json"
+    try:
+        with httpx.Client(timeout=20) as c:
+            r = c.get(url, headers=_gh_headers())
+            if r.status_code != 200:
+                return
+            c.request(
+                "DELETE", url, headers=_gh_headers(),
+                json={"message": f"delete bridge session {session_id}", "sha": r.json()["sha"]},
+            )
+    except Exception as e:
+        print(f"[chat_ui] mirror delete {session_id} failed: {e}", flush=True)
+
+
+def _mirror_list() -> List[Dict[str, Any]]:
+    """Session metadata from the mirror, cached for 60s to spare the API."""
+    if not _MIRROR_ENABLED or not os.getenv("GITHUB_TOKEN"):
+        return []
+    now = time.time()
+    if now - _MIRROR_LIST_CACHE["at"] < 60:
+        return _MIRROR_LIST_CACHE["data"]
+    import httpx
+
+    url = f"https://api.github.com/repos/{MIRROR_REPO}/contents/{MIRROR_PREFIX}"
+    out: List[Dict[str, Any]] = []
+    try:
+        with httpx.Client(timeout=20) as c:
+            r = c.get(url, headers=_gh_headers())
+            if r.status_code == 200:
+                for item in r.json():
+                    if item.get("name", "").endswith(".json"):
+                        out.append({"id": item["name"][:-5], "sha": item.get("sha")})
+    except Exception:
+        pass
+    _MIRROR_LIST_CACHE.update({"at": now, "data": out})
+    return out
+
+
+def _flusher_loop() -> None:
+    while True:
+        time.sleep(MIRROR_FLUSH_SECONDS)
+        with _DIRTY_LOCK:
+            ids = list(_DIRTY)
+            _DIRTY.clear()
+        for sid in ids:
+            s = SESSIONS.get(sid)
+            if s is not None:
+                with s.lock:
+                    _mirror_write(s)
+
+
+if _MIRROR_ENABLED:
+    threading.Thread(target=_flusher_loop, daemon=True, name="session-mirror").start()
 
 
 # ── auth ────────────────────────────────────────────────────────────────────
@@ -140,23 +290,10 @@ class Session:
     def persist(self) -> None:
         try:
             SESSION_DIR.mkdir(parents=True, exist_ok=True)
-            (SESSION_DIR / f"{self.id}.json").write_text(
-                json.dumps(
-                    {
-                        "id": self.id,
-                        "system_prompt": self.system_prompt,
-                        "messages": self.messages,
-                        "created_at": self.created_at,
-                        "cost_cents": self.cost_cents,
-                        "cached_tokens": self.cached_tokens,
-                        "prompt_tokens": self.prompt_tokens,
-                        "title": self.title,
-                    },
-                    default=str,
-                )
-            )
+            (SESSION_DIR / f"{self.id}.json").write_text(_session_payload(self))
         except Exception as e:  # bookkeeping must never break a reply
             print(f"[chat_ui] persist failed for {self.id}: {e}", flush=True)
+        _mark_dirty(self.id)
 
     def trim(self) -> None:
         if len(self.messages) <= MAX_HISTORY_MESSAGES:
@@ -177,11 +314,16 @@ _STORE_LOCK = threading.Lock()
 
 def _load_from_disk(session_id: str) -> Optional[Session]:
     path = SESSION_DIR / f"{session_id}.json"
-    if not path.exists():
-        return None
-    try:
-        raw = json.loads(path.read_text())
-    except Exception:
+    raw = None
+    if path.exists():
+        try:
+            raw = json.loads(path.read_text())
+        except Exception:
+            raw = None
+    if raw is None and _MIRROR_ENABLED and os.getenv("GITHUB_TOKEN"):
+        # A redeploy wiped local disk — fall back to the git mirror.
+        raw = _mirror_read(session_id)
+    if raw is None:
         return None
     s = Session(session_id, raw.get("system_prompt") or build_system_prompt())
     s.messages = raw.get("messages") or []
@@ -288,6 +430,60 @@ class DoRequestBody(BaseModel):
     max_tokens: Optional[int] = None
 
 
+class AutoRequestBody(DoRequestBody):
+    """One-send-button mode: the bridge decides chat vs quick-do vs big-do."""
+
+
+_ROUTER_PROMPT = """You route one user message in an operator console that controls code repos and cloud deployments.
+
+Reply with EXACTLY one label:
+- CHAT — a question, discussion, planning, explanation, or anything answerable from knowledge. No live data or changes needed.
+- DO_SMALL — one quick concrete action: read a file, check a status/log/health, look something up live, a tiny one-file edit, a single commit.
+- DO_BIG — multi-step work: features, debugging with tests, deploys, multi-file changes, anything that needs several tool calls.
+
+Output only the label, nothing else."""
+
+
+async def _classify(message: str, history: List[Dict[str, Any]]) -> str:
+    """Cheap routing call (~150 tokens in, a couple out). Falls back to CHAT —
+    the safe failure mode, since chat can never change anything."""
+    from llm_gateway import ChatMessage, ChatRequest, get_router
+
+    ctx = []
+    for m in history[-6:]:
+        c = m.get("content")
+        if isinstance(c, str) and c.strip():
+            ctx.append(f"{m.get('role')}: {c[:280]}")
+    prompt = (
+        _ROUTER_PROMPT
+        + "\n\nConversation tail:\n"
+        + ("\n".join(ctx) if ctx else "(none)")
+        + f"\nuser: {message[:600]}\n\nLabel:"
+    )
+    try:
+        resp = await get_router().chat(
+            ChatRequest(
+                provider="moonshot",
+                model="kimi-k3",
+                messages=[ChatMessage(role="user", content=prompt)],
+                max_tokens=8,
+                temperature=0.7,
+                reasoning_effort="low",
+            )
+        )
+        label = (resp.content or "").strip().upper().split()[0] if resp.content else ""
+        label = label.strip("*.#")
+        if label in ("CHAT", "DO_SMALL", "DO_BIG"):
+            return label
+    except Exception as e:
+        print(f"[chat_ui] router classify failed: {e}", flush=True)
+    # Heuristic fallback: obvious action verbs route to a small do, else chat.
+    verbs = ("deploy", "commit", "fix", "run", "set env", "redeploy", "check the log",
+             "check logs", "update", "restart", "build", "push")
+    low = message.lower()
+    return "DO_SMALL" if any(v in low for v in verbs) else "CHAT"
+
+
 # ── routes ──────────────────────────────────────────────────────────────────
 
 @ui_router.post("/ui/login")
@@ -328,20 +524,49 @@ async def ui_get_session(session_id: Optional[str] = None):
 @ui_router.get("/ui/sessions")
 async def ui_list_sessions():
     known = {sid: s.to_dict(include_messages=False) for sid, s in SESSIONS.items()}
+
+    def _ingest(sid: str, raw: Dict[str, Any]) -> None:
+        if sid in known or not isinstance(raw, dict):
+            return
+        known[sid] = {
+            "id": sid,
+            "created_at": raw.get("created_at"),
+            "cost_cents": raw.get("cost_cents", 0),
+            "message_count": len(raw.get("messages") or []),
+            "title": raw.get("title", "session"),
+        }
+
     try:
         for p in SESSION_DIR.glob("*.json"):
-            if p.stem not in known:
-                raw = json.loads(p.read_text())
-                known[p.stem] = {
-                    "id": p.stem,
-                    "created_at": raw.get("created_at"),
-                    "cost_cents": raw.get("cost_cents", 0),
-                    "message_count": len(raw.get("messages") or []),
-                    "title": raw.get("title", "session"),
-                }
+            try:
+                _ingest(p.stem, json.loads(p.read_text()))
+            except Exception:
+                continue
     except Exception:
         pass
+    # Merge in sessions that only exist in the git mirror (post-redeploy).
+    loop = asyncio.get_event_loop()
+    for item in await loop.run_in_executor(None, _mirror_list):
+        sid = item["id"]
+        if sid not in known:
+            raw = await loop.run_in_executor(None, _mirror_read, sid)
+            if raw:
+                _ingest(sid, raw)
     return {"sessions": sorted(known.values(), key=lambda d: d.get("created_at") or "", reverse=True)}
+
+
+@ui_router.delete("/ui/session/{session_id}")
+async def ui_delete_session(session_id: str):
+    with _STORE_LOCK:
+        SESSIONS.pop(session_id, None)
+    try:
+        (SESSION_DIR / f"{session_id}.json").unlink(missing_ok=True)
+    except Exception:
+        pass
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _mirror_delete, session_id)
+    _MIRROR_LIST_CACHE["at"] = 0.0
+    return {"ok": True, "deleted": session_id}
 
 
 @ui_router.post("/ui/chat")
@@ -504,6 +729,39 @@ async def ui_do(body: DoRequestBody = Body(...)):
     }
 
 
+@ui_router.post("/ui/auto")
+async def ui_auto(body: AutoRequestBody = Body(...)):
+    """Classify first, then run chat or do. Small tasks get small caps so a
+    quick command costs cents and seconds, not a full agent run."""
+    s = get_session(body.session_id)
+    with s.lock:
+        history = list(s.messages)
+
+    route = await _classify(body.message, history)
+
+    if route == "CHAT":
+        chat_body = ChatRequestBody(
+            session_id=s.id, message=body.message, model=body.model,
+            provider=body.provider, reasoning_effort=body.reasoning_effort,
+        )
+        out = await ui_chat(chat_body)
+        out["routed"] = "chat"
+        return out
+
+    do_body = DoRequestBody(
+        session_id=s.id, message=body.message, model=body.model,
+        provider=body.provider, reasoning_effort=body.reasoning_effort,
+        budget_usd=body.budget_usd, max_turns=body.max_turns,
+        tool_set=body.tool_set, max_tokens=body.max_tokens,
+    )
+    if route == "DO_SMALL":
+        do_body.budget_usd = min(body.budget_usd, AUTO_SMALL_BUDGET_USD)
+        do_body.max_turns = min(body.max_turns or AUTO_SMALL_TURNS, AUTO_SMALL_TURNS)
+    out = await ui_do(do_body)
+    out["routed"] = "do_small" if route == "DO_SMALL" else "do_big"
+    return out
+
+
 @ui_router.get("/ui/progress")
 async def ui_progress():
     """Live view: harness turn state plus this run's terminal state."""
@@ -562,15 +820,64 @@ body{
 
 /* ── header ─────────────────────────────────────────────── */
 header{
-  display:flex;align-items:center;gap:14px;padding:12px 20px;
+  display:flex;align-items:center;gap:12px;padding:12px 16px;
   border-bottom:1px solid var(--line-soft);background:var(--bg);
-  position:sticky;top:0;z-index:5;
+  position:sticky;top:0;z-index:6;
 }
 .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14.5px}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
 .spacer{flex:1}
 .stat{font-size:12.5px;color:var(--dim);white-space:nowrap}
 .stat b{color:var(--fg);font-weight:600}
+.iconbtn{
+  border:none;background:none;color:var(--dim);font:inherit;font-size:17px;
+  padding:6px 9px;border-radius:8px;cursor:pointer;line-height:1;
+}
+.iconbtn:hover{background:var(--raised);color:var(--fg)}
+
+/* ── session drawer ─────────────────────────────────────── */
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:8;
+  display:none;opacity:0;transition:opacity .18s}
+#scrim.on{display:block;opacity:1}
+#drawer{
+  position:fixed;top:0;left:0;bottom:0;width:min(300px,84vw);z-index:9;
+  background:var(--surface);border-right:1px solid var(--line);
+  transform:translateX(-102%);transition:transform .2s ease;
+  display:flex;flex-direction:column;
+}
+#drawer.on{transform:none}
+#drawer .dhead{display:flex;align-items:center;gap:8px;padding:13px 14px;
+  border-bottom:1px solid var(--line-soft)}
+#drawer .dhead .t{font-weight:600;font-size:13.5px;flex:1}
+#slist{flex:1;overflow-y:auto;padding:8px}
+.sitem{
+  display:flex;align-items:flex-start;gap:6px;padding:9px 10px;
+  border-radius:10px;cursor:pointer;margin-bottom:2px;
+}
+.sitem:hover{background:var(--raised)}
+.sitem.cur{background:var(--accent-soft)}
+.sitem .sbody{flex:1;min-width:0}
+.sitem .stitle{font-size:13.5px;font-weight:550;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.sitem .smeta{font-size:11px;color:var(--faint);margin-top:1px}
+.sitem .sdel{border:none;background:none;color:var(--faint);cursor:pointer;
+  font-size:14px;padding:2px 5px;border-radius:6px;visibility:hidden}
+.sitem:hover .sdel{visibility:visible}
+.sitem .sdel:hover{color:#c0392b;background:var(--raised)}
+@media (min-width:900px){
+  #drawer{position:static;transform:none;width:270px;flex:none;height:auto;
+    border-right:1px solid var(--line)}
+  #scrim{display:none!important}
+  #menuBtn{display:none}
+  #shell{flex:1;display:flex;min-height:0}
+}
+@media (max-width:899px){
+  #shell{flex:1;display:flex;flex-direction:column;min-height:0}
+  #col{flex:1;display:flex;flex-direction:column;min-height:0}
+}
+@media (min-width:900px){
+  #col{flex:1;display:flex;flex-direction:column;min-height:0}
+}
 
 /* ── messages ───────────────────────────────────────────── */
 main{flex:1;overflow-y:auto;scroll-behavior:smooth}
@@ -607,6 +914,11 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
   border-radius:8px;padding:7px 11px;overflow-x:auto;white-space:pre-wrap;
   word-break:break-word;
 }
+.thinking{color:var(--faint);font-size:13.5px;display:flex;gap:8px;align-items:center}
+.dots span{animation:b 1.2s infinite;display:inline-block}
+.dots span:nth-child(2){animation-delay:.18s}
+.dots span:nth-child(3){animation-delay:.36s}
+@keyframes b{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
 
 /* ── live progress ──────────────────────────────────────── */
 #bar{
@@ -662,6 +974,8 @@ textarea::placeholder{color:var(--faint)}
 .btn.ghost{background:none;border-color:transparent;color:var(--dim);
   font-weight:500;padding:6px 10px}
 .btn.ghost:hover{background:var(--raised);color:var(--fg);border-color:transparent}
+#send{min-width:74px;display:flex;align-items:center;justify-content:center;gap:7px}
+#send .arrow{font-size:15px;line-height:1}
 
 /* ── login ──────────────────────────────────────────────── */
 #login{position:fixed;inset:0;background:var(--bg);z-index:20;
@@ -693,50 +1007,68 @@ textarea::placeholder{color:var(--faint)}
 </div>
 
 <header>
+  <button class="iconbtn" id="menuBtn" onclick="toggleDrawer()">☰</button>
   <div class="brand"><span class="dot"></span> bridge console</div>
   <div class="spacer"></div>
   <div class="stat">spent <b id="cost">0.00</b>¢</div>
   <div class="stat">cache <b id="hit">0</b>%</div>
-  <button class="btn ghost" onclick="newSession()">New chat</button>
 </header>
 
-<main id="main"><div id="log"></div></main>
-
-<footer>
-  <div class="dock">
-    <div id="bar"><span class="pulse"></span><span id="bartext"></span></div>
-    <div class="settings">
-      <div class="group"><span class="glabel">Budget</span>
-        <div class="seg" id="budget">
-          <button data-v="0.25">$0.25</button><button data-v="1" class="on">$1</button>
-          <button data-v="5">$5</button><button data-v="10">$10</button></div></div>
-      <div class="group"><span class="glabel">Effort</span>
-        <div class="seg" id="effort">
-          <button data-v="low" class="on">low</button><button data-v="high">high</button>
-          <button data-v="max">max</button></div></div>
-      <div class="group"><span class="glabel">Tools</span>
-        <div class="seg" id="toolset">
-          <button data-v="build" class="on">build</button>
-          <button data-v="research">research</button></div></div>
-      <div class="group"><span class="glabel">Turns</span>
-        <div class="seg" id="turns">
-          <button data-v="" class="on">auto</button><button data-v="25">25</button>
-          <button data-v="100">100</button><button data-v="250">250</button></div></div>
-      <div class="group"><span class="glabel">Model</span>
-        <div class="seg" id="model">
-          <button data-v="kimi-k3" class="on">kimi-k3</button>
-          <button data-v="kimi-k2.6">k2.6</button></div></div>
+<div id="shell">
+  <div id="scrim" onclick="toggleDrawer(false)"></div>
+  <nav id="drawer">
+    <div class="dhead">
+      <span class="t">Sessions</span>
+      <button class="btn ghost" onclick="newSession()">+ New</button>
     </div>
-    <div class="composer">
-      <textarea id="box" rows="1" placeholder="Ask a question, or describe a job…"></textarea>
-      <div class="actions">
-        <span class="hint">Chat can’t touch anything · Do it runs the agent</span>
-        <button class="btn" id="send" onclick="go('chat')">Chat</button>
-        <button class="btn primary" id="doit" onclick="go('do')">Do it</button>
+    <div id="slist"></div>
+  </nav>
+  <div id="col">
+    <main id="main"><div id="log"></div></main>
+    <footer>
+      <div class="dock">
+        <div id="bar"><span class="pulse"></span><span id="bartext"></span></div>
+        <div class="settings">
+          <div class="group"><span class="glabel">Budget</span>
+            <div class="seg" id="budget">
+              <button data-v="0.05">5¢</button><button data-v="0.10">10¢</button>
+              <button data-v="0.25">25¢</button><button data-v="1" class="on">$1</button>
+              <button data-v="5">$5</button></div></div>
+          <div class="group"><span class="glabel">Effort</span>
+            <div class="seg" id="effort">
+              <button data-v="low" class="on">low</button><button data-v="high">high</button>
+              <button data-v="max">max</button></div></div>
+          <div class="group"><span class="glabel">Tools</span>
+            <div class="seg" id="toolset">
+              <button data-v="build" class="on">build</button>
+              <button data-v="research">research</button></div></div>
+          <div class="group"><span class="glabel">Turns</span>
+            <div class="seg" id="turns">
+              <button data-v="" class="on">auto</button><button data-v="10">10</button>
+              <button data-v="25">25</button><button data-v="100">100</button></div></div>
+          <div class="group"><span class="glabel">Model</span>
+            <div class="seg" id="model">
+              <button data-v="kimi-k3" class="on">kimi-k3</button>
+              <button data-v="kimi-k2.6">k2.6</button></div></div>
+        </div>
+        <div class="composer">
+          <textarea id="box" rows="1" placeholder="Message — the bridge decides if it needs tools…"></textarea>
+          <div class="actions">
+            <div class="seg" id="mode">
+              <button data-v="auto" class="on">auto</button>
+              <button data-v="chat">chat</button>
+              <button data-v="do">do</button>
+            </div>
+            <span class="hint" id="modeHint">auto picks chat vs action</span>
+            <button class="btn primary" id="send" onclick="send()">
+              <span>Send</span><span class="arrow">↑</span>
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </footer>
   </div>
-</footer>
+</div>
 
 <script>
 let SID = localStorage.getItem('bridge_sid') || null;
@@ -748,9 +1080,17 @@ document.querySelectorAll('.seg').forEach(seg=>{
     const b = e.target.closest('button'); if(!b) return;
     seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');
+    if(seg.id==='mode') modeHint();
   });
 });
 const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
+function modeHint(){
+  const m = setting('mode');
+  $('modeHint').textContent = m==='auto' ? 'auto picks chat vs action'
+    : m==='chat' ? 'chat can’t touch anything'
+    : 'runs the agent with tools';
+}
+modeHint();
 
 /* minimal markdown — escape first, so model output can never inject html */
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -773,8 +1113,6 @@ function md(src){
     else if(oli){ if(list!=='ol'){out+=(list?'</'+list+'>':'')+'<ol>';list='ol';} out+='<li>'+oli[2]+'</li>'; }
     else { if(list){out+='</'+list+'>';list=null;}
            const s=ln.trim();
-           /* a placeholder alone on a line is a code block: emit it bare,
-              since <p><pre> is invalid and browsers silently close the <p> */
            out+= !s? '' : (/^@@CB\d+@@$/.test(s)? s : '<p>'+ln+'</p>'); }
   }
   if(list) out+='</'+list+'>';
@@ -792,9 +1130,52 @@ async function login(){
   $('lerr').textContent='';
   try{
     await api('/ui/login',{method:'POST',body:JSON.stringify({password:$('pw').value})});
-    $('login').style.display='none'; $('pw').value=''; load();
+    $('login').style.display='none'; $('pw').value=''; boot();
   }catch(e){ $('lerr').textContent = e.message; }
 }
+
+/* ── drawer / session list ──────────────────────────────── */
+function toggleDrawer(force){
+  const on = force!==undefined ? force : !$('drawer').classList.contains('on');
+  $('drawer').classList.toggle('on', on);
+  $('scrim').classList.toggle('on', on);
+  if(on) loadSessions();
+}
+async function loadSessions(){
+  let d; try{ d=await api('/ui/sessions'); }catch(e){ return; }
+  const el=$('slist'); el.innerHTML='';
+  if(!d.sessions.length){
+    el.innerHTML='<div style="padding:14px 12px;font-size:12.5px;color:var(--faint)">No past sessions yet.</div>';
+    return;
+  }
+  for(const s of d.sessions){
+    const item=document.createElement('div');
+    item.className='sitem'+(s.id===SID?' cur':'');
+    const when=(s.created_at||'').slice(0,10);
+    item.innerHTML=
+      '<div class="sbody"><div class="stitle"></div>'+
+      '<div class="smeta">'+when+' · '+(s.message_count||0)+' msgs · '+
+      ((s.cost_cents||0).toFixed(1))+'¢</div></div>';
+    item.querySelector('.stitle').textContent=s.title||'session';
+    const del=document.createElement('button');
+    del.className='sdel'; del.textContent='×'; del.title='delete session';
+    del.onclick=async e=>{
+      e.stopPropagation();
+      if(!confirm('Delete this session?')) return;
+      await api('/ui/session/'+s.id,{method:'DELETE'}).catch(()=>{});
+      if(s.id===SID) newSession(); else loadSessions();
+    };
+    item.appendChild(del);
+    item.onclick=()=>{ openSession(s.id); toggleDrawer(false); };
+    el.appendChild(item);
+  }
+}
+async function openSession(id){
+  SID=id; localStorage.setItem('bridge_sid',SID);
+  await load();
+}
+
+/* ── rendering ──────────────────────────────────────────── */
 function turn(cls){
   const d=document.createElement('div'); d.className='turn '+cls;
   $('log').appendChild(d); return d;
@@ -815,6 +1196,12 @@ function addTool(text){
 function addMeta(node,text){
   const m=document.createElement('div'); m.className='meta'; m.textContent=text;
   node.appendChild(m);
+}
+function addThinking(){
+  const t=turn('bot'); const b=document.createElement('div');
+  b.className='thinking';
+  b.innerHTML='thinking <span class="dots"><span>·</span><span>·</span><span>·</span></span>';
+  t.appendChild(b); scroll(); return t;
 }
 function render(msgs){
   $('log').innerHTML='';
@@ -841,31 +1228,58 @@ async function load(){
 function newSession(){
   localStorage.removeItem('bridge_sid'); SID=null; $('log').innerHTML=''; load();
 }
-function busy(b){ $('send').disabled=b; $('doit').disabled=b; }
+function busy(b){ $('send').disabled=b; }
 
-async function go(mode){
+/* ── send ───────────────────────────────────────────────── */
+async function send(forceMode){
   const text=$('box').value.trim(); if(!text) return;
-  $('box').value=''; $('box').style.height='auto'; addUser(text); busy(true);
+  const mode = forceMode || setting('mode');
+  $('box').value=''; $('box').style.height='auto';
+  addUser(text);
+  const think = addThinking();
+  busy(true);
   const base={session_id:SID,message:text,model:setting('model'),
               reasoning_effort:setting('effort')};
   try{
     if(mode==='chat'){
       const r=await api('/ui/chat',{method:'POST',body:JSON.stringify(base)});
+      think.remove();
       SID=r.session_id; localStorage.setItem('bridge_sid',SID);
       const n=addBot(r.reply||'(empty reply)');
       addMeta(n,`${r.cost_cents}¢ · ${r.usage.cached_tokens.toLocaleString()} of `+
         `${r.usage.prompt_tokens.toLocaleString()} tokens cached`);
       stats(r.session);
-    }else{
+    }else if(mode==='auto'){
+      const t=setting('turns');
+      const r=await api('/ui/auto',{method:'POST',body:JSON.stringify({...base,
+        budget_usd:parseFloat(setting('budget'))||1,
+        tool_set:setting('toolset'),
+        max_turns:t?parseInt(t):null})});
+      SID=r.session_id; localStorage.setItem('bridge_sid',SID);
+      if(r.routed==='chat'){
+        think.remove();
+        const n=addBot(r.reply||'(empty reply)');
+        addMeta(n,`auto → chat · ${r.cost_cents}¢`);
+        stats(r.session);
+      }else{
+        think.remove();
+        const label = r.routed==='do_small'
+          ? `auto → quick task · cap ${(r.budget_cents).toFixed(0)}¢`
+          : `auto → agent run · cap $${(r.budget_cents/100).toFixed(2)}`;
+        const n=turn('bot'); addMeta(n,label);
+        await poll();
+      }
+    }else{ /* explicit do */
       const t=setting('turns');
       const r=await api('/ui/do',{method:'POST',body:JSON.stringify({...base,
         budget_usd:parseFloat(setting('budget'))||1,
         tool_set:setting('toolset'),
         max_turns:t?parseInt(t):null})});
+      think.remove();
       SID=r.session_id; localStorage.setItem('bridge_sid',SID);
       await poll();
     }
-  }catch(e){ addBot('**Error** — '+e.message); }
+  }catch(e){ think.remove(); addBot('**Error** — '+e.message); }
   busy(false); scroll();
 }
 
@@ -893,13 +1307,26 @@ async function poll(){
   }
 }
 
+/* reconnect to a run still going when the page was closed */
+async function boot(){
+  await load();
+  try{
+    const p=await api('/ui/progress');
+    if(p.run && p.run.active && (!SID || p.run.session_id===SID)) poll();
+  }catch(e){}
+  loadSessions();
+}
+
 const box=$('box');
 box.addEventListener('input',()=>{
   box.style.height='auto'; box.style.height=Math.min(box.scrollHeight,220)+'px';
 });
 box.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); go(e.metaKey||e.ctrlKey?'do':'chat'); }
+  if(e.key==='Enter'&&!e.shiftKey){
+    e.preventDefault();
+    send(e.metaKey||e.ctrlKey ? 'do' : null);
+  }
 });
-load().catch(()=>{});
+boot().catch(()=>{});
 </script></body></html>
 """
