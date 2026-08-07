@@ -1,5 +1,0 @@
-{
-  "action": "set_env",
-  "name": "FETCH_ALLOWED_HOSTS",
-  "value": "kalshiml-production.up.railway.app,api.elections.kalshi.com,api.open-meteo.com,mesonet.agron.iastate.edu,api.weather.gov,en.wikipedia.org,*.wikipedia.org,raw.githubusercontent.com,github.com,*.github.io,api.github.com,html.duckduckgo.com,duckduckgo.com,lite.duckduckgo.com,*.railway.app"
-}
