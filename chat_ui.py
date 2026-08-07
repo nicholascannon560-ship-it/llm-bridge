@@ -778,7 +778,14 @@ async def ui_progress():
 @ui_router.get("/ui", response_class=HTMLResponse)
 @ui_router.get("/ui/", response_class=HTMLResponse)
 async def ui_page():
-    return HTMLResponse(PAGE)
+    return HTMLResponse(
+        content=PAGE,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 PAGE = r"""<!doctype html>
