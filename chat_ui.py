@@ -1046,10 +1046,16 @@ textarea::placeholder{color:var(--faint)}
             <div class="seg" id="turns">
               <button data-v="" class="on">auto</button><button data-v="10">10</button>
               <button data-v="25">25</button><button data-v="100">100</button></div></div>
+          <div class="group"><span class="glabel">Provider</span>
+            <div class="seg" id="provider">
+              <button data-v="moonshot" class="on">moonshot</button>
+              <button data-v="anthropic">anthropic</button></div></div>
           <div class="group"><span class="glabel">Model</span>
             <div class="seg" id="model">
               <button data-v="kimi-k3" class="on">kimi-k3</button>
-              <button data-v="kimi-k2.6">k2.6</button></div></div>
+              <button data-v="kimi-k2.6">k2.6</button>
+              <button data-v="claude-sonnet-5" style="display:none">claude-sonnet-5</button>
+              <button data-v="claude-haiku-4-5-20251001" style="display:none">claude-haiku</button></div></div>
         </div>
         <div class="composer">
           <textarea id="box" rows="1" placeholder="Message — the bridge decides if it needs tools…"></textarea>
@@ -1075,12 +1081,28 @@ let SID = localStorage.getItem('bridge_sid') || null;
 const $ = i => document.getElementById(i);
 
 /* segmented settings */
+const MODELS_BY_PROVIDER = {
+  moonshot: ['kimi-k3','kimi-k2.6'],
+  anthropic: ['claude-sonnet-5','claude-haiku-4-5-20251001']
+};
+function updateModels(){
+  const prov = setting('provider');
+  const seg = $('model');
+  seg.querySelectorAll('button').forEach(b=>{
+    b.style.display = MODELS_BY_PROVIDER[prov].includes(b.dataset.v) ? '' : 'none';
+    b.classList.remove('on');
+  });
+  // pick first visible
+  const first = seg.querySelector('button[style=""]') || seg.querySelector('button:not([style*="none"])');
+  if(first) first.classList.add('on');
+}
 document.querySelectorAll('.seg').forEach(seg=>{
   seg.addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
     seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');
     if(seg.id==='mode') modeHint();
+    if(seg.id==='provider') updateModels();
   });
 });
 const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
@@ -1239,7 +1261,7 @@ async function send(forceMode){
   const think = addThinking();
   busy(true);
   const base={session_id:SID,message:text,model:setting('model'),
-              reasoning_effort:setting('effort')};
+              provider:setting('provider'),reasoning_effort:setting('effort')};
   try{
     if(mode==='chat'){
       const r=await api('/ui/chat',{method:'POST',body:JSON.stringify(base)});
