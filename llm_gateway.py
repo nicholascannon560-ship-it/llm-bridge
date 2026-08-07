@@ -45,6 +45,8 @@ DEFAULT_MODELS = {
 # "cached_input" is the prompt-cache-hit rate where the provider publishes one.
 COST_TABLE = {
     "anthropic": {
+        # Opus 5: $5.00 / $25.00 per Mtok
+        "claude-opus-5": {"input": 5.00, "output": 25.00, "cached_input": 0.50},
         # Sonnet 5: $3.00 / $15.00 per Mtok
         "claude-sonnet-5": {"input": 0.30, "output": 1.50, "cached_input": 0.03},
         # Haiku 4.5: $1.00 / $5.00 per Mtok.

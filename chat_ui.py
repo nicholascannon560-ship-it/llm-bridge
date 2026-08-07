@@ -1054,6 +1054,7 @@ textarea::placeholder{color:var(--faint)}
             <div class="seg" id="model">
               <button data-v="kimi-k3" class="on">kimi-k3</button>
               <button data-v="kimi-k2.6">k2.6</button>
+              <button data-v="claude-opus-5" style="display:none">claude-opus-5</button>
               <button data-v="claude-sonnet-5" style="display:none">claude-sonnet-5</button>
               <button data-v="claude-haiku-4-5-20251001" style="display:none">claude-haiku</button></div></div>
         </div>
@@ -1083,7 +1084,7 @@ const $ = i => document.getElementById(i);
 /* segmented settings */
 const MODELS_BY_PROVIDER = {
   moonshot: ['kimi-k3','kimi-k2.6'],
-  anthropic: ['claude-sonnet-5','claude-haiku-4-5-20251001']
+  anthropic: ['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001']
 };
 function updateModels(){
   const prov = setting('provider');
