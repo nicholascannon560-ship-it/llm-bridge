@@ -93,7 +93,7 @@ app = FastAPI(
         "repos, list repos and read file contents using a single "
         "GITHUB_TOKEN."
     ),
-    version="1.5.0",
+    version="1.6.0",
     lifespan=lifespan,
 )
 
@@ -111,6 +111,12 @@ app.include_router(skills_router)
 # SSRF reasoning — this service holds admin-scoped tokens).
 from fetch_routes import fetch_router
 app.include_router(fetch_router)
+
+# Web search: caller supplies a query, never a URL, and the upstream host is
+# hardcoded in search_routes.py — no SSRF surface. Result URLs still go
+# through /fetch's allowlist before they can be read.
+from search_routes import search_router
+app.include_router(search_router)
 
 # Watchdog status / manual-trigger routes (auth-gated like everything else).
 app.include_router(watchdog_router)
