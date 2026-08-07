@@ -1359,7 +1359,7 @@ async function doLogout(){
   localStorage.removeItem('bridge_sid'); SID=null;
   $('log').innerHTML=''; $('login').style.display='flex';
 }
-function boot(){
+async function boot(){
   await load();
   try{
     const p=await api('/ui/progress');
