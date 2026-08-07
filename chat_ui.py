@@ -1354,7 +1354,7 @@ async function poll(){
 }
 
 /* reconnect to a run still going when the page was closed */
-async async function doLogout(){
+async function doLogout(){
   try{ await fetch('/ui/logout',{method:'POST',credentials:'same-origin'}); }catch(_){}
   localStorage.removeItem('bridge_sid'); SID=null;
   $('log').innerHTML=''; $('login').style.display='flex';
