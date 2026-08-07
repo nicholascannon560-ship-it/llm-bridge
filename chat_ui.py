@@ -528,132 +528,314 @@ PAGE = r"""<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>bridge console</title>
 <style>
-:root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--fg:#e6e8ee;--dim:#8b93a7;
---accent:#5b8cff;--go:#3fb950;--warn:#d29922;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+:root{
+  --bg:#faf9f5; --surface:#fff; --raised:#f4f2ec;
+  --line:#e6e2d7; --line-soft:#efece3;
+  --fg:#1f1e1d; --dim:#6f6b63; --faint:#938f86;
+  --accent:#d97757; --accent-hover:#c8613f; --accent-soft:#f6e5dd;
+  --user-bg:#f0ede4;
+  --radius:12px;
+  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
+    "Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#262624; --surface:#30302e; --raised:#35352f;
+    --line:#42423d; --line-soft:#3a3a35;
+    --fg:#f5f4ef; --dim:#a8a49b; --faint:#807c74;
+    --accent:#d97757; --accent-hover:#e08a6e; --accent-soft:#3d2f28;
+    --user-bg:#3a3a35;
+  }
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column}
-header{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-header b{font-size:14px}
-.stat{font-size:12px;color:var(--dim)}
-.stat span{color:var(--fg)}
-main{flex:1;display:flex;min-height:0}
-#log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
-aside{width:260px;border-left:1px solid var(--line);padding:14px;overflow-y:auto;background:var(--panel)}
-aside label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin:12px 0 4px}
-aside input,aside select{width:100%;padding:7px 8px;background:#0f1218;border:1px solid var(--line);
-color:var(--fg);border-radius:6px;font-size:13px}
-.msg{max-width:min(760px,92%);padding:10px 13px;border-radius:10px;white-space:pre-wrap;
-word-wrap:break-word;line-height:1.5;font-size:14px}
-.user{align-self:flex-end;background:#20304d;border:1px solid #2c4066}
-.bot{align-self:flex-start;background:var(--panel);border:1px solid var(--line)}
-.tool{align-self:flex-start;background:#12161d;border:1px dashed var(--line);color:var(--dim);
-font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
-.meta{font-size:11px;color:var(--dim);margin-top:6px}
-footer{border-top:1px solid var(--line);padding:12px;display:flex;gap:8px;align-items:flex-end}
-textarea{flex:1;min-height:58px;max-height:200px;resize:vertical;padding:10px;background:var(--panel);
-border:1px solid var(--line);color:var(--fg);border-radius:8px;font:inherit;font-size:14px}
-button{padding:10px 15px;border-radius:8px;border:1px solid var(--line);background:#222834;
-color:var(--fg);font-weight:600;cursor:pointer;font-size:13px}
-button:hover:not(:disabled){border-color:var(--accent)}
-button:disabled{opacity:.45;cursor:not-allowed}
-#send{background:#223052;border-color:#2f4478}
-#doit{background:#1d3a26;border-color:#2c5c3a;color:#8ee79c}
-#bar{display:none;padding:8px 16px;background:#1a2030;border-bottom:1px solid var(--line);
-font-size:12px;color:var(--dim);font-family:ui-monospace,Menlo,monospace}
-#login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;
-justify-content:center;flex-direction:column;gap:10px;z-index:9}
-#login input{padding:10px;width:240px;background:var(--panel);border:1px solid var(--line);
-color:var(--fg);border-radius:8px}
-.err{color:#f85149;font-size:12px}
-.hint{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.45}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+  font-size:15px;line-height:1.6;display:flex;flex-direction:column;
+  -webkit-font-smoothing:antialiased;
+}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;
+  border:3px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+/* ── header ─────────────────────────────────────────────── */
+header{
+  display:flex;align-items:center;gap:14px;padding:12px 20px;
+  border-bottom:1px solid var(--line-soft);background:var(--bg);
+  position:sticky;top:0;z-index:5;
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14.5px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+.spacer{flex:1}
+.stat{font-size:12.5px;color:var(--dim);white-space:nowrap}
+.stat b{color:var(--fg);font-weight:600}
+
+/* ── messages ───────────────────────────────────────────── */
+main{flex:1;overflow-y:auto;scroll-behavior:smooth}
+#log{max-width:46rem;margin:0 auto;padding:28px 20px 8px;
+  display:flex;flex-direction:column;gap:22px}
+.turn{display:flex;flex-direction:column;gap:6px}
+.turn.user{align-items:flex-end}
+.bubble{
+  background:var(--user-bg);padding:10px 15px;border-radius:16px;
+  max-width:85%;white-space:pre-wrap;word-wrap:break-word;
+}
+.body{max-width:100%;word-wrap:break-word}
+.body p{margin:0 0 .75em}
+.body p:last-child{margin-bottom:0}
+.body ul,.body ol{margin:.4em 0 .8em;padding-left:1.35em}
+.body li{margin:.2em 0}
+.body h3{font-size:15px;font-weight:650;margin:1.1em 0 .4em}
+.body code{
+  font-family:var(--mono);font-size:.875em;background:var(--raised);
+  padding:.12em .38em;border-radius:5px;border:1px solid var(--line-soft);
+}
+.body pre{
+  background:var(--raised);border:1px solid var(--line-soft);
+  border-radius:10px;padding:12px 14px;overflow-x:auto;margin:.6em 0;
+}
+.body pre code{background:none;border:none;padding:0;font-size:12.5px;line-height:1.55}
+.body strong{font-weight:650}
+.body a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.meta{font-size:11.5px;color:var(--faint);display:flex;gap:9px;flex-wrap:wrap}
+.tool{
+  font-family:var(--mono);font-size:12px;color:var(--dim);
+  background:var(--raised);border:1px solid var(--line-soft);
+  border-left:2px solid var(--accent);
+  border-radius:8px;padding:7px 11px;overflow-x:auto;white-space:pre-wrap;
+  word-break:break-word;
+}
+
+/* ── live progress ──────────────────────────────────────── */
+#bar{
+  display:none;max-width:46rem;margin:0 auto 4px;padding:9px 14px;
+  background:var(--accent-soft);border:1px solid var(--line);
+  border-radius:10px;font-size:12.5px;color:var(--dim);
+  font-family:var(--mono);align-items:center;gap:9px;
+}
+#bar.on{display:flex}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);
+  animation:p 1.3s ease-in-out infinite;flex:none}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ── composer ───────────────────────────────────────────── */
+footer{padding:6px 20px 20px;background:linear-gradient(transparent,var(--bg) 22%)}
+.dock{max-width:46rem;margin:0 auto}
+.settings{display:flex;flex-wrap:wrap;gap:14px;padding:0 2px 10px}
+.group{display:flex;align-items:center;gap:7px}
+.glabel{font-size:11px;color:var(--faint);letter-spacing:.03em}
+.seg{display:flex;background:var(--raised);border:1px solid var(--line);
+  border-radius:9px;padding:2px;gap:2px}
+.seg button{
+  border:none;background:none;color:var(--dim);font:inherit;font-size:12px;
+  font-weight:500;padding:4px 10px;border-radius:7px;cursor:pointer;
+  transition:background .13s,color .13s;
+}
+.seg button:hover{color:var(--fg)}
+.seg button.on{background:var(--surface);color:var(--fg);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.07)}
+.composer{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:10px 12px;transition:border-color .15s,box-shadow .15s;
+}
+.composer:focus-within{border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft)}
+textarea{
+  width:100%;border:none;background:none;color:var(--fg);font:inherit;
+  resize:none;outline:none;min-height:24px;max-height:220px;line-height:1.55;
+}
+textarea::placeholder{color:var(--faint)}
+.actions{display:flex;align-items:center;gap:8px;padding-top:8px}
+.hint{font-size:11.5px;color:var(--faint);flex:1}
+.btn{
+  font:inherit;font-size:13px;font-weight:600;padding:7px 15px;border-radius:9px;
+  cursor:pointer;transition:background .13s,border-color .13s,opacity .13s;
+  border:1px solid var(--line);background:var(--surface);color:var(--fg);
+}
+.btn:hover:not(:disabled){border-color:var(--faint)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover:not(:disabled){background:var(--accent-hover);
+  border-color:var(--accent-hover)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:none;border-color:transparent;color:var(--dim);
+  font-weight:500;padding:6px 10px}
+.btn.ghost:hover{background:var(--raised);color:var(--fg);border-color:transparent}
+
+/* ── login ──────────────────────────────────────────────── */
+#login{position:fixed;inset:0;background:var(--bg);z-index:20;
+  display:flex;align-items:center;justify-content:center}
+.card{display:flex;flex-direction:column;gap:13px;width:min(320px,88vw);
+  align-items:stretch;text-align:center}
+.card .brand{justify-content:center;font-size:16px;margin-bottom:2px}
+.card input{
+  padding:10px 13px;background:var(--surface);border:1px solid var(--line);
+  color:var(--fg);border-radius:10px;font:inherit;outline:none;text-align:center;
+}
+.card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.err{color:#c0392b;font-size:12.5px;min-height:1em}
+@media (prefers-color-scheme:dark){.err{color:#f08a7a}}
+@media (max-width:640px){
+  .settings{gap:9px}.glabel{display:none}
+  #log{padding:20px 14px 4px}footer{padding:6px 14px 16px}
+}
 </style></head><body>
 
 <div id="login">
-  <b>bridge console</b>
-  <input id="pw" type="password" placeholder="password" autofocus>
-  <button onclick="login()">unlock</button>
-  <div class="err" id="lerr"></div>
+  <div class="card">
+    <div class="brand"><span class="dot"></span> bridge console</div>
+    <input id="pw" type="password" placeholder="password" autofocus
+      onkeydown="if(event.key==='Enter')login()">
+    <button class="btn primary" onclick="login()">Unlock</button>
+    <div class="err" id="lerr"></div>
+  </div>
 </div>
 
 <header>
-  <b>bridge console</b>
-  <span class="stat">session <span id="sid">—</span></span>
-  <span class="stat">spent <span id="cost">0.00</span>¢</span>
-  <span class="stat">cache <span id="hit">0</span>%</span>
-  <button style="margin-left:auto;padding:6px 10px" onclick="newSession()">new session</button>
+  <div class="brand"><span class="dot"></span> bridge console</div>
+  <div class="spacer"></div>
+  <div class="stat">spent <b id="cost">0.00</b>¢</div>
+  <div class="stat">cache <b id="hit">0</b>%</div>
+  <button class="btn ghost" onclick="newSession()">New chat</button>
 </header>
 
-<div id="bar"></div>
-
-<main>
-  <div id="log"></div>
-  <aside>
-    <label>budget for “do it” ($)</label>
-    <input id="budget" type="number" value="1.00" min="0.01" max="50" step="0.25">
-    <label>reasoning effort</label>
-    <select id="effort"><option>low</option><option>high</option><option>max</option></select>
-    <label>tool set</label>
-    <select id="toolset"><option value="build">build (can write)</option>
-    <option value="research">research (read only)</option></select>
-    <label>model</label>
-    <select id="model"><option>kimi-k3</option><option>kimi-k2.6</option></select>
-    <label>max turns (blank = 100)</label>
-    <input id="turns" type="number" min="1" max="500" placeholder="100">
-    <div class="hint"><b>Chat</b> cannot call tools — the request forbids it.
-    <b>Do it</b> runs the agent with the tools and budget above.</div>
-  </aside>
-</main>
+<main id="main"><div id="log"></div></main>
 
 <footer>
-  <textarea id="box" placeholder="Ask something, or describe a job…"></textarea>
-  <button id="send" onclick="go('chat')">Chat</button>
-  <button id="doit" onclick="go('do')">Do it ▸</button>
+  <div class="dock">
+    <div id="bar"><span class="pulse"></span><span id="bartext"></span></div>
+    <div class="settings">
+      <div class="group"><span class="glabel">Budget</span>
+        <div class="seg" id="budget">
+          <button data-v="0.25">$0.25</button><button data-v="1" class="on">$1</button>
+          <button data-v="5">$5</button><button data-v="10">$10</button></div></div>
+      <div class="group"><span class="glabel">Effort</span>
+        <div class="seg" id="effort">
+          <button data-v="low" class="on">low</button><button data-v="high">high</button>
+          <button data-v="max">max</button></div></div>
+      <div class="group"><span class="glabel">Tools</span>
+        <div class="seg" id="toolset">
+          <button data-v="build" class="on">build</button>
+          <button data-v="research">research</button></div></div>
+      <div class="group"><span class="glabel">Turns</span>
+        <div class="seg" id="turns">
+          <button data-v="" class="on">auto</button><button data-v="25">25</button>
+          <button data-v="100">100</button><button data-v="250">250</button></div></div>
+      <div class="group"><span class="glabel">Model</span>
+        <div class="seg" id="model">
+          <button data-v="kimi-k3" class="on">kimi-k3</button>
+          <button data-v="kimi-k2.6">k2.6</button></div></div>
+    </div>
+    <div class="composer">
+      <textarea id="box" rows="1" placeholder="Ask a question, or describe a job…"></textarea>
+      <div class="actions">
+        <span class="hint">Chat can’t touch anything · Do it runs the agent</span>
+        <button class="btn" id="send" onclick="go('chat')">Chat</button>
+        <button class="btn primary" id="doit" onclick="go('do')">Do it</button>
+      </div>
+    </div>
+  </div>
 </footer>
 
 <script>
 let SID = localStorage.getItem('bridge_sid') || null;
 const $ = i => document.getElementById(i);
 
+/* segmented settings */
+document.querySelectorAll('.seg').forEach(seg=>{
+  seg.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  });
+});
+const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
+
+/* minimal markdown — escape first, so model output can never inject html */
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function md(src){
+  const blocks=[];
+  let t = esc(src).replace(/```(\w*)\n?([\s\S]*?)```/g,(m,l,c)=>{
+    blocks.push('<pre><code>'+c.replace(/\n$/,'')+'</code></pre>');
+    return '@@CB'+(blocks.length-1)+'@@';
+  });
+  t = t.replace(/`([^`\n]+)`/g,'<code>$1</code>')
+       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+       .replace(/(^|[\s(])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+       .replace(/^###\s+(.+)$/gm,'<h3>$1</h3>')
+       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+                '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const lines=t.split('\n'); let out='',list=null;
+  for(const ln of lines){
+    const li = ln.match(/^\s*[-*]\s+(.*)$/), oli = ln.match(/^\s*(\d+)\.\s+(.*)$/);
+    if(li){ if(list!=='ul'){out+=(list?'</'+list+'>':'')+'<ul>';list='ul';} out+='<li>'+li[1]+'</li>'; }
+    else if(oli){ if(list!=='ol'){out+=(list?'</'+list+'>':'')+'<ol>';list='ol';} out+='<li>'+oli[2]+'</li>'; }
+    else { if(list){out+='</'+list+'>';list=null;}
+           const s=ln.trim();
+           /* a placeholder alone on a line is a code block: emit it bare,
+              since <p><pre> is invalid and browsers silently close the <p> */
+           out+= !s? '' : (/^@@CB\d+@@$/.test(s)? s : '<p>'+ln+'</p>'); }
+  }
+  if(list) out+='</'+list+'>';
+  return out.replace(/@@CB(\d+)@@/g,(m,i)=>blocks[i]);
+}
+
 async function api(path, opts={}){
-  const r = await fetch(path, {credentials:'same-origin',
-    headers:{'Content-Type':'application/json'}, ...opts});
-  if(r.status === 401){ $('login').style.display='flex'; throw new Error('auth'); }
+  const r = await fetch(path,{credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},...opts});
+  if(r.status===401){ $('login').style.display='flex'; throw new Error('please unlock'); }
   if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText);
   return r.json();
 }
 async function login(){
+  $('lerr').textContent='';
   try{
     await api('/ui/login',{method:'POST',body:JSON.stringify({password:$('pw').value})});
-    $('login').style.display='none'; load();
+    $('login').style.display='none'; $('pw').value=''; load();
   }catch(e){ $('lerr').textContent = e.message; }
 }
-function add(role, text, cls){
-  const d = document.createElement('div');
-  d.className = 'msg ' + (cls || (role==='user'?'user':'bot'));
-  d.textContent = text;
-  $('log').appendChild(d); $('log').scrollTop = 1e9;
-  return d;
+function turn(cls){
+  const d=document.createElement('div'); d.className='turn '+cls;
+  $('log').appendChild(d); return d;
+}
+function scroll(){ $('main').scrollTop = $('main').scrollHeight; }
+function addUser(text){
+  const t=turn('user'); const b=document.createElement('div');
+  b.className='bubble'; b.textContent=text; t.appendChild(b); scroll(); return t;
+}
+function addBot(text){
+  const t=turn('bot'); const b=document.createElement('div');
+  b.className='body'; b.innerHTML=md(text); t.appendChild(b); scroll(); return t;
+}
+function addTool(text){
+  const t=turn('bot'); const b=document.createElement('div');
+  b.className='tool'; b.textContent=text; t.appendChild(b); scroll(); return t;
+}
+function addMeta(node,text){
+  const m=document.createElement('div'); m.className='meta'; m.textContent=text;
+  node.appendChild(m);
 }
 function render(msgs){
   $('log').innerHTML='';
   for(const m of msgs){
-    if(m.role==='user') add('user', m.content||'');
+    if(m.role==='user') addUser(m.content||'');
     else if(m.role==='assistant'){
-      if(m.content) add('bot', m.content);
-      if(m.tool_calls) for(const tc of m.tool_calls)
-        add('bot','▸ '+tc.function.name+'('+(tc.function.arguments||'').slice(0,160)+')','tool');
+      if(m.content) addBot(m.content);
+      (m.tool_calls||[]).forEach(tc=>
+        addTool('→ '+tc.function.name+'  '+(tc.function.arguments||'').slice(0,180)));
     }
-    else if(m.role==='tool') add('bot','← '+(m.content||'').slice(0,300),'tool');
+    else if(m.role==='tool') addTool('← '+(m.content||'').slice(0,320));
   }
+  scroll();
 }
 function stats(s){
-  $('sid').textContent = s.id.slice(0,8);
-  $('cost').textContent = (s.cost_cents||0).toFixed(2);
-  $('hit').textContent = Math.round((s.cache_hit_rate||0)*100);
+  $('cost').textContent=(s.cost_cents||0).toFixed(2);
+  $('hit').textContent=Math.round((s.cache_hit_rate||0)*100);
 }
 async function load(){
-  const s = await api('/ui/session' + (SID?('?session_id='+SID):''));
-  SID = s.id; localStorage.setItem('bridge_sid', SID);
+  const s=await api('/ui/session'+(SID?('?session_id='+SID):''));
+  SID=s.id; localStorage.setItem('bridge_sid',SID);
   render(s.messages||[]); stats(s);
 }
 function newSession(){
@@ -662,55 +844,61 @@ function newSession(){
 function busy(b){ $('send').disabled=b; $('doit').disabled=b; }
 
 async function go(mode){
-  const text = $('box').value.trim(); if(!text) return;
-  $('box').value=''; add('user', text); busy(true);
-  const base = {session_id:SID, message:text, model:$('model').value,
-                reasoning_effort:$('effort').value};
+  const text=$('box').value.trim(); if(!text) return;
+  $('box').value=''; $('box').style.height='auto'; addUser(text); busy(true);
+  const base={session_id:SID,message:text,model:setting('model'),
+              reasoning_effort:setting('effort')};
   try{
     if(mode==='chat'){
-      const r = await api('/ui/chat',{method:'POST',body:JSON.stringify(base)});
+      const r=await api('/ui/chat',{method:'POST',body:JSON.stringify(base)});
       SID=r.session_id; localStorage.setItem('bridge_sid',SID);
-      const d = add('bot', r.reply||'(empty)');
-      const m = document.createElement('div'); m.className='meta';
-      m.textContent = `chat · ${r.cost_cents}¢ · ${r.usage.cached_tokens}/${r.usage.prompt_tokens} cached`;
-      d.appendChild(m); stats(r.session);
-    } else {
-      const turns = $('turns').value;
-      const r = await api('/ui/do',{method:'POST',body:JSON.stringify({...base,
-        budget_usd: parseFloat($('budget').value)||1,
-        tool_set: $('toolset').value,
-        max_turns: turns? parseInt(turns): null})});
+      const n=addBot(r.reply||'(empty reply)');
+      addMeta(n,`${r.cost_cents}¢ · ${r.usage.cached_tokens.toLocaleString()} of `+
+        `${r.usage.prompt_tokens.toLocaleString()} tokens cached`);
+      stats(r.session);
+    }else{
+      const t=setting('turns');
+      const r=await api('/ui/do',{method:'POST',body:JSON.stringify({...base,
+        budget_usd:parseFloat(setting('budget'))||1,
+        tool_set:setting('toolset'),
+        max_turns:t?parseInt(t):null})});
       SID=r.session_id; localStorage.setItem('bridge_sid',SID);
       await poll();
     }
-  }catch(e){ add('bot','error: '+e.message); }
-  busy(false);
+  }catch(e){ addBot('**Error** — '+e.message); }
+  busy(false); scroll();
 }
 
 async function poll(){
-  $('bar').style.display='block';
+  $('bar').classList.add('on');
   for(;;){
     await new Promise(r=>setTimeout(r,1500));
-    let p; try{ p = await api('/ui/progress'); }catch(e){ break; }
-    const h = p.harness||{}, run = p.run||{};
+    let p; try{ p=await api('/ui/progress'); }catch(e){ break; }
+    const h=p.harness||{}, run=p.run||{};
     if(run.active){
-      $('bar').textContent =
-        `turn ${h.turn||0}/${h.max_turns||'?'} · ${(h.cost_cents||0).toFixed(2)}¢ of `+
+      $('bartext').textContent =
+        `turn ${h.turn||0}/${h.max_turns||'—'} · ${(h.cost_cents||0).toFixed(2)}¢ of `+
         `${(h.cost_budget_cents||0).toFixed(0)}¢ · ${h.last_tool||'thinking'}`;
-    } else {
-      $('bar').style.display='none';
-      if(run.error) add('bot','run failed: '+run.error);
+    }else{
+      $('bar').classList.remove('on');
+      if(run.error){ addBot('**Run failed** — '+run.error); break; }
       await load();
-      if(run.status && run.status!=='complete')
-        add('bot','(stopped: '+run.status+' after '+(run.turns_used||0)+' turns, '+
-          (run.cost_cents||0).toFixed(2)+'¢)','tool');
+      if(run.status && run.status!=='complete'){
+        const n=$('log').lastChild || addBot('');
+        addMeta(n,`stopped: ${run.status} · ${run.turns_used||0} turns · `+
+          `${(run.cost_cents||0).toFixed(2)}¢`);
+      }
       break;
     }
   }
 }
 
-$('box').addEventListener('keydown', e=>{
-  if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) go(e.shiftKey?'do':'chat');
+const box=$('box');
+box.addEventListener('input',()=>{
+  box.style.height='auto'; box.style.height=Math.min(box.scrollHeight,220)+'px';
+});
+box.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); go(e.metaKey||e.ctrlKey?'do':'chat'); }
 });
 load().catch(()=>{});
 </script></body></html>
