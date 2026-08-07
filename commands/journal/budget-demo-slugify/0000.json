@@ -1,0 +1,14 @@
+{
+  "turn": 0,
+  "type": "run_start",
+  "task_id": "budget-demo-slugify",
+  "timestamp": "2026-08-07T02:07:32.278624+00:00",
+  "task": "Build a small, self-contained Python utility and PROVE it works by running it.\n\n1. Commit `slugify.py` to the agent-sandbox repo (github_commit with repo='agent-sandbox'), containing a function `slugify(text)` that: lowercases the text, strips leading/trailing whitespace, replaces any run of non-alphanumeric characters with a single hyphen, and trims leading/trailing hyphens. `slugify('')` must return ''.\n2. Commit `test_slugify.py` to the same repo with pytest tests covering: a normal sentence, mixed punctuation, leading/trailing whitespace, an already-clean slug, and the empty string.\n3. Run them with run_tests (command: 'pytest -q test_slugify.py', setup: 'pip install pytest').\n4. If anything fails, fix the code, re-commit, and re-run until the tests pass.\n5. Finish with a short summary: what you built, the final test result, and the file paths.\n\nKeep it small. Do not touch any repo other than agent-sandbox.",
+  "tool_names": null,
+  "tool_set": "build",
+  "max_turns": null,
+  "cost_budget_cents": 100.0,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
