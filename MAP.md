@@ -80,6 +80,9 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-08 | console: single-flow /ui/turn confirm-gate; Haiku chat default; executor Kimi/Both | files: chat_ui.py
+- 2026-08-08 | harness advisor hook (advisor_model+advise_every) injects 2nd-model review into loop | files: agent_loop/harness.py
+- 2026-08-08 | AnthropicProvider.chat flattens tool/tool_calls turns so Claude works as chat/advisor | files: llm_gateway.py
 - 2026-08-07 | chat console at /ui: Chat (tool_choice=none) vs Do it (agent+budget); cookie auth, no bridge key in browser | files: chat_ui.py, main.py
 - 2026-08-07 | prefix caching: session-stable system prompt + verbatim history; harness takes history/system_prompt | files: agent_loop/harness.py, chat_ui.py
 - 2026-08-07 | agent_run: per-task budget via budget_usd/cost_budget_cents; max_turns default 10->100 (AGENT_DEFAULT_MAX_TURNS) so spend governs | files: agent_loop/harness.py, command_channel.py
