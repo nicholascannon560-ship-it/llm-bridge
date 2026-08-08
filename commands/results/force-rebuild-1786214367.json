@@ -1,0 +1,10 @@
+{
+  "id": "force-rebuild-1786214367",
+  "status": "ok",
+  "action": "set_env",
+  "result": {
+    "variableUpsert": true
+  },
+  "error": null,
+  "processed_at": "2026-08-08T18:39:38.729751+00:00"
+}
