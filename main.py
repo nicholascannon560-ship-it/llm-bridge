@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 import httpx
-from fastapi import Body, FastAPI, Header, HTTPException, Path, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -664,21 +664,7 @@ async def _do_commit(payload: dict[str, Any]) -> dict[str, Any]:
 @app.post("/commit", tags=["files"], summary="Create or update a file")
 async def commit_file(
     req: CommitRequest,
-    require_approval: bool = Query(False, description="Queue for approval instead of executing immediately"),
-    x_auto_approve: bool = Header(False, alias="x-auto-approve", description="Skip approval gate"),
 ) -> dict[str, Any]:
-    if require_approval and not x_auto_approve:
-        # The approval subsystem (approval_routes.py) has been removed. Rather
-        # than silently committing without the approval gate the caller asked
-        # for, refuse the request explicitly.
-        return JSONResponse(
-            status_code=501,
-            content={
-                "detail": "approval subsystem removed; require_approval is no "
-                          "longer supported. Retry with x-auto-approve to commit "
-                          "directly.",
-            }
-        )
     return await _do_commit({
         "owner": req.owner,
         "repo": req.repo,
