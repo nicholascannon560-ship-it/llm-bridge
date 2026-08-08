@@ -1,0 +1,7 @@
+{
+  "action": "set_env",
+  "name": "FORCE_BUILD_TIMESTAMP",
+  "value": "1786214367",
+  "service_id": "509d2aef-f1a5-4854-9a57-e44cf9c079a0",
+  "environment_name": "production"
+}
