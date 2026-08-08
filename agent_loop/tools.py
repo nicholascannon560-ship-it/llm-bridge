@@ -101,6 +101,33 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "github_patch",
+            "description": (
+                "Change part of an existing file by replacing an exact snippet, without "
+                "resending the whole file. PREFER THIS OVER github_commit for any edit to a "
+                "file that already exists — github_commit re-sends every byte of the file and "
+                "is far more expensive. old_string must be unique in the file: include a few "
+                "surrounding lines if the snippet appears more than once. Only the first match "
+                "is replaced. To create a new file, use github_commit instead."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "owner": {"type": "string", "description": "Repo owner"},
+                    "repo": {"type": "string", "description": "Repo name"},
+                    "path": {"type": "string", "description": "File path inside repo"},
+                    "old_string": {"type": "string", "description": "Exact text to replace, copied from the file"},
+                    "new_string": {"type": "string", "description": "Replacement text"},
+                    "message": {"type": "string", "description": "Git commit message"},
+                    "branch": {"type": "string", "description": "Branch (default: repo default)"}
+                },
+                "required": ["repo", "path", "old_string", "new_string", "message"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "github_create_repo",
             "description": (
                 "Create a NEW GitHub repository under the operator's account (owner is fixed). "
@@ -401,6 +428,7 @@ except Exception as _browser_import_err:  # pragma: no cover
 
 WRITE_TOOL_NAMES = {
     "github_commit",
+    "github_patch",
     "github_create_repo",
     "github_create_branch",
     "run_tests",
@@ -580,6 +608,105 @@ async def _tool_github_commit(args: Dict) -> Dict:
         "path": path,
         "commit_sha": data.get("commit", {}).get("sha"),
         "updated": existing_sha is not None
+    }
+
+
+def _fuzzy_replace(text: str, old: str, new: str) -> str:
+    """Fall back to whitespace-insensitive line matching, preserving the
+    indentation actually found in the file. Mirrors patch_routes._fuzzy_replace."""
+    old_lines = old.splitlines()
+    text_lines = text.splitlines()
+
+    for i in range(len(text_lines) - len(old_lines) + 1):
+        window = text_lines[i:i + len(old_lines)]
+        if all(w.strip() == o.strip() for w, o in zip(window, old_lines)):
+            indent = len(text_lines[i]) - len(text_lines[i].lstrip())
+            new_lines = []
+            for idx, line in enumerate(new.splitlines()):
+                if idx == 0:
+                    new_lines.append((" " * indent + line.lstrip()) if line.strip() else line)
+                else:
+                    new_lines.append(line)
+            return "\n".join(text_lines[:i] + new_lines + text_lines[i + len(old_lines):])
+
+    raise ValueError("fuzzy match failed")
+
+
+async def _tool_github_patch(args: Dict) -> Dict:
+    """Replace an exact snippet in an existing file. Costs the size of the edit
+    rather than the size of the file."""
+    import httpx
+    owner = args.get("owner", OWNER)
+    repo = args["repo"]
+    path = args["path"]
+    old_string = args["old_string"]
+    new_string = args["new_string"]
+    message = args["message"]
+    branch = args.get("branch")
+
+    contents_path = f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
+    params = {"ref": branch} if branch else None
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        lookup = await client.get(contents_path, headers=_github_headers(), params=params)
+
+    if lookup.status_code != 200:
+        return {"error": f"GitHub API {lookup.status_code}", "detail": lookup.text[:300]}
+
+    data = lookup.json()
+    if isinstance(data, list):
+        return {"error": f"{path} is a directory, not a file"}
+
+    existing_sha = data.get("sha")
+    try:
+        current = base64.b64decode(data.get("content", "")).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as e:
+        return {"error": f"cannot patch binary or non-UTF8 file: {e}"}
+
+    occurrences = current.count(old_string)
+    if occurrences > 1:
+        return {
+            "error": "old_string is not unique",
+            "occurrences": occurrences,
+            "hint": "Include surrounding lines so the snippet appears exactly once.",
+        }
+
+    if occurrences == 1:
+        updated = current.replace(old_string, new_string, 1)
+    else:
+        try:
+            updated = _fuzzy_replace(current, old_string, new_string)
+        except ValueError:
+            return {
+                "error": "old_string not found in file",
+                "hint": "Use github_read to copy the exact current text, then retry.",
+                "total_chars": len(current),
+            }
+
+    if updated == current:
+        return {"error": "patch would not change the file", "path": path}
+
+    payload = {
+        "message": message,
+        "content": base64.b64encode(updated.encode("utf-8")).decode("ascii"),
+        "sha": existing_sha,
+    }
+    if branch:
+        payload["branch"] = branch
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.put(contents_path, headers=_github_headers(), json=payload)
+
+    if resp.status_code not in (200, 201):
+        return {"error": f"GitHub API {resp.status_code}", "detail": resp.text[:300]}
+
+    result = resp.json()
+    return {
+        "patched": True,
+        "path": path,
+        "commit_sha": result.get("commit", {}).get("sha"),
+        "chars_before": len(current),
+        "chars_after": len(updated),
     }
 
 
@@ -956,6 +1083,7 @@ async def _tool_run_tests(args: Dict) -> Dict:
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "github_commit": _tool_github_commit,
+    "github_patch": _tool_github_patch,
     "github_create_repo": _tool_github_create_repo,
     "github_create_branch": _tool_github_create_branch,
     "railway_redeploy": _tool_railway_redeploy,

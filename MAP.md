@@ -80,6 +80,7 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-08 | agent loop: added github_patch (old_string/new_string edit) so the agent stops resending whole files on every edit; registered in WRITE_TOOL_NAMES so browse+write stays blocked | files: agent_loop/tools.py
 - 2026-08-08 | RECOVERY: boot fixed — dropped deleted approval_routes import + repaired chat_ui try/except SyntaxError; patch_router still mounted; approval subsystem fully removed (/commit no longer takes require_approval/x-auto-approve, commits directly) | files: main.py
 - 2026-08-08 | Phase 2: AnthropicProvider tool-calling -> Claude executors (Sonnet/Opus); UI Executor picker Sonnet/Opus/Kimi/Both | files: llm_gateway.py, chat_ui.py
 - 2026-08-08 | console: single-flow /ui/turn confirm-gate; Haiku chat default; executor Kimi/Both | files: chat_ui.py
