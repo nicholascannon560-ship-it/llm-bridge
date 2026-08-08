@@ -1153,7 +1153,9 @@ textarea::placeholder{color:var(--faint)}
               <button data-v="kimi-k3">Kimi K3</button></div></div>
           <div class="group"><span class="glabel">Executor</span>
             <div class="seg" id="executor">
-              <button data-v="kimi" class="on">Kimi K3</button>
+              <button data-v="claude-sonnet-5" class="on">Sonnet</button>
+              <button data-v="claude-opus-5">Opus</button>
+              <button data-v="kimi-k3">Kimi K3</button>
               <button data-v="both">Both</button></div></div>
         </div>
         <div class="composer">
@@ -1192,17 +1194,19 @@ const providerFor = m => m.startsWith('claude') ? 'anthropic'
 function chatCfg(){ const m=setting('chatmodel'); return {provider:providerFor(m), model:m}; }
 
 /* Executor picker -> executor model + optional advisor.
-   kimi  = Kimi K3 runs the loop alone.
-   both  = Kimi K3 executes, Claude advises every few turns and on errors. */
+   A single model id runs the loop alone; "both" is the hash-it-out mode:
+   Sonnet executes and Opus advises every few turns and on errors. */
+const EXEC_LABEL = {'claude-sonnet-5':'Sonnet','claude-opus-5':'Opus','kimi-k3':'Kimi K3'};
 function execConfig(){
-  if(setting('executor')==='both'){
-    return {provider:'moonshot', model:'kimi-k3',
+  const e = setting('executor');
+  if(e==='both'){
+    return {provider:'anthropic', model:'claude-sonnet-5',
             advisor_provider:'anthropic', advisor_model:'claude-opus-5',
-            advise_every:3, label:'Kimi K3 + Claude advisor'};
+            advise_every:3, label:'Sonnet + Opus advisor'};
   }
-  return {provider:'moonshot', model:'kimi-k3',
+  return {provider:providerFor(e), model:e,
           advisor_provider:null, advisor_model:null, advise_every:0,
-          label:'Kimi K3'};
+          label:EXEC_LABEL[e]||e};
 }
 
 /* minimal markdown — escape first, so model output can never inject html */

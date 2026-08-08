@@ -322,24 +322,158 @@ class AnthropicProvider(LLMProvider):
             merged = [{"role": "user", "content": "Continue."}]
         return "\n\n".join(system_parts), merged
 
+    @staticmethod
+    def _to_anthropic_tools(tools):
+        """OpenAI tool schema -> Anthropic tool schema.
+
+        OpenAI wraps each tool as {"type":"function","function":{name,
+        description, parameters}}. Anthropic wants {name, description,
+        input_schema}. Tolerates an already-unwrapped {name,...} too.
+        """
+        out = []
+        for t in tools or []:
+            fn = t.get("function", t)
+            out.append({
+                "name": fn.get("name"),
+                "description": fn.get("description", "") or "",
+                "input_schema": fn.get("parameters") or {"type": "object", "properties": {}},
+            })
+        return out
+
+    @staticmethod
+    def _to_anthropic_tool_messages(messages):
+        """Convert an OpenAI-style transcript to Anthropic content-block turns,
+        PRESERVING tool calls so a Claude model can drive the agent loop.
+
+        Mapping: system -> separate; assistant.content/tool_calls -> a single
+        assistant turn with text + tool_use blocks; role="tool" -> a user turn
+        with a tool_result block. Consecutive same-role turns are merged (a
+        run's multiple tool results collapse into one user turn), which
+        Anthropic requires.
+
+        Then a repair pass makes the pairing valid no matter how the history
+        was trimmed, because Anthropic 400s otherwise: tool_result blocks whose
+        id was not declared by the immediately preceding assistant turn are
+        dropped; assistant tool_use ids with no following result get a
+        synthetic "(result unavailable)"; empty turns and leading assistant
+        turns are removed.
+        """
+        system_parts = []
+        out = []  # [{"role", "content":[blocks]}]
+
+        def add(role, blocks):
+            if out and out[-1]["role"] == role:
+                out[-1]["content"].extend(blocks)
+            else:
+                out.append({"role": role, "content": list(blocks)})
+
+        for m in messages:
+            role = m.role
+            content = m.content or ""
+            if role == "system":
+                if content:
+                    system_parts.append(content)
+            elif role == "tool":
+                add("user", [{
+                    "type": "tool_result",
+                    "tool_use_id": m.tool_call_id or "",
+                    "content": content or "(no output)",
+                }])
+            elif role == "assistant":
+                blocks = []
+                if content:
+                    blocks.append({"type": "text", "text": content})
+                for tc in (m.tool_calls or []):
+                    fn = (tc or {}).get("function", {})
+                    try:
+                        args = json.loads(fn.get("arguments") or "{}")
+                    except Exception:
+                        args = {}
+                    blocks.append({
+                        "type": "tool_use",
+                        "id": tc.get("id") or "",
+                        "name": fn.get("name", ""),
+                        "input": args,
+                    })
+                add("assistant", blocks or [{"type": "text", "text": "(no output)"}])
+            else:  # user or unknown
+                add("user", [{"type": "text", "text": content or "(empty)"}])
+
+        # Repair tool_use/tool_result pairing.
+        for i, turn in enumerate(out):
+            if turn["role"] != "assistant":
+                continue
+            use_ids = [b["id"] for b in turn["content"] if b.get("type") == "tool_use"]
+            if not use_ids:
+                continue
+            nxt = out[i + 1] if i + 1 < len(out) and out[i + 1]["role"] == "user" else None
+            seen = set()
+            if nxt:
+                kept = []
+                for b in nxt["content"]:
+                    if b.get("type") == "tool_result":
+                        if b["tool_use_id"] in use_ids and b["tool_use_id"] not in seen:
+                            seen.add(b["tool_use_id"])
+                            kept.append(b)
+                        # drop orphan / duplicate tool_result
+                    else:
+                        kept.append(b)
+                nxt["content"] = kept
+            missing = [uid for uid in use_ids if uid not in seen]
+            if missing:
+                synth = [{"type": "tool_result", "tool_use_id": uid,
+                          "content": "(result unavailable)"} for uid in missing]
+                if nxt:
+                    nxt["content"] = synth + nxt["content"]
+                else:
+                    out.insert(i + 1, {"role": "user", "content": synth})
+
+        # Drop any tool_result that still has no declaring assistant right before
+        # it (e.g. a tool turn at the very start), then drop emptied turns and
+        # leading assistant turns.
+        for i, turn in enumerate(out):
+            if turn["role"] == "user":
+                prev = out[i - 1] if i > 0 else None
+                prev_ids = ([b["id"] for b in prev["content"] if b.get("type") == "tool_use"]
+                            if prev and prev["role"] == "assistant" else [])
+                turn["content"] = [b for b in turn["content"]
+                                   if b.get("type") != "tool_result" or b["tool_use_id"] in prev_ids]
+        out = [t for t in out if t["content"]]
+        while out and out[0]["role"] == "assistant":
+            out.pop(0)
+        if not out:
+            out = [{"role": "user", "content": [{"type": "text", "text": "Continue."}]}]
+        return "\n\n".join(system_parts), out
+
     async def chat(self, req: ChatRequest) -> ChatResponse:
         start = time.time()
 
-        # Convert messages to Anthropic format (handles tool/tool_calls turns).
-        system_msg, user_assistant_msgs = self._to_anthropic_messages(req.messages)
+        # Tools are honored only when the caller actually wants them. Chat and
+        # advisor calls pass tool_choice="none" (schemas sent only to share a
+        # cache prefix), and must stay on the robust text-flatten path.
+        use_tools = bool(req.tools) and req.tool_choice != "none"
 
         payload = {
             "model": req.model or DEFAULT_MODELS["anthropic"],
             "max_tokens": req.max_tokens,
-            "messages": user_assistant_msgs,
         }
-        # claude-sonnet-5 only accepts temperature=1.0; omit otherwise
-        if req.temperature == 1.0:
+        if req.temperature == 1.0:  # some Claude models only accept 1.0
             payload["temperature"] = 1.0
+
+        if use_tools:
+            system_msg, msgs = self._to_anthropic_tool_messages(req.messages)
+            payload["messages"] = msgs
+            payload["tools"] = self._to_anthropic_tools(req.tools)
+            tc = req.tool_choice
+            payload["tool_choice"] = ({"type": "any"} if tc in ("required", "any")
+                                      else {"type": "auto"})
+        else:
+            system_msg, msgs = self._to_anthropic_messages(req.messages)
+            payload["messages"] = msgs
         if system_msg:
             payload["system"] = system_msg
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             r = await client.post(
                 self.BASE_URL,
                 headers={
@@ -353,20 +487,46 @@ class AnthropicProvider(LLMProvider):
             data = r.json()
 
         latency = (time.time() - start) * 1000
-        content = data.get("content", [{}])[0].get("text", "") if data.get("content") else ""
+
+        # Response content is a list of blocks: text and/or tool_use.
+        text_parts, tool_calls = [], []
+        for b in data.get("content") or []:
+            if b.get("type") == "text":
+                text_parts.append(b.get("text", ""))
+            elif b.get("type") == "tool_use":
+                tool_calls.append({
+                    "id": b.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": b.get("name"),
+                        "arguments": json.dumps(b.get("input") or {}),
+                    },
+                })
+        content = "".join(text_parts)
+
+        stop = data.get("stop_reason")
+        finish_reason = ("tool_calls" if stop == "tool_use"
+                         else "length" if stop == "max_tokens"
+                         else "stop")
+
         usage = data.get("usage", {})
         prompt_tokens = usage.get("input_tokens", 0)
         completion_tokens = usage.get("output_tokens", 0)
+        cached_tokens = usage.get("cache_read_input_tokens", 0)
         cost = self.estimate_cost(payload["model"], prompt_tokens, completion_tokens)
 
         return ChatResponse(
             provider="anthropic",
             model=payload["model"],
             content=content,
-            usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens},
+            usage={"prompt_tokens": prompt_tokens,
+                   "completion_tokens": completion_tokens,
+                   "cached_tokens": cached_tokens},
             cost_cents=cost,
             latency_ms=latency,
             timestamp=datetime.now(timezone.utc).isoformat(),
+            tool_calls=tool_calls or None,
+            finish_reason=finish_reason,
         )
 
     async def chat_stream(self, req: ChatRequest) -> AsyncGenerator[str, None]:
