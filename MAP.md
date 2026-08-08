@@ -80,6 +80,7 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-08 | Phase 2: AnthropicProvider tool-calling -> Claude executors (Sonnet/Opus); UI Executor picker Sonnet/Opus/Kimi/Both | files: llm_gateway.py, chat_ui.py
 - 2026-08-08 | console: single-flow /ui/turn confirm-gate; Haiku chat default; executor Kimi/Both | files: chat_ui.py
 - 2026-08-08 | harness advisor hook (advisor_model+advise_every) injects 2nd-model review into loop | files: agent_loop/harness.py
 - 2026-08-08 | AnthropicProvider.chat flattens tool/tool_calls turns so Claude works as chat/advisor | files: llm_gateway.py
