@@ -33,7 +33,6 @@ from llm_routes import llm_router
 from command_channel import process_pending_commands
 from kml_watchdog import watchdog_worker, watchdog_router
 from patch_routes import router as patch_router
-from approval_routes import router as approval_router
 
 GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -130,12 +129,11 @@ except Exception as _agent_routes_err:  # pragma: no cover
 try:
     from chat_ui import ui_router
     app.include_router(ui_router)
-
-# Include patch and approval routers
-app.include_router(patch_router)
-app.include_router(approval_router)
 except Exception as _ui_routes_err:  # pragma: no cover
     print(f"[chat_ui] routes not mounted: {_ui_routes_err}", flush=True)
+
+# Include patch router
+app.include_router(patch_router)
 
 
 # --------------------------------------------------------------------------- #
@@ -670,26 +668,15 @@ async def commit_file(
     x_auto_approve: bool = Header(False, alias="x-auto-approve", description="Skip approval gate"),
 ) -> dict[str, Any]:
     if require_approval and not x_auto_approve:
-        from approval_routes import queue_for_approval
-        aid = queue_for_approval(
-            action="commit",
-            payload={
-                "owner": req.owner,
-                "repo": req.repo,
-                "path": req.path,
-                "content": req.content,
-                "message": req.message,
-                "branch": req.branch,
-            },
-            description=f"Commit {req.path} to {req.owner}/{req.repo} on {req.branch or 'default'}"
-        )
+        # The approval subsystem (approval_routes.py) has been removed. Rather
+        # than silently committing without the approval gate the caller asked
+        # for, refuse the request explicitly.
         return JSONResponse(
-            status_code=202,
+            status_code=501,
             content={
-                "detail": "approval required",
-                "approval_id": aid,
-                "approve_url": f"/approvals/{aid}/approve",
-                "reject_url": f"/approvals/{aid}/reject",
+                "detail": "approval subsystem removed; require_approval is no "
+                          "longer supported. Retry with x-auto-approve to commit "
+                          "directly.",
             }
         )
     return await _do_commit({
