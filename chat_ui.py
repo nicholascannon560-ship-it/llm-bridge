@@ -76,6 +76,11 @@ AUTO_SMALL_TURNS = int(os.getenv("UI_AUTO_SMALL_TURNS", "8"))
 # from the client per message.
 CHAT_PROVIDER = os.getenv("UI_CHAT_PROVIDER", "anthropic")
 CHAT_MODEL = os.getenv("UI_CHAT_MODEL", "claude-haiku-4-5-20251001")
+# The router/classifier is a tiny 8-token call on every message. Keep it on a
+# cheap, funded model — NOT Kimi, which needs a Moonshot balance and would make
+# routing fail whenever that runs dry.
+CLASSIFY_PROVIDER = os.getenv("UI_CLASSIFY_PROVIDER", "anthropic")
+CLASSIFY_MODEL = os.getenv("UI_CLASSIFY_MODEL", "claude-haiku-4-5-20251001")
 EXEC_PROVIDER = os.getenv("UI_EXEC_PROVIDER", "moonshot")
 EXEC_MODEL = os.getenv("UI_EXEC_MODEL", "kimi-k3")
 ADVISOR_PROVIDER = os.getenv("UI_ADVISOR_PROVIDER", "anthropic")
@@ -481,8 +486,8 @@ async def _classify(message: str, history: List[Dict[str, Any]]) -> str:
     try:
         resp = await get_router().chat(
             ChatRequest(
-                provider="moonshot",
-                model="kimi-k3",
+                provider=CLASSIFY_PROVIDER,
+                model=CLASSIFY_MODEL,
                 messages=[ChatMessage(role="user", content=prompt)],
                 max_tokens=8,
                 temperature=0.7,
@@ -787,6 +792,10 @@ class TurnRequestBody(BaseModel):
     session_id: Optional[str] = None
     message: str
     reasoning_effort: str = "low"
+    # Chat model for this message (used only when the turn routes to CHAT).
+    # None falls back to the server default (Haiku).
+    provider: Optional[str] = None
+    model: Optional[str] = None
 
 
 @ui_router.post("/ui/turn")
@@ -808,7 +817,8 @@ async def ui_turn(body: TurnRequestBody = Body(...)):
     if route == "CHAT":
         chat_body = ChatRequestBody(
             session_id=s.id, message=body.message,
-            model=CHAT_MODEL, provider=CHAT_PROVIDER,
+            model=body.model or CHAT_MODEL,
+            provider=body.provider or CHAT_PROVIDER,
             reasoning_effort=body.reasoning_effort,
         )
         out = await ui_chat(chat_body)
@@ -1135,6 +1145,12 @@ textarea::placeholder{color:var(--faint)}
             <div class="seg" id="turns">
               <button data-v="" class="on">auto</button><button data-v="10">10</button>
               <button data-v="25">25</button><button data-v="100">100</button></div></div>
+          <div class="group"><span class="glabel">Chat</span>
+            <div class="seg" id="chatmodel">
+              <button data-v="claude-haiku-4-5-20251001" class="on">Haiku</button>
+              <button data-v="claude-sonnet-5">Sonnet</button>
+              <button data-v="claude-opus-5">Opus</button>
+              <button data-v="kimi-k3">Kimi K3</button></div></div>
           <div class="group"><span class="glabel">Executor</span>
             <div class="seg" id="executor">
               <button data-v="kimi" class="on">Kimi K3</button>
@@ -1168,6 +1184,12 @@ document.querySelectorAll('.seg').forEach(seg=>{
   });
 });
 const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
+
+/* Provider is inferred from the model id, so each role needs only one picker. */
+const providerFor = m => m.startsWith('claude') ? 'anthropic'
+  : m.startsWith('kimi') ? 'moonshot'
+  : m.startsWith('gpt') ? 'openai' : 'anthropic';
+function chatCfg(){ const m=setting('chatmodel'); return {provider:providerFor(m), model:m}; }
 
 /* Executor picker -> executor model + optional advisor.
    kimi  = Kimi K3 runs the loop alone.
@@ -1322,9 +1344,6 @@ function newSession(){
 function busy(b){ $('send').disabled=b; }
 
 /* ── send ───────────────────────────────────────────────── */
-/* The cheap chat model, matched to the server's UI_CHAT_* defaults. */
-const CHAT = {provider:'anthropic', model:'claude-haiku-4-5-20251001'};
-
 async function send(){
   const text=$('box').value.trim(); if(!text) return;
   $('box').value=''; $('box').style.height='auto';
@@ -1332,8 +1351,10 @@ async function send(){
   const think = addThinking();
   busy(true);
   try{
+    const cc=chatCfg();
     const r=await api('/ui/turn',{method:'POST',body:JSON.stringify({
-      session_id:SID, message:text, reasoning_effort:setting('effort')})});
+      session_id:SID, message:text, reasoning_effort:setting('effort'),
+      provider:cc.provider, model:cc.model})});
     SID=r.session_id; localStorage.setItem('bridge_sid',SID);
     think.remove();
     if(r.routed==='chat'){
@@ -1392,9 +1413,10 @@ function renderProposal(text, r){
     t.remove();
     const think=addThinking(); busy(true);
     try{
+      const cc=chatCfg();
       const cr=await api('/ui/chat',{method:'POST',body:JSON.stringify({
         session_id:SID, message:text,
-        provider:CHAT.provider, model:CHAT.model,
+        provider:cc.provider, model:cc.model,
         reasoning_effort:setting('effort')})});
       think.remove();
       SID=cr.session_id; localStorage.setItem('bridge_sid',SID);
