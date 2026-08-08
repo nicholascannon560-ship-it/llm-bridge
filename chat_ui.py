@@ -1036,7 +1036,8 @@ footer{padding:6px 20px 20px;background:linear-gradient(transparent,var(--bg) 22
 .dock{max-width:46rem;margin:0 auto}
 .settings{display:flex;flex-wrap:wrap;gap:14px;padding:0 2px 10px}
 .group{display:flex;align-items:center;gap:7px}
-.glabel{font-size:11px;color:var(--faint);letter-spacing:.03em}
+.glabel{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.04em;
+  text-transform:uppercase}
 .seg{display:flex;background:var(--raised);border:1px solid var(--line);
   border-radius:9px;padding:2px;gap:2px}
 .seg button{
@@ -1090,7 +1091,11 @@ textarea::placeholder{color:var(--faint)}
 .err{color:#c0392b;font-size:12.5px;min-height:1em}
 @media (prefers-color-scheme:dark){.err{color:#f08a7a}}
 @media (max-width:640px){
-  .settings{gap:9px}.glabel{display:none}
+  .settings{gap:12px}
+  /* Stack each control's label above its buttons and keep it visible — hiding
+     labels on mobile made the two model rows indistinguishable. */
+  .group{flex-direction:column;align-items:flex-start;gap:4px;flex:1 1 44%}
+  .seg{width:100%}
   #log{padding:20px 14px 4px}footer{padding:6px 14px 16px}
 }
 </style></head><body>
