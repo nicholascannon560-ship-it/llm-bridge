@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 import httpx
-from fastapi import Body, FastAPI, HTTPException, Path, Query, Request
+from fastapi import Body, FastAPI, Header, HTTPException, Path, Query, Request
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -32,6 +32,8 @@ from railway_extension import router as railway_router, set_service_variable
 from llm_routes import llm_router
 from command_channel import process_pending_commands
 from kml_watchdog import watchdog_worker, watchdog_router
+from patch_routes import router as patch_router
+from approval_routes import router as approval_router
 
 GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -128,6 +130,10 @@ except Exception as _agent_routes_err:  # pragma: no cover
 try:
     from chat_ui import ui_router
     app.include_router(ui_router)
+
+# Include patch and approval routers
+app.include_router(patch_router)
+app.include_router(approval_router)
 except Exception as _ui_routes_err:  # pragma: no cover
     print(f"[chat_ui] routes not mounted: {_ui_routes_err}", flush=True)
 
@@ -606,46 +612,94 @@ async def create_issue_comment(
     }
 
 
-@app.post("/commit", tags=["files"], summary="Create or update a file")
-async def commit_file(req: CommitRequest) -> dict[str, Any]:
-    contents_path = f"/repos/{req.owner}/{req.repo}/contents/{req.path}"
+async def _do_commit(payload: dict[str, Any]) -> dict[str, Any]:
+    """Execute a GitHub file commit. Shared by /commit and /approvals/{id}/approve."""
+    owner = payload["owner"]
+    repo = payload["repo"]
+    path = payload["path"]
+    content = payload["content"]
+    message = payload["message"]
+    branch = payload.get("branch")
+    sha = payload.get("sha")
 
-    existing_sha: Optional[str] = None
-    params = {"ref": req.branch} if req.branch else None
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        lookup = await client.get(
-            f"{GITHUB_API}{contents_path}",
-            headers=_github_headers(),
-            params=params,
-        )
-    if lookup.status_code == 200:
-        existing_sha = lookup.json().get("sha")
-    elif lookup.status_code not in (404,):
-        try:
-            detail = lookup.json()
-        except ValueError:
-            detail = lookup.text
-        raise HTTPException(status_code=lookup.status_code, detail=detail)
+    contents_path = f"/repos/{owner}/{repo}/contents/{path}"
 
-    payload: dict[str, Any] = {
-        "message": req.message,
-        "content": base64.b64encode(req.content.encode("utf-8")).decode("ascii"),
+    existing_sha: Optional[str] = sha
+    if existing_sha is None:
+        params = {"ref": branch} if branch else None
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            lookup = await client.get(
+                f"{GITHUB_API}{contents_path}",
+                headers=_github_headers(),
+                params=params,
+            )
+        if lookup.status_code == 200:
+            existing_sha = lookup.json().get("sha")
+        elif lookup.status_code not in (404,):
+            try:
+                detail = lookup.json()
+            except ValueError:
+                detail = lookup.text
+            raise HTTPException(status_code=lookup.status_code, detail=detail)
+
+    commit_payload: dict[str, Any] = {
+        "message": message,
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
     }
-    if req.branch:
-        payload["branch"] = req.branch
+    if branch:
+        commit_payload["branch"] = branch
     if existing_sha:
-        payload["sha"] = existing_sha
+        commit_payload["sha"] = existing_sha
 
-    response = await github_request("PUT", contents_path, json=payload)
+    response = await github_request("PUT", contents_path, json=commit_payload)
     data = response.json()
     return {
         "committed": True,
-        "path": req.path,
+        "path": path,
         "commit_sha": data.get("commit", {}).get("sha"),
         "content_sha": data.get("content", {}).get("sha"),
         "html_url": data.get("content", {}).get("html_url"),
         "updated": existing_sha is not None,
     }
+
+
+@app.post("/commit", tags=["files"], summary="Create or update a file")
+async def commit_file(
+    req: CommitRequest,
+    require_approval: bool = Query(False, description="Queue for approval instead of executing immediately"),
+    x_auto_approve: bool = Header(False, alias="x-auto-approve", description="Skip approval gate"),
+) -> dict[str, Any]:
+    if require_approval and not x_auto_approve:
+        from approval_routes import queue_for_approval
+        aid = queue_for_approval(
+            action="commit",
+            payload={
+                "owner": req.owner,
+                "repo": req.repo,
+                "path": req.path,
+                "content": req.content,
+                "message": req.message,
+                "branch": req.branch,
+            },
+            description=f"Commit {req.path} to {req.owner}/{req.repo} on {req.branch or 'default'}"
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "detail": "approval required",
+                "approval_id": aid,
+                "approve_url": f"/approvals/{aid}/approve",
+                "reject_url": f"/approvals/{aid}/reject",
+            }
+        )
+    return await _do_commit({
+        "owner": req.owner,
+        "repo": req.repo,
+        "path": req.path,
+        "content": req.content,
+        "message": req.message,
+        "branch": req.branch,
+    })
 
 
 @app.get(
