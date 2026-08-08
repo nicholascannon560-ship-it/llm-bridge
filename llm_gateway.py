@@ -260,17 +260,73 @@ class AnthropicProvider(LLMProvider):
 
     BASE_URL = "https://api.anthropic.com/v1/messages"
 
+    @staticmethod
+    def _to_anthropic_messages(messages):
+        """Flatten an OpenAI-style message list into Anthropic's format.
+
+        Anthropic accepts only `user`/`assistant` turns (system is a separate
+        field) and rejects a `tool` role outright. The agent loop's transcript
+        is full of `tool` results and assistant turns that carry `tool_calls`
+        with empty text — feeding those to Anthropic raw is a 400. This does
+        NOT implement tool calling (that is a separate change); it makes a
+        Claude model usable as a chat model or an advisor over a transcript it
+        did not itself produce:
+          - system  -> returned separately
+          - assistant with tool_calls -> text plus a short note of what it called
+          - tool     -> a user turn carrying the tool result
+        Consecutive same-role turns are merged and the list is forced to start
+        with `user`, both of which Anthropic requires.
+        """
+        system_parts = []
+        flat = []  # list of (role, text)
+        for m in messages:
+            role = m.role
+            content = m.content or ""
+            if role == "system":
+                if content:
+                    system_parts.append(content)
+                continue
+            if role == "tool":
+                flat.append(("user", f"[tool result] {content}"))
+                continue
+            if role == "assistant":
+                note = ""
+                if getattr(m, "tool_calls", None):
+                    names = []
+                    for tc in m.tool_calls:
+                        fn = (tc or {}).get("function", {})
+                        if fn.get("name"):
+                            names.append(fn["name"])
+                    if names:
+                        note = f"[called tools: {', '.join(names)}]"
+                text = (content + ("\n" + note if note else "")).strip()
+                flat.append(("assistant", text or note or "[no output]"))
+                continue
+            # user or anything else
+            flat.append(("user", content))
+
+        # Drop leading assistant turns: Anthropic must start with user.
+        while flat and flat[0][0] == "assistant":
+            flat.pop(0)
+
+        merged = []
+        for role, text in flat:
+            if not text:
+                continue
+            if merged and merged[-1]["role"] == role:
+                merged[-1]["content"] += "\n\n" + text
+            else:
+                merged.append({"role": role, "content": text})
+
+        if not merged:
+            merged = [{"role": "user", "content": "Continue."}]
+        return "\n\n".join(system_parts), merged
+
     async def chat(self, req: ChatRequest) -> ChatResponse:
         start = time.time()
 
-        # Convert messages to Anthropic format
-        system_msg = ""
-        user_assistant_msgs = []
-        for m in req.messages:
-            if m.role == "system":
-                system_msg = m.content
-            else:
-                user_assistant_msgs.append({"role": m.role, "content": m.content})
+        # Convert messages to Anthropic format (handles tool/tool_calls turns).
+        system_msg, user_assistant_msgs = self._to_anthropic_messages(req.messages)
 
         payload = {
             "model": req.model or DEFAULT_MODELS["anthropic"],

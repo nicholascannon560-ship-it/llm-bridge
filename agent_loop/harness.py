@@ -83,6 +83,9 @@ HISTORY_TOKEN_BUDGET = int(os.environ.get("AGENT_HISTORY_TOKEN_BUDGET", "120000"
 # Reserve for the wrap-up call when a budget/turn/context stop fires: the run
 # ends with a written summary of what was found instead of a bare error line.
 WRAP_UP_MAX_TOKENS = int(os.environ.get("AGENT_WRAP_UP_MAX_TOKENS", "2048"))
+# Completion cap for one advisor consult. Kept modest: the advisor writes a
+# short critique and next step, not an essay, and every call is billed.
+ADVISOR_MAX_TOKENS = int(os.environ.get("AGENT_ADVISOR_MAX_TOKENS", "1024"))
 # Estimated marginal cost of one more prompt token, in cents. Used only as a
 # floor for the next-turn projection; the real guard is the observed cost of
 # the previous turn (see _projected_next_cost_cents), because a provider can
@@ -165,6 +168,9 @@ class AgentHarness:
         cost_budget_cents: Optional[float] = None,
         history: Optional[List[Dict[str, Any]]] = None,
         system_prompt: Optional[str] = None,
+        advisor_provider: Optional[str] = None,
+        advisor_model: Optional[str] = None,
+        advise_every: int = 0,
     ):
         self.task = task
         # Prior conversation, replayed verbatim ahead of the new task. Chat and
@@ -206,6 +212,16 @@ class AgentHarness:
         # is not rate-limited and carries only the turn, not the transcript —
         # the journal is append-only, so each entry must stand alone.
         self.on_turn = on_turn
+        # Advisor: a SECOND model (e.g. Claude) that reviews the executor's
+        # work and feeds guidance back into the loop. It never runs tools —
+        # it reads the transcript and answers in text, which is injected as a
+        # user turn so the executor sees it next call. Off unless both a model
+        # and a cadence are given. Every advisor call is billed against the
+        # same cost budget, and any failure is swallowed: the advisor can only
+        # help the run, never take it down.
+        self.advisor_provider = advisor_provider
+        self.advisor_model = advisor_model
+        self.advise_every = int(advise_every or 0)
         self.memory = MemoryStore(path=memory_path)
         self.task_id = task_id or f"agent-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
@@ -445,6 +461,19 @@ Rules:
                 except Exception as e:
                     print(f"[agent_loop] checkpoint error: {e}", flush=True)
 
+            # Advisor consult: on a fixed cadence, and immediately whenever a
+            # whole turn's tool calls all errored (the "stuck" signal). The
+            # advice lands as a user turn before the next executor call.
+            if self.advisor_model and self.advise_every:
+                all_errored = bool(tool_results) and all(
+                    isinstance(r, dict) and "error" in r for r in tool_results
+                )
+                if all_errored:
+                    await self._consult_advisor(turn, "every tool call this turn errored")
+                elif turn % self.advise_every == 0:
+                    await self._consult_advisor(
+                        turn, f"scheduled review every {self.advise_every} turns")
+
         else:
             status = "max_turns_reached"
             final_answer = await self._wrap_up(
@@ -536,6 +565,75 @@ Rules:
         except Exception as e:
             print(f"[agent_loop] wrap-up call failed: {e}", flush=True)
         return stop_reason
+
+    async def _consult_advisor(self, turn: int, reason: str) -> None:
+        """Ask the advisor model to review the work so far and inject its
+        guidance back into the loop.
+
+        The advisor sees the same transcript the executor built but is given a
+        reviewer's brief and NO tools — it cannot act, only advise. Its answer
+        is appended as a user turn prefixed so the executor knows it came from
+        the advisor, not the operator. Best-effort throughout: a slow or failing
+        advisor must never stall or kill the executor's run.
+        """
+        if not (self.advisor_model and BRIDGE_MODE):
+            return
+        provider = self.advisor_provider or "anthropic"
+        try:
+            brief = (
+                "You are the ADVISOR reviewing another agent's work on the task "
+                "below. You cannot use tools — do not attempt to. Read the "
+                "transcript so far and give the executor concrete, specific "
+                "guidance: name any mistake or risk you see, confirm what is "
+                "going well, and state the single best next step. Be brief and "
+                f"direct.\n\n(Consult reason: {reason}.)"
+            )
+            advisor_messages = list(self.messages) + [
+                {"role": "user", "content": brief}
+            ]
+            chat_messages = [
+                ChatMessage(
+                    role=m["role"],
+                    content=m.get("content"),
+                    tool_calls=m.get("tool_calls"),
+                    tool_call_id=m.get("tool_call_id"),
+                )
+                for m in advisor_messages
+            ]
+            resp = await get_router().chat(ChatRequest(
+                provider=provider,
+                model=self.advisor_model,
+                messages=chat_messages,
+                max_tokens=ADVISOR_MAX_TOKENS,
+                temperature=1.0,
+                tools=None,
+                tool_choice="none",
+                reasoning_effort="low",
+            ))
+            self.total_cost_cents += resp.cost_cents or 0.0
+            usage = resp.usage or {}
+            self.total_tokens["prompt"] += usage.get("prompt_tokens", 0)
+            self.total_tokens["completion"] += usage.get("completion_tokens", 0)
+            self.total_tokens["cached"] += usage.get("cached_tokens", 0)
+            advice = (resp.content or "").strip()
+            if advice:
+                self.messages.append({
+                    "role": "user",
+                    "content": (
+                        f"[ADVISOR — {provider}/{self.advisor_model}]\n{advice}\n\n"
+                        "Consider this guidance, then continue the task."
+                    ),
+                })
+                self._record({
+                    "turn": turn,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "type": "advisor",
+                    "reason": reason,
+                    "advice_preview": advice[:400],
+                    "advisor": f"{provider}/{self.advisor_model}",
+                })
+        except Exception as e:
+            print(f"[agent_loop] advisor consult failed: {e}", flush=True)
 
     def _record(self, turn_record: Dict[str, Any]) -> None:
         """Append a turn to the transcript and journal it.
@@ -677,6 +775,9 @@ async def run_agent(
     cost_budget_cents: Optional[float] = None,
     history: Optional[List[Dict[str, Any]]] = None,
     system_prompt: Optional[str] = None,
+    advisor_provider: Optional[str] = None,
+    advisor_model: Optional[str] = None,
+    advise_every: int = 0,
 ) -> Dict[str, Any]:
     """One-shot agent run. Creates a harness, runs it, returns result."""
     harness = AgentHarness(
@@ -697,5 +798,8 @@ async def run_agent(
         cost_budget_cents=cost_budget_cents,
         history=history,
         system_prompt=system_prompt,
+        advisor_provider=advisor_provider,
+        advisor_model=advisor_model,
+        advise_every=advise_every,
     )
     return await harness.run()

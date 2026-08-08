@@ -71,6 +71,18 @@ _MIRROR_ENABLED = os.getenv("UI_SESSION_MIRROR", "on").lower() not in ("off", "0
 AUTO_SMALL_BUDGET_USD = float(os.getenv("UI_AUTO_SMALL_BUDGET_USD", "0.15"))
 AUTO_SMALL_TURNS = int(os.getenv("UI_AUTO_SMALL_TURNS", "8"))
 
+# Default model roles for the simplified console. Chat is cheap and fast;
+# execution defaults to Kimi; "Both" adds Claude as the advisor. All overridable
+# from the client per message.
+CHAT_PROVIDER = os.getenv("UI_CHAT_PROVIDER", "anthropic")
+CHAT_MODEL = os.getenv("UI_CHAT_MODEL", "claude-haiku-4-5-20251001")
+EXEC_PROVIDER = os.getenv("UI_EXEC_PROVIDER", "moonshot")
+EXEC_MODEL = os.getenv("UI_EXEC_MODEL", "kimi-k3")
+ADVISOR_PROVIDER = os.getenv("UI_ADVISOR_PROVIDER", "anthropic")
+ADVISOR_MODEL = os.getenv("UI_ADVISOR_MODEL", "claude-opus-5")
+# How often (in turns) the advisor reviews the executor in "Both" mode.
+ADVISE_EVERY = int(os.getenv("UI_ADVISE_EVERY", "3"))
+
 _DIRTY: set = set()
 _DIRTY_LOCK = threading.Lock()
 _MIRROR_LIST_CACHE: Dict[str, Any] = {"at": 0.0, "data": []}
@@ -428,6 +440,12 @@ class DoRequestBody(BaseModel):
     max_turns: Optional[int] = Field(default=None, ge=1, le=500)
     tool_set: str = "build"
     max_tokens: Optional[int] = None
+    # Advisor: a second model that reviews the executor mid-run and feeds
+    # guidance back in. Off unless both a model and a cadence are given. This
+    # is how "Both" mode works: Kimi executes, Claude advises.
+    advisor_provider: Optional[str] = None
+    advisor_model: Optional[str] = None
+    advise_every: int = Field(default=0, ge=0, le=50)
 
 
 class AutoRequestBody(DoRequestBody):
@@ -681,6 +699,9 @@ async def ui_do(body: DoRequestBody = Body(...)):
                     task_id=task_id,
                     history=history,
                     system_prompt=s.system_prompt,
+                    advisor_provider=body.advisor_provider,
+                    advisor_model=body.advisor_model,
+                    advise_every=body.advise_every,
                 )
             )
             with s.lock:
@@ -760,6 +781,55 @@ async def ui_auto(body: AutoRequestBody = Body(...)):
     out = await ui_do(do_body)
     out["routed"] = "do_small" if route == "DO_SMALL" else "do_big"
     return out
+
+
+class TurnRequestBody(BaseModel):
+    session_id: Optional[str] = None
+    message: str
+    reasoning_effort: str = "low"
+
+
+@ui_router.post("/ui/turn")
+async def ui_turn(body: TurnRequestBody = Body(...)):
+    """Single entry point for the simplified console.
+
+    Classify the message. A plain question is answered right away by the cheap
+    chat model (Haiku by default). A task is NOT executed — it comes back as a
+    proposal so the operator confirms, and picks an executor, before anything
+    enters the agent loop. This is the "ask me before it enters the loop" gate:
+    nothing here ever calls ui_do.
+    """
+    s = get_session(body.session_id)
+    with s.lock:
+        history = list(s.messages)
+
+    route = await _classify(body.message, history)
+
+    if route == "CHAT":
+        chat_body = ChatRequestBody(
+            session_id=s.id, message=body.message,
+            model=CHAT_MODEL, provider=CHAT_PROVIDER,
+            reasoning_effort=body.reasoning_effort,
+        )
+        out = await ui_chat(chat_body)
+        out["routed"] = "chat"
+        return out
+
+    # Task-like: propose, run nothing. The user message is intentionally NOT
+    # persisted here — whichever action they pick next (Run -> ui_do, or Just
+    # answer -> ui_chat) records it, so it is never double-added or orphaned.
+    small = route == "DO_SMALL"
+    return {
+        "session_id": s.id,
+        "routed": "propose",
+        "classification": route,
+        "message": body.message,
+        "suggested": {
+            "budget_usd": AUTO_SMALL_BUDGET_USD if small else 1.0,
+            "max_turns": AUTO_SMALL_TURNS if small else None,
+            "tool_set": "build",
+        },
+    }
 
 
 @ui_router.get("/ui/progress")
@@ -924,6 +994,15 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
   border-radius:8px;padding:7px 11px;overflow-x:auto;white-space:pre-wrap;
   word-break:break-word;
 }
+.proposal{
+  background:var(--raised);border:1px solid var(--line);
+  border-left:2px solid var(--accent);border-radius:10px;padding:12px 14px;
+  display:flex;flex-direction:column;gap:9px;max-width:560px;
+}
+.proposal .ptitle{font-size:14px;font-weight:600;color:var(--fg)}
+.proposal .pmeta{font-size:12px;color:var(--dim)}
+.proposal .pmeta b{color:var(--fg);font-weight:600}
+.proposal .prow{display:flex;gap:9px;align-items:center;margin-top:2px}
 .thinking{color:var(--faint);font-size:13.5px;display:flex;gap:8px;align-items:center}
 .dots span{animation:b 1.2s infinite;display:inline-block}
 .dots span:nth-child(2){animation-delay:.18s}
@@ -1056,38 +1135,15 @@ textarea::placeholder{color:var(--faint)}
             <div class="seg" id="turns">
               <button data-v="" class="on">auto</button><button data-v="10">10</button>
               <button data-v="25">25</button><button data-v="100">100</button></div></div>
-          <div class="group"><span class="glabel">Provider</span>
-            <div class="seg" id="provider">
-              <button data-v="moonshot" class="on">moonshot</button>
-              <button data-v="anthropic">anthropic</button></div></div>
-          <div class="group"><span class="glabel">Model</span>
-            <div class="seg" id="model">
-              <button data-v="kimi-k3" class="on">kimi-k3</button>
-              <button data-v="kimi-k2.6">k2.6</button>
-              <button data-v="claude-opus-5" style="display:none">claude-opus-5</button>
-              <button data-v="claude-sonnet-5" style="display:none">claude-sonnet-5</button>
-              <button data-v="claude-haiku-4-5-20251001" style="display:none">claude-haiku</button></div></div>
-          <div class="group"><span class="glabel">Exec Provider</span>
-            <div class="seg" id="exec_provider">
-              <button data-v="moonshot" class="on">moonshot</button>
-              <button data-v="anthropic">anthropic</button></div></div>
-          <div class="group"><span class="glabel">Exec Model</span>
-            <div class="seg" id="exec_model">
-              <button data-v="kimi-k3" class="on">kimi-k3</button>
-              <button data-v="kimi-k2.6">k2.6</button>
-              <button data-v="claude-opus-5" style="display:none">claude-opus-5</button>
-              <button data-v="claude-sonnet-5" style="display:none">claude-sonnet-5</button>
-              <button data-v="claude-haiku-4-5-20251001" style="display:none">claude-haiku</button></div></div>
+          <div class="group"><span class="glabel">Executor</span>
+            <div class="seg" id="executor">
+              <button data-v="kimi" class="on">Kimi K3</button>
+              <button data-v="both">Both</button></div></div>
         </div>
         <div class="composer">
           <textarea id="box" rows="1" placeholder="Message — the bridge decides if it needs tools…"></textarea>
           <div class="actions">
-            <div class="seg" id="mode">
-              <button data-v="auto" class="on">auto</button>
-              <button data-v="chat">chat</button>
-              <button data-v="do">do</button>
-            </div>
-            <span class="hint" id="modeHint">auto picks chat vs action</span>
+            <span class="hint" id="modeHint">questions get a quick answer · tasks ask before running</span>
             <button class="btn primary" id="send" onclick="send()">
               <span>Send</span><span class="arrow">↑</span>
             </button>
@@ -1104,38 +1160,28 @@ let SID = localStorage.getItem('bridge_sid') || null;
 const $ = i => document.getElementById(i);
 
 /* segmented settings */
-const MODELS_BY_PROVIDER = {
-  moonshot: ['kimi-k3','kimi-k2.6'],
-  anthropic: ['claude-opus-5','claude-sonnet-5','claude-haiku-4-5-20251001']
-};
-function updateModels(segId, provId){
-  const prov = setting(provId);
-  const seg = $(segId);
-  seg.querySelectorAll('button').forEach(b=>{
-    b.style.display = MODELS_BY_PROVIDER[prov].includes(b.dataset.v) ? '' : 'none';
-    b.classList.remove('on');
-  });
-  const first = seg.querySelector('button:not([style*="none"])');
-  if(first) first.classList.add('on');
-}
 document.querySelectorAll('.seg').forEach(seg=>{
   seg.addEventListener('click', e=>{
     const b = e.target.closest('button'); if(!b) return;
     seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');
-    if(seg.id==='mode') modeHint();
-    if(seg.id==='provider') updateModels('model','provider');
-    if(seg.id==='exec_provider') updateModels('exec_model','exec_provider');
   });
 });
 const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
-function modeHint(){
-  const m = setting('mode');
-  $('modeHint').textContent = m==='auto' ? 'auto picks chat vs action'
-    : m==='chat' ? 'chat can’t touch anything'
-    : 'runs the agent with tools';
+
+/* Executor picker -> executor model + optional advisor.
+   kimi  = Kimi K3 runs the loop alone.
+   both  = Kimi K3 executes, Claude advises every few turns and on errors. */
+function execConfig(){
+  if(setting('executor')==='both'){
+    return {provider:'moonshot', model:'kimi-k3',
+            advisor_provider:'anthropic', advisor_model:'claude-opus-5',
+            advise_every:3, label:'Kimi K3 + Claude advisor'};
+  }
+  return {provider:'moonshot', model:'kimi-k3',
+          advisor_provider:null, advisor_model:null, advise_every:0,
+          label:'Kimi K3'};
 }
-modeHint();
 
 /* minimal markdown — escape first, so model output can never inject html */
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -1276,59 +1322,87 @@ function newSession(){
 function busy(b){ $('send').disabled=b; }
 
 /* ── send ───────────────────────────────────────────────── */
-async function send(forceMode){
+/* The cheap chat model, matched to the server's UI_CHAT_* defaults. */
+const CHAT = {provider:'anthropic', model:'claude-haiku-4-5-20251001'};
+
+async function send(){
   const text=$('box').value.trim(); if(!text) return;
-  const mode = forceMode || setting('mode');
   $('box').value=''; $('box').style.height='auto';
   addUser(text);
   const think = addThinking();
   busy(true);
-  const isChat = mode==='chat';
-  const prov = isChat ? setting('provider') : setting('exec_provider');
-  const mod  = isChat ? setting('model')    : setting('exec_model');
-  const base={session_id:SID,message:text,model:mod,
-              provider:prov,reasoning_effort:setting('effort')};
   try{
-    if(mode==='chat'){
-      const r=await api('/ui/chat',{method:'POST',body:JSON.stringify(base)});
-      think.remove();
-      SID=r.session_id; localStorage.setItem('bridge_sid',SID);
+    const r=await api('/ui/turn',{method:'POST',body:JSON.stringify({
+      session_id:SID, message:text, reasoning_effort:setting('effort')})});
+    SID=r.session_id; localStorage.setItem('bridge_sid',SID);
+    think.remove();
+    if(r.routed==='chat'){
       const n=addBot(r.reply||'(empty reply)');
-      addMeta(n,`${r.cost_cents}¢ · ${r.usage.cached_tokens.toLocaleString()} of `+
-        `${r.usage.prompt_tokens.toLocaleString()} tokens cached`);
+      addMeta(n,`chat · ${r.cost_cents}¢`);
       stats(r.session);
-    }else if(mode==='auto'){
-      const t=setting('turns');
-      const r=await api('/ui/auto',{method:'POST',body:JSON.stringify({...base,
-        budget_usd:parseFloat(setting('budget'))||1,
-        tool_set:setting('toolset'),
-        max_turns:t?parseInt(t):null})});
-      SID=r.session_id; localStorage.setItem('bridge_sid',SID);
-      if(r.routed==='chat'){
-        think.remove();
-        const n=addBot(r.reply||'(empty reply)');
-        addMeta(n,`auto → chat · ${r.cost_cents}¢`);
-        stats(r.session);
-      }else{
-        think.remove();
-        const label = r.routed==='do_small'
-          ? `auto → quick task · cap ${(r.budget_cents).toFixed(0)}¢`
-          : `auto → agent run · cap $${(r.budget_cents/100).toFixed(2)}`;
-        const n=turn('bot'); addMeta(n,label);
-        await poll();
-      }
-    }else{ /* explicit do */
-      const t=setting('turns');
-      const r=await api('/ui/do',{method:'POST',body:JSON.stringify({...base,
-        budget_usd:parseFloat(setting('budget'))||1,
-        tool_set:setting('toolset'),
-        max_turns:t?parseInt(t):null})});
-      think.remove();
-      SID=r.session_id; localStorage.setItem('bridge_sid',SID);
-      await poll();
+    }else{
+      renderProposal(text, r);   // task — ask before running
     }
   }catch(e){ think.remove(); addBot('**Error** — '+e.message); }
   busy(false); scroll();
+}
+
+/* Confirm card. Nothing enters the agent loop until Run is clicked. */
+function renderProposal(text, r){
+  const ex = execConfig();
+  const sug = r.suggested || {};
+  const budget = parseFloat(setting('budget')) || sug.budget_usd || 1;
+  const turnsRaw = setting('turns');
+  const turns = turnsRaw ? parseInt(turnsRaw) : (sug.max_turns || null);
+  const kind = r.classification==='DO_SMALL' ? 'quick task' : 'multi-step task';
+
+  const t = turn('bot');
+  const card = document.createElement('div'); card.className='proposal';
+  card.innerHTML =
+    '<div class="ptitle">Run this as a '+esc(kind)+'?</div>'+
+    '<div class="pmeta">executor <b>'+esc(ex.label)+'</b> · budget <b>$'+
+      budget.toFixed(2)+'</b> · turns <b>'+(turns?turns:'auto')+'</b> · tools <b>'+
+      esc(setting('toolset'))+'</b></div>';
+  const row=document.createElement('div'); row.className='prow';
+  const run=document.createElement('button'); run.className='btn primary'; run.textContent='Run';
+  const ans=document.createElement('button'); ans.className='btn ghost'; ans.textContent='Just answer';
+  row.appendChild(run); row.appendChild(ans);
+  card.appendChild(row); t.appendChild(card); scroll();
+
+  run.onclick=async()=>{
+    run.disabled=true; ans.disabled=true;
+    row.innerHTML='<span class="hint">running…</span>';
+    busy(true);
+    try{
+      const dr=await api('/ui/do',{method:'POST',body:JSON.stringify({
+        session_id:SID, message:text,
+        provider:ex.provider, model:ex.model,
+        advisor_provider:ex.advisor_provider, advisor_model:ex.advisor_model,
+        advise_every:ex.advise_every,
+        reasoning_effort:setting('effort'),
+        budget_usd:budget, tool_set:setting('toolset'), max_turns:turns})});
+      SID=dr.session_id; localStorage.setItem('bridge_sid',SID);
+      const n=turn('bot'); addMeta(n,'agent run · '+ex.label+' · cap $'+budget.toFixed(2));
+      await poll();
+    }catch(e){ addBot('**Error** — '+e.message); }
+    busy(false); scroll();
+  };
+  ans.onclick=async()=>{
+    run.disabled=true; ans.disabled=true;
+    t.remove();
+    const think=addThinking(); busy(true);
+    try{
+      const cr=await api('/ui/chat',{method:'POST',body:JSON.stringify({
+        session_id:SID, message:text,
+        provider:CHAT.provider, model:CHAT.model,
+        reasoning_effort:setting('effort')})});
+      think.remove();
+      SID=cr.session_id; localStorage.setItem('bridge_sid',SID);
+      const n=addBot(cr.reply||'(empty reply)'); addMeta(n,'chat · '+cr.cost_cents+'¢');
+      stats(cr.session);
+    }catch(e){ think.remove(); addBot('**Error** — '+e.message); }
+    busy(false); scroll();
+  };
 }
 
 async function poll(){
@@ -1372,7 +1446,7 @@ box.addEventListener('input',()=>{
 box.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey){
     e.preventDefault();
-    send(e.metaKey||e.ctrlKey ? 'do' : null);
+    send();
   }
 });
 boot().catch(()=>{});
