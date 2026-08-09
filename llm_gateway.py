@@ -445,6 +445,47 @@ class AnthropicProvider(LLMProvider):
             out = [{"role": "user", "content": [{"type": "text", "text": "Continue."}]}]
         return "\n\n".join(system_parts), out
 
+    @staticmethod
+    def _inject_cache_control(payload: dict) -> None:
+        """Add ephemeral prompt-cache breakpoints to an Anthropic payload.
+
+        Anthropic caching is opt-in PER REQUEST: with no cache_control markers
+        nothing is cached and usage.cache_read_input_tokens stays 0 — so a
+        multi-call chat/agent loop re-bills the whole prefix at full rate every
+        turn. Two breakpoints, matching Anthropic's tools->system->messages
+        render order:
+          - last system block  -> caches the tools+system prefix (both render
+            before messages), i.e. the stable per-session part
+          - last message block -> caches the conversation so far, so an
+            appended tool loop re-bills only the newly added turns
+        The minimum cacheable prefix is model-dependent (Haiku 4.5: 4096
+        tokens); shorter prefixes silently don't cache, which is fine — the
+        savings are meant to land once the transcript grows, which is exactly
+        when a loop gets expensive.
+        """
+        cc = {"type": "ephemeral"}
+        marked_prefix = False
+        sys = payload.get("system")
+        if isinstance(sys, str) and sys.strip():
+            payload["system"] = [{"type": "text", "text": sys, "cache_control": cc}]
+            marked_prefix = True
+        elif isinstance(sys, list) and sys and isinstance(sys[-1], dict):
+            sys[-1]["cache_control"] = cc
+            marked_prefix = True
+        if not marked_prefix:
+            tools = payload.get("tools")
+            if isinstance(tools, list) and tools and isinstance(tools[-1], dict):
+                tools[-1]["cache_control"] = cc
+        msgs = payload.get("messages")
+        if isinstance(msgs, list) and msgs and isinstance(msgs[-1], dict):
+            content = msgs[-1].get("content")
+            if isinstance(content, str) and content:
+                msgs[-1]["content"] = [
+                    {"type": "text", "text": content, "cache_control": cc}
+                ]
+            elif isinstance(content, list) and content and isinstance(content[-1], dict):
+                content[-1]["cache_control"] = cc
+
     async def chat(self, req: ChatRequest) -> ChatResponse:
         start = time.time()
 
@@ -472,6 +513,9 @@ class AnthropicProvider(LLMProvider):
             payload["messages"] = msgs
         if system_msg:
             payload["system"] = system_msg
+
+        # Opt into prompt caching (no-op if the prefix is too short to cache).
+        self._inject_cache_control(payload)
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             r = await client.post(
@@ -510,10 +554,18 @@ class AnthropicProvider(LLMProvider):
                          else "stop")
 
         usage = data.get("usage", {})
-        prompt_tokens = usage.get("input_tokens", 0)
-        completion_tokens = usage.get("output_tokens", 0)
+        # With prompt caching on, Anthropic splits the prompt three ways:
+        # input_tokens is the uncached remainder only, so the true prompt total
+        # is input + cache_read + cache_creation. estimate_cost wants the FULL
+        # prompt plus the cached portion, so reconstruct both here.
+        input_tokens = usage.get("input_tokens", 0)
         cached_tokens = usage.get("cache_read_input_tokens", 0)
-        cost = self.estimate_cost(payload["model"], prompt_tokens, completion_tokens)
+        cache_creation = usage.get("cache_creation_input_tokens", 0)
+        prompt_tokens = input_tokens + cached_tokens + cache_creation
+        completion_tokens = usage.get("output_tokens", 0)
+        cost = self.estimate_cost(
+            payload["model"], prompt_tokens, completion_tokens, cached_tokens
+        )
 
         return ChatResponse(
             provider="anthropic",
