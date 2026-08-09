@@ -124,12 +124,13 @@ CHAT_RESEARCH_MAX_STEPS = int(os.getenv("UI_CHAT_RESEARCH_MAX_STEPS", "3"))
 # Must resolve to a read-only tool set; assert_tool_set_safe rejects any set
 # that carries a write/deploy tool.
 CHAT_RESEARCH_TOOL_SET = os.getenv("UI_CHAT_RESEARCH_TOOL_SET", "research")
-# The research loop runs on a CAPABLE model regardless of the chat-model chip:
-# a weak model (Haiku) flails — hesitates, makes poor tool choices, and burns
-# extra billed turns — so Sonnet is both more reliable and usually cheaper
-# end-to-end here. Overrides body.provider/model for the loop only.
-CHAT_RESEARCH_PROVIDER = os.getenv("UI_CHAT_RESEARCH_PROVIDER", "anthropic")
-CHAT_RESEARCH_MODEL = os.getenv("UI_CHAT_RESEARCH_MODEL", "claude-sonnet-5")
+# The research loop runs on the model picked in the UI (the chat-model chip),
+# so you can trade capability for cost — e.g. Kimi 2.6 is much cheaper than
+# Sonnet. Pick a capable model: a weak one (Haiku) flails and burns extra
+# turns. Set these envs non-empty to PIN a research model regardless of the
+# chip; empty (default) means "use whatever the request selects".
+CHAT_RESEARCH_PROVIDER = os.getenv("UI_CHAT_RESEARCH_PROVIDER", "")
+CHAT_RESEARCH_MODEL = os.getenv("UI_CHAT_RESEARCH_MODEL", "")
 # Guardrails against a runaway transcript: cap the size of each tool result fed
 # back (github_read windows / repo_search hits balloon the prompt), and stop the
 # loop once it has spent this many cents — then force one final text answer.
@@ -743,6 +744,9 @@ async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
     )
 
     router = get_router()
+    # Env pins win if set; otherwise use the model the request selected (chip).
+    provider = CHAT_RESEARCH_PROVIDER or body.provider or "anthropic"
+    model = CHAT_RESEARCH_MODEL or body.model or "claude-sonnet-5"
     totals = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
     cost = 0.0
     steps = 0
@@ -775,77 +779,85 @@ async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
             % (len(blob) - CHAT_RESEARCH_TOOL_CHARS)
         )
 
+    async def _chat(tool_choice: str):
+        return await router.chat(ChatRequest(
+            provider=provider,
+            model=model,
+            messages=_mk(messages),
+            max_tokens=body.max_tokens,
+            temperature=1.0,
+            tools=tools,
+            tool_choice=tool_choice,
+            reasoning_effort=body.reasoning_effort,
+        ))
+
     # Answered-with-text stops cleanly; hitting the step cap or the cent cap
     # with tools still pending falls through to one forced tool_choice="none"
-    # call so the user always gets prose, never a dangling tool call.
+    # call so the user always gets prose, never a dangling tool call. The whole
+    # thing is wrapped so a provider error (e.g. a Moonshot/Kimi 429 when the
+    # balance is dry) becomes a readable message instead of a 500.
     answered = False
-    for _ in range(CHAT_RESEARCH_MAX_STEPS):
-        resp = await router.chat(ChatRequest(
-            provider=CHAT_RESEARCH_PROVIDER,
-            model=CHAT_RESEARCH_MODEL,
-            messages=_mk(messages),
-            max_tokens=body.max_tokens,
-            temperature=1.0,
-            tools=tools,
-            tool_choice="auto",
-            reasoning_effort=body.reasoning_effort,
-        ))
-        _tally(resp)
-        if not resp.tool_calls:
-            final = resp.content or ""
-            answered = True
-            break
-        steps += 1
-        messages.append({
-            "role": "assistant",
-            "content": resp.content,
-            "tool_calls": resp.tool_calls,
-        })
-        for tc in resp.tool_calls:
-            fn = tc.get("function") or {}
-            name = fn.get("name", "")
-            try:
-                args = json.loads(fn.get("arguments") or "{}")
-            except Exception:
-                args = {}
-            try:
-                result = await run_tool(name, args)
-            except Exception as e:
-                result = {"error": f"{type(e).__name__}: {e}"}
+    try:
+        for _ in range(CHAT_RESEARCH_MAX_STEPS):
+            resp = await _chat("auto")
+            _tally(resp)
+            if not resp.tool_calls:
+                final = resp.content or ""
+                answered = True
+                break
+            steps += 1
             messages.append({
-                "role": "tool",
-                "tool_call_id": tc.get("id"),
-                "content": _clip(json.dumps(result, default=str)),
+                "role": "assistant",
+                "content": resp.content,
+                "tool_calls": resp.tool_calls,
             })
-        if cost >= CHAT_RESEARCH_MAX_CENTS:
-            break  # spend ceiling — stop looping, force a final answer below
+            for tc in resp.tool_calls:
+                fn = tc.get("function") or {}
+                name = fn.get("name", "")
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                try:
+                    result = await run_tool(name, args)
+                except Exception as e:
+                    result = {"error": f"{type(e).__name__}: {e}"}
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id"),
+                    "content": _clip(json.dumps(result, default=str)),
+                })
+            if cost >= CHAT_RESEARCH_MAX_CENTS:
+                break  # spend ceiling — stop looping, force a final answer below
 
-    if not answered:
-        # Forced final answer. Without an explicit instruction, a model cut off
-        # mid-research (tools now forbidden) tends to emit the tool call it still
-        # wanted as raw JSON text instead of prose — so tell it plainly to answer
-        # from what it already has.
-        messages.append({
-            "role": "user",
-            "content": (
-                "Stop searching now and answer using only what you have already "
-                "found above. Write a normal prose answer — do not output tool "
-                "calls, JSON, or ask to look at more files. If something is still "
-                "unknown, say so briefly."
-            ),
-        })
-        resp = await router.chat(ChatRequest(
-            provider=CHAT_RESEARCH_PROVIDER,
-            model=CHAT_RESEARCH_MODEL,
-            messages=_mk(messages),
-            max_tokens=body.max_tokens,
-            temperature=1.0,
-            tools=tools,
-            tool_choice="none",
-            reasoning_effort=body.reasoning_effort,
-        ))
-        _tally(resp)
-        final = resp.content or ""
+        if not answered:
+            # Forced final answer. Without an explicit instruction, a model cut
+            # off mid-research (tools now forbidden) tends to emit the tool call
+            # it still wanted as raw JSON text instead of prose — so tell it
+            # plainly to answer from what it already has.
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Stop searching now and answer using only what you have "
+                    "already found above. Write a normal prose answer — do not "
+                    "output tool calls, JSON, or ask to look at more files. If "
+                    "something is still unknown, say so briefly."
+                ),
+            })
+            resp = await _chat("none")
+            _tally(resp)
+            final = resp.content or ""
+    except Exception as e:
+        # Provider/network failure mid-research (e.g. a Moonshot/Kimi 429 when
+        # the balance is dry) — return whatever was gathered plus a readable
+        # note instead of 500ing the chat turn.
+        if provider == "moonshot" or str(model).startswith("kimi"):
+            note = ("_(Kimi/Moonshot is unavailable right now — likely rate-"
+                    "limited or out of balance. Try again, or pick a Claude "
+                    "model from the menu.)_")
+        else:
+            note = f"_(research stopped: {type(e).__name__}: {e})_"
+        final = (final + "\n\n" + note) if final else note
 
     return final, totals, cost, steps
 
@@ -1485,8 +1497,8 @@ textarea::placeholder{color:var(--faint)}
             <button class="cbtn" id="addbtn" type="button" title="Attach files or screenshots">+</button>
             <input type="file" id="fileinput" multiple style="display:none"
               accept="image/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv,.log">
-            <button class="chip" id="modelchip" type="button" title="Chat model">
-              <span id="modelname">Haiku</span><span class="caret">▾</span></button>
+            <button class="chip" id="modelchip" type="button" title="Chat / research model">
+              <span id="modelname">Sonnet</span><span class="caret">▾</span></button>
             <button class="chip" id="optchip" type="button" title="Effort · tools · executor">
               <span>⚙</span><span class="caret">▾</span></button>
             <span class="grow"></span>
@@ -1495,10 +1507,11 @@ textarea::placeholder{color:var(--faint)}
           </div>
         </div>
         <div class="pop" id="modelpop">
-          <div class="phead">Chat model</div>
-          <div class="pitem on" data-v="claude-haiku-4-5-20251001">Haiku<span class="pk">✓</span></div>
-          <div class="pitem" data-v="claude-sonnet-5">Sonnet<span class="pk">✓</span></div>
+          <div class="phead">Chat / research model</div>
+          <div class="pitem on" data-v="claude-sonnet-5">Sonnet<span class="pk">✓</span></div>
           <div class="pitem" data-v="claude-opus-5">Opus<span class="pk">✓</span></div>
+          <div class="pitem" data-v="claude-haiku-4-5-20251001">Haiku<span class="pk">✓</span></div>
+          <div class="pitem" data-v="kimi-k2.6">Kimi 2.6 · cheapest<span class="pk">✓</span></div>
           <div class="pitem" data-v="kimi-k3">Kimi K3<span class="pk">✓</span></div>
         </div>
         <div class="pop" id="optpop">
@@ -1529,10 +1542,11 @@ let SID = localStorage.getItem('bridge_sid') || null;
 const $ = i => document.getElementById(i);
 
 /* ── compact settings: chips + popover selector menus ───── */
-const CFG = {chatmodel:'claude-haiku-4-5-20251001', effort:'low',
+const CFG = {chatmodel:'claude-sonnet-5', effort:'low',
              toolset:'build', executor:'claude-sonnet-5'};
 const MODEL_LABEL = {'claude-haiku-4-5-20251001':'Haiku',
-  'claude-sonnet-5':'Sonnet','claude-opus-5':'Opus','kimi-k3':'Kimi K3'};
+  'claude-sonnet-5':'Sonnet','claude-opus-5':'Opus',
+  'kimi-k2.6':'Kimi 2.6','kimi-k3':'Kimi K3'};
 const setting = id => CFG[id] ?? '';
 
 function closePops(){ document.querySelectorAll('.pop.on').forEach(p=>p.classList.remove('on')); }
