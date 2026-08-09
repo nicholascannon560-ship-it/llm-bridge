@@ -80,6 +80,8 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-09 | chat: optional bounded read-only research loop (UI_CHAT_RESEARCH, default off) in /ui/chat — chat model does recon with the read-only `research` tool set (tool_choice=auto, assert_tool_set_safe blocks writes) before answering; only final text folds into thread; caps UI_CHAT_RESEARCH_MAX_STEPS(4) + forced tool_choice=none final | files: chat_ui.py
+- 2026-08-09 | llm_gateway: ENABLE Anthropic prompt caching (was OFF — no cache_control markers, so cache_read_input_tokens always 0). AnthropicProvider._inject_cache_control adds ephemeral breakpoints (last system + last message block); token accounting reconstructs full prompt (input+cache_read+cache_creation). Verified live: 2nd identical Haiku call cached 8412/8415 | files: llm_gateway.py
 - 2026-08-08 | prompts: tell the executor to BATCH independent tool calls into one turn (harness already runs all tool_calls per turn; llm_gateway returns all tool_use blocks) — flips the old "wait for a tool result before the next tool" rule; loop now only for real dependency chains | files: agent_loop/harness.py, chat_ui.py
 - 2026-08-08 | chat_ui: brief-in/summary-out handoff (UI_HANDOFF_BRIEF, default on) so a chat<->executor model switch no longer re-bills the full transcript; chat distils a brief, only the final answer folds back | files: chat_ui.py
 - 2026-08-08 | agent loop: repo_search tool (branch-aware content grep -> path:line, read-only) + read-narrow discipline added to both system prompts (locate with repo_search, then read a tight window) | files: agent_loop/tools.py, chat_ui.py, agent_loop/harness.py
