@@ -108,6 +108,23 @@ ADVISE_EVERY = int(os.getenv("UI_ADVISE_EVERY", "3"))
 # full-transcript handoff (known-good fallback, one env var, no redeploy needed).
 HANDOFF_BRIEF = os.getenv("UI_HANDOFF_BRIEF", "on").lower() not in ("off", "0", "false")
 
+# Read-only research in chat. When on, /ui/chat is no longer a single
+# tool_choice="none" call — the chat model runs a bounded loop with the
+# read-only `research` tool set (tool_choice="auto"), doing interactive recon
+# (repo_search, github_read, ...) before it answers. Writes/deploys are NEVER in
+# scope (assert_tool_set_safe), so chat still cannot change anything. Only the
+# final text answer folds into the thread; the tool-by-tool trace stays out (a
+# later chat turn would re-bill it). Off by default so the deploy can be
+# checkpointed; UI_CHAT_RESEARCH=on to enable.
+CHAT_RESEARCH = os.getenv("UI_CHAT_RESEARCH", "off").lower() in ("on", "1", "true")
+# Hard cap on read-only tool-calling turns per chat message. Small on purpose:
+# chat recon is meant to be a few lookups, not an agent run. On the last turn a
+# forced tool_choice="none" call extracts a text answer.
+CHAT_RESEARCH_MAX_STEPS = int(os.getenv("UI_CHAT_RESEARCH_MAX_STEPS", "4"))
+# Must resolve to a read-only tool set; assert_tool_set_safe rejects any set
+# that carries a write/deploy tool.
+CHAT_RESEARCH_TOOL_SET = os.getenv("UI_CHAT_RESEARCH_TOOL_SET", "research")
+
 _DIRTY: set = set()
 _DIRTY_LOCK = threading.Lock()
 _MIRROR_LIST_CACHE: Dict[str, Any] = {"at": 0.0, "data": []}
@@ -687,6 +704,114 @@ async def ui_delete_session(session_id: str):
     return {"ok": True, "deleted": session_id}
 
 
+async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
+    """Bounded read-only research loop for chat.
+
+    The chat model gets the read-only `research` tool set and tool_choice="auto"
+    and may call tools (repo_search, github_read, ...) for a few turns to gather
+    context, then answers in text. assert_tool_set_safe guarantees no write or
+    deploy tool is in scope, so chat still cannot change anything. The session's
+    stable system_prompt is reused verbatim and the transcript only grows by
+    appending, so the cached prefix (see AnthropicProvider._inject_cache_control)
+    is reused across the loop's own calls — the repeated recon transcript bills
+    at the cache-hit rate once it clears the model's minimum. Returns
+    (final_text, usage_totals, cost_cents, steps).
+    """
+    from llm_gateway import ChatMessage, ChatRequest, get_router
+    from agent_loop.tools import resolve_tools, assert_tool_set_safe, run_tool
+
+    tools = resolve_tools(None, CHAT_RESEARCH_TOOL_SET)
+    assert_tool_set_safe(tools)  # hard guarantee: read-only in chat
+
+    with s.lock:
+        history = list(s.messages)
+    messages: List[Dict[str, Any]] = (
+        [{"role": "system", "content": s.system_prompt}]
+        + history
+        + [{"role": "user", "content": body.message}]
+    )
+
+    router = get_router()
+    totals = {"prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
+    cost = 0.0
+    steps = 0
+    final = ""
+
+    def _mk(msgs: List[Dict[str, Any]]) -> List[Any]:
+        return [
+            ChatMessage(
+                role=m["role"],
+                content=m.get("content"),
+                tool_calls=m.get("tool_calls"),
+                tool_call_id=m.get("tool_call_id"),
+            )
+            for m in msgs
+        ]
+
+    def _tally(resp) -> None:
+        nonlocal cost
+        u = resp.usage or {}
+        totals["prompt_tokens"] += u.get("prompt_tokens", 0)
+        totals["completion_tokens"] += u.get("completion_tokens", 0)
+        totals["cached_tokens"] += u.get("cached_tokens", 0)
+        cost += resp.cost_cents or 0.0
+
+    for _ in range(CHAT_RESEARCH_MAX_STEPS):
+        resp = await router.chat(ChatRequest(
+            provider=body.provider,
+            model=body.model,
+            messages=_mk(messages),
+            max_tokens=body.max_tokens,
+            temperature=1.0,
+            tools=tools,
+            tool_choice="auto",
+            reasoning_effort=body.reasoning_effort,
+        ))
+        _tally(resp)
+        if not resp.tool_calls:
+            final = resp.content or ""
+            break
+        steps += 1
+        messages.append({
+            "role": "assistant",
+            "content": resp.content,
+            "tool_calls": resp.tool_calls,
+        })
+        for tc in resp.tool_calls:
+            fn = tc.get("function") or {}
+            name = fn.get("name", "")
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except Exception:
+                args = {}
+            try:
+                result = await run_tool(name, args)
+            except Exception as e:
+                result = {"error": f"{type(e).__name__}: {e}"}
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id"),
+                "content": json.dumps(result, default=str),
+            })
+    else:
+        # Hit the step cap with tools still pending — force a text answer so the
+        # user always gets prose, not a dangling tool call.
+        resp = await router.chat(ChatRequest(
+            provider=body.provider,
+            model=body.model,
+            messages=_mk(messages),
+            max_tokens=body.max_tokens,
+            temperature=1.0,
+            tools=tools,
+            tool_choice="none",
+            reasoning_effort=body.reasoning_effort,
+        ))
+        _tally(resp)
+        final = resp.content or ""
+
+    return final, totals, cost, steps
+
+
 @ui_router.post("/ui/chat")
 async def ui_chat(body: ChatRequestBody = Body(...)):
     """One LLM call. Tools are sent but forbidden.
@@ -694,10 +819,41 @@ async def ui_chat(body: ChatRequestBody = Body(...)):
     Sending the schemas and then setting tool_choice="none" looks redundant —
     it is not. It keeps the prompt prefix identical to what DO IT sends, so
     both modes hit the same cache, while the provider guarantees no tool runs.
+
+    With UI_CHAT_RESEARCH=on the chat model instead runs a bounded read-only
+    tool loop first (see _run_chat_research) and only the final text answer
+    folds into the thread.
     """
     from llm_gateway import ChatMessage, ChatRequest, get_router
 
     s = get_session(body.session_id)
+
+    if CHAT_RESEARCH:
+        reply, usage, cost_cents, steps = await _run_chat_research(s, body)
+        with s.lock:
+            s.messages.append({"role": "user", "content": body.message})
+            s.messages.append({"role": "assistant", "content": reply})
+            s.cost_cents += cost_cents
+            s.prompt_tokens += usage.get("prompt_tokens", 0)
+            s.cached_tokens += usage.get("cached_tokens", 0)
+            if s.title == "new session":
+                s.title = body.message[:60]
+            s.trim()
+            s.persist()
+        return {
+            "session_id": s.id,
+            "mode": "chat",
+            "reply": reply,
+            "cost_cents": round(cost_cents, 4),
+            "usage": {
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "cached_tokens": usage.get("cached_tokens", 0),
+            },
+            "research_steps": steps,
+            "session": s.to_dict(include_messages=False),
+        }
+
     with s.lock:
         history = list(s.messages)
 
