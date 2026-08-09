@@ -437,6 +437,14 @@ Rules:
    and continue the original task.
 7. Never put credentials, API keys, or tokens into a tool argument, a commit,
    or your reply.
+8. Read only what the task needs. Use repo_search to find the exact file and
+   line, then github_read a TIGHT window around it. Do not read a whole large
+   file to answer a local question, and do not re-read something you have
+   already seen this run.
+9. If a repo has a MAP.md, read its relevant task-slice first and open only the
+   files it names — skip broad directory crawls.
+10. Prefer github_patch over github_commit to change an existing file: patch
+   sends only the edit, github_commit re-sends every byte.
 """
 
 

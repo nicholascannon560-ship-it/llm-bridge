@@ -82,6 +82,37 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "repo_search",
+            "description": (
+                "Search a repository's file CONTENTS for a regex and get back the matching "
+                "lines with their path and line number — so you can jump straight to the right "
+                "spot instead of reading whole files to find it. Branch-aware: it searches the "
+                "actual branch you name (unlike GitHub's code search, which only sees the "
+                "default branch). ALWAYS use this to LOCATE code before github_read, then "
+                "github_read a tight window around the reported line. Narrow the scan with "
+                "path= (path prefix) and extensions= whenever you can. Returns matches[], "
+                "files_scanned, and truncated."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "owner": {"type": "string", "description": "Repo owner (default: nicholascannon560-ship-it)"},
+                    "repo": {"type": "string", "description": "Repo name"},
+                    "pattern": {"type": "string", "description": "Python regex, matched per line"},
+                    "branch": {"type": "string", "description": "Branch or ref to search (default: repo default branch)"},
+                    "path": {"type": "string", "description": "Only search files whose path starts with this prefix (optional)"},
+                    "extensions": {"type": "array", "items": {"type": "string"}, "description": "Only these extensions, e.g. [\"py\",\"md\"] (optional)"},
+                    "ignore_case": {"type": "boolean", "description": "Case-insensitive match (default false)"},
+                    "context": {"type": "integer", "description": "Extra lines of context around each match (default 0, max 5)"},
+                    "max_results": {"type": "integer", "description": "Max matching lines to return (default 40, max 200)"}
+                },
+                "required": ["repo", "pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "github_commit",
             "description": "Commit a single file to a GitHub repository.",
             "parameters": {
@@ -441,6 +472,7 @@ UNTRUSTED_INPUT_TOOL_NAMES = {"browser_research", "browser_read"}
 
 READ_ONLY_TOOL_NAMES = [
     "github_read",
+    "repo_search",
     "github_list_repos",
     "railway_get_status",
     "railway_get_logs",
@@ -521,6 +553,29 @@ async def run_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 GITHUB_READ_DEFAULT_CHARS = int(os.environ.get("GITHUB_READ_DEFAULT_CHARS", "8000"))
 GITHUB_READ_MAX_CHARS = int(os.environ.get("GITHUB_READ_MAX_CHARS", "60000"))
 
+# repo_search caps. Content search fetches candidate blobs server-side and greps
+# them in-process, returning only the matching lines — so the model pays for
+# snippets, not whole files. These bound the server-side work per call.
+REPO_SEARCH_MAX_FILES = int(os.environ.get("REPO_SEARCH_MAX_FILES", "400"))
+REPO_SEARCH_MAX_FILE_BYTES = int(os.environ.get("REPO_SEARCH_MAX_FILE_BYTES", "400000"))
+REPO_SEARCH_CONCURRENCY = int(os.environ.get("REPO_SEARCH_CONCURRENCY", "8"))
+REPO_SEARCH_DEFAULT_RESULTS = int(os.environ.get("REPO_SEARCH_DEFAULT_RESULTS", "40"))
+REPO_SEARCH_MAX_RESULTS = int(os.environ.get("REPO_SEARCH_MAX_RESULTS", "200"))
+
+# Extensions never worth grepping — binary or bulk data. Skipped unless the
+# caller explicitly names extensions.
+_BINARY_EXTS = {
+    "png", "jpg", "jpeg", "gif", "webp", "ico", "pdf", "zip", "gz", "tar", "tgz",
+    "bz2", "7z", "parquet", "xlsx", "xls", "db", "sqlite", "so", "dylib", "dll",
+    "bin", "exe", "woff", "woff2", "ttf", "eot", "mp4", "mov", "mp3", "wav",
+    "pkl", "npy", "npz",
+}
+
+
+def _ext_of(path: str) -> str:
+    base = path.rsplit("/", 1)[-1]
+    return base.rsplit(".", 1)[-1].lower() if "." in base else ""
+
 
 async def _tool_github_read(args: Dict) -> Dict:
     import httpx
@@ -566,6 +621,137 @@ async def _tool_github_read(args: Dict) -> Dict:
         "truncated": end < len(content),
         "next_offset": end if end < len(content) else None,
         "content": window,
+    }
+
+
+async def _tool_repo_search(args: Dict) -> Dict:
+    """Branch-aware content grep: tree -> fetch candidate blobs -> regex per line.
+
+    Returns only matching lines (path + line number + text), so the model pays
+    for snippets it can act on, not whole files it has to skim. Server-side work
+    is bounded by the REPO_SEARCH_* caps; the model narrows with path/extensions.
+    """
+    import httpx
+
+    owner = args.get("owner", OWNER)
+    repo = args["repo"]
+    pattern = args["pattern"]
+    branch = args.get("branch")
+    path_prefix = (args.get("path") or "").lstrip("/")
+    exts = {str(e).lower().lstrip(".") for e in (args.get("extensions") or []) if isinstance(e, str)}
+    flags = re.IGNORECASE if args.get("ignore_case") else 0
+    ctx = max(0, min(int(args.get("context") or 0), 5))
+    max_results = max(1, min(int(args.get("max_results") or REPO_SEARCH_DEFAULT_RESULTS),
+                             REPO_SEARCH_MAX_RESULTS))
+
+    try:
+        rx = re.compile(pattern, flags)
+    except re.error as e:
+        return {"error": f"bad regex: {e}"}
+
+    headers = _github_headers()
+    async with httpx.AsyncClient(timeout=30) as client:
+        ref = branch
+        if not ref:
+            r = await client.get(f"{GITHUB_API}/repos/{owner}/{repo}", headers=headers)
+            if r.status_code != 200:
+                return {"error": f"GitHub API {r.status_code} resolving repo", "detail": r.text[:200]}
+            ref = r.json().get("default_branch", "main")
+
+        # A branch name resolves fine as a tree-ish here; recursive lists all blobs.
+        tr = await client.get(
+            f"{GITHUB_API}/repos/{owner}/{repo}/git/trees/{ref}",
+            headers=headers, params={"recursive": "1"},
+        )
+        if tr.status_code != 200:
+            return {"error": f"GitHub API {tr.status_code} reading tree for ref {ref!r}",
+                    "detail": tr.text[:200]}
+        tree = tr.json()
+
+        blobs = []
+        for e in tree.get("tree", []):
+            if e.get("type") != "blob":
+                continue
+            p = e.get("path", "")
+            if path_prefix and not p.startswith(path_prefix):
+                continue
+            ext = _ext_of(p)
+            if exts:
+                if ext not in exts:
+                    continue
+            elif ext in _BINARY_EXTS:
+                continue
+            if int(e.get("size") or 0) > REPO_SEARCH_MAX_FILE_BYTES:
+                continue
+            blobs.append(e)
+
+        tree_truncated = bool(tree.get("truncated"))
+        overflow = len(blobs) > REPO_SEARCH_MAX_FILES
+        blobs = blobs[:REPO_SEARCH_MAX_FILES]
+
+        sem = asyncio.Semaphore(REPO_SEARCH_CONCURRENCY)
+        lock = asyncio.Lock()
+        matches: List[Dict[str, Any]] = []
+        files_scanned = 0
+        hit_cap = False
+
+        async def _scan(blob):
+            nonlocal files_scanned, hit_cap
+            async with sem:
+                if hit_cap:
+                    return
+                try:
+                    br = await client.get(
+                        f"{GITHUB_API}/repos/{owner}/{repo}/git/blobs/{blob['sha']}",
+                        headers=headers,
+                    )
+                    if br.status_code != 200:
+                        return
+                    bj = br.json()
+                    if bj.get("encoding") != "base64":
+                        return
+                    raw = base64.b64decode(bj.get("content") or "")
+                    if b"\x00" in raw[:4096]:
+                        return  # binary
+                    text = raw.decode("utf-8", errors="replace")
+                except Exception:
+                    return
+            lines = text.split("\n")
+            local = []
+            for i, line in enumerate(lines):
+                if rx.search(line):
+                    entry = {"path": blob["path"], "line": i + 1, "text": line[:400]}
+                    if ctx:
+                        lo, hi = max(0, i - ctx), min(len(lines), i + ctx + 1)
+                        entry["context"] = "\n".join(lines[lo:hi])[:1200]
+                    local.append(entry)
+            async with lock:
+                files_scanned += 1
+                for m in local:
+                    if len(matches) >= max_results:
+                        hit_cap = True
+                        break
+                    matches.append(m)
+
+        await asyncio.gather(*[_scan(b) for b in blobs])
+
+    matches.sort(key=lambda m: (m["path"], m["line"]))
+    hint = ""
+    if hit_cap:
+        hint = "Hit max_results — narrow with path= or extensions=, or raise max_results."
+    elif overflow:
+        hint = "Candidate files exceeded the scan cap — narrow with path= or extensions=."
+    elif tree_truncated:
+        hint = "Repo tree was truncated by GitHub; some files were not considered."
+    return {
+        "ref": ref,
+        "pattern": pattern,
+        "files_considered": len(blobs),
+        "files_scanned": files_scanned,
+        "match_count": len(matches),
+        "truncated": bool(hit_cap or overflow or tree_truncated),
+        "matches": matches,
+        "hint": hint,
     }
 
 
@@ -1082,6 +1268,7 @@ async def _tool_run_tests(args: Dict) -> Dict:
 
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
+    "repo_search": _tool_repo_search,
     "github_commit": _tool_github_commit,
     "github_patch": _tool_github_patch,
     "github_create_repo": _tool_github_create_repo,
