@@ -1307,33 +1307,74 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
 /* ── composer ───────────────────────────────────────────── */
 footer{padding:6px 20px 20px;background:linear-gradient(transparent,var(--bg) 22%)}
 .dock{max-width:46rem;margin:0 auto}
-.settings{display:flex;flex-wrap:wrap;gap:14px;padding:0 2px 10px}
-.group{display:flex;align-items:center;gap:7px}
-.glabel{font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.04em;
-  text-transform:uppercase}
-.seg{display:flex;background:var(--raised);border:1px solid var(--line);
-  border-radius:9px;padding:2px;gap:2px}
-.seg button{
-  border:none;background:none;color:var(--dim);font:inherit;font-size:12px;
-  font-weight:500;padding:4px 10px;border-radius:7px;cursor:pointer;
-  transition:background .13s,color .13s;
-}
-.seg button:hover{color:var(--fg)}
-.seg button.on{background:var(--surface);color:var(--fg);font-weight:600;
-  box-shadow:0 1px 2px rgba(0,0,0,.07)}
 .composer{
-  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-  padding:10px 12px;transition:border-color .15s,box-shadow .15s;
+  background:var(--surface);border:1px solid var(--line);border-radius:20px;
+  padding:8px 10px;transition:border-color .15s,box-shadow .15s;
 }
 .composer:focus-within{border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-soft)}
 textarea{
   width:100%;border:none;background:none;color:var(--fg);font:inherit;
   resize:none;outline:none;min-height:24px;max-height:220px;line-height:1.55;
+  padding:4px 6px 2px;
 }
 textarea::placeholder{color:var(--faint)}
-.actions{display:flex;align-items:center;gap:8px;padding-top:8px}
-.hint{font-size:11.5px;color:var(--faint);flex:1}
+/* attachment previews (UI only for now) */
+.attachrow{display:flex;flex-wrap:wrap;gap:8px;padding:4px 6px 0}
+.attachrow:empty{display:none}
+.attach{display:flex;align-items:center;gap:6px;background:var(--raised);
+  border:1px solid var(--line);border-radius:9px;padding:4px 8px 4px 4px;
+  font-size:12px;color:var(--dim);max-width:190px}
+.attach img{width:26px;height:26px;border-radius:5px;object-fit:cover;flex:none}
+.attach .an{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.attach .ax{border:none;background:none;color:var(--faint);cursor:pointer;
+  font-size:15px;padding:0 2px;line-height:1}
+.attach .ax:hover{color:#c0392b}
+/* compact action bar */
+.cbar{display:flex;align-items:center;gap:6px;padding-top:6px}
+.cbar .grow{flex:1}
+.cbtn{border:none;background:none;color:var(--dim);cursor:pointer;
+  width:34px;height:34px;border-radius:50%;font-size:18px;line-height:1;flex:none;
+  display:flex;align-items:center;justify-content:center}
+.cbtn:hover{background:var(--raised);color:var(--fg)}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
+  background:var(--raised);color:var(--fg);font:inherit;font-size:12.5px;
+  font-weight:600;padding:6px 11px;border-radius:16px;cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--faint)}
+.chip .caret{font-size:10px;color:var(--faint)}
+.sendbtn{border:none;background:var(--accent);color:#fff;cursor:pointer;
+  width:36px;height:36px;border-radius:50%;font-size:18px;line-height:1;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .13s,opacity .13s}
+.sendbtn:hover:not(:disabled){background:var(--accent-hover)}
+.sendbtn:disabled{opacity:.4;cursor:not-allowed}
+/* popover selector menus */
+.pop{position:fixed;z-index:14;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.18);padding:6px;
+  min-width:180px;display:none}
+.pop.on{display:block}
+.pop .phead{font-size:10.5px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--faint);padding:7px 9px 3px}
+.pop .pitem{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:8px;
+  cursor:pointer;font-size:13.5px;color:var(--fg)}
+.pop .pitem:hover{background:var(--raised)}
+.pop .pitem.on{background:var(--accent-soft)}
+.pop .pitem .pk{margin-left:auto;color:var(--accent);font-size:13px;visibility:hidden}
+.pop .pitem.on .pk{visibility:visible}
+.pop .prow{display:flex;gap:2px;background:var(--raised);border:1px solid var(--line);
+  border-radius:9px;padding:2px;margin:2px 5px 7px}
+.pop .prow button{flex:1;border:none;background:none;color:var(--dim);font:inherit;
+  font-size:12px;font-weight:500;padding:5px 6px;border-radius:7px;cursor:pointer}
+.pop .prow button:hover{color:var(--fg)}
+.pop .prow button.on{background:var(--surface);color:var(--fg);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.07)}
+/* copy control under bot messages */
+.msgtools{display:flex;gap:6px;margin-top:1px}
+.copybtn{border:none;background:none;color:var(--faint);cursor:pointer;font:inherit;
+  font-size:11.5px;display:inline-flex;align-items:center;gap:4px;padding:3px 8px;
+  border-radius:7px}
+.copybtn:hover{background:var(--raised);color:var(--fg)}
+.hint{font-size:11.5px;color:var(--faint)}
 .btn{
   font:inherit;font-size:13px;font-weight:600;padding:7px 15px;border-radius:9px;
   cursor:pointer;transition:background .13s,border-color .13s,opacity .13s;
@@ -1347,8 +1388,6 @@ textarea::placeholder{color:var(--faint)}
 .btn.ghost{background:none;border-color:transparent;color:var(--dim);
   font-weight:500;padding:6px 10px}
 .btn.ghost:hover{background:var(--raised);color:var(--fg);border-color:transparent}
-#send{min-width:74px;display:flex;align-items:center;justify-content:center;gap:7px}
-#send .arrow{font-size:15px;line-height:1}
 
 /* ── login ──────────────────────────────────────────────── */
 #login{position:fixed;inset:0;background:var(--bg);z-index:20;
@@ -1364,12 +1403,8 @@ textarea::placeholder{color:var(--faint)}
 .err{color:#c0392b;font-size:12.5px;min-height:1em}
 @media (prefers-color-scheme:dark){.err{color:#f08a7a}}
 @media (max-width:640px){
-  .settings{gap:12px}
-  /* Stack each control's label above its buttons and keep it visible — hiding
-     labels on mobile made the two model rows indistinguishable. */
-  .group{flex-direction:column;align-items:flex-start;gap:4px;flex:1 1 44%}
-  .seg{width:100%}
-  #log{padding:20px 14px 4px}footer{padding:6px 14px 16px}
+  #log{padding:20px 14px 4px}footer{padding:6px 12px 14px}
+  .pop{min-width:160px}
 }
 </style></head><body>
 
@@ -1405,45 +1440,45 @@ textarea::placeholder{color:var(--faint)}
     <footer>
       <div class="dock">
         <div id="bar"><span class="pulse"></span><span id="bartext"></span></div>
-        <div class="settings">
-          <div class="group"><span class="glabel">Budget</span>
-            <div class="seg" id="budget">
-              <button data-v="0.05">5¢</button><button data-v="0.10">10¢</button>
-              <button data-v="0.25">25¢</button><button data-v="1" class="on">$1</button>
-              <button data-v="5">$5</button></div></div>
-          <div class="group"><span class="glabel">Effort</span>
-            <div class="seg" id="effort">
-              <button data-v="low" class="on">low</button><button data-v="high">high</button>
-              <button data-v="max">max</button></div></div>
-          <div class="group"><span class="glabel">Tools</span>
-            <div class="seg" id="toolset">
-              <button data-v="build" class="on">build</button>
-              <button data-v="research">research</button></div></div>
-          <div class="group"><span class="glabel">Turns</span>
-            <div class="seg" id="turns">
-              <button data-v="" class="on">auto</button><button data-v="10">10</button>
-              <button data-v="25">25</button><button data-v="100">100</button></div></div>
-          <div class="group"><span class="glabel">Chat</span>
-            <div class="seg" id="chatmodel">
-              <button data-v="claude-haiku-4-5-20251001" class="on">Haiku</button>
-              <button data-v="claude-sonnet-5">Sonnet</button>
-              <button data-v="claude-opus-5">Opus</button>
-              <button data-v="kimi-k3">Kimi K3</button></div></div>
-          <div class="group"><span class="glabel">Executor</span>
-            <div class="seg" id="executor">
-              <button data-v="claude-sonnet-5" class="on">Sonnet</button>
-              <button data-v="claude-opus-5">Opus</button>
-              <button data-v="kimi-k3">Kimi K3</button>
-              <button data-v="both">Both</button></div></div>
-        </div>
         <div class="composer">
+          <div class="attachrow" id="attachrow"></div>
           <textarea id="box" rows="1" placeholder="Message — the bridge decides if it needs tools…"></textarea>
-          <div class="actions">
-            <span class="hint" id="modeHint">questions get a quick answer · tasks ask before running</span>
-            <button class="btn primary" id="send" onclick="send()">
-              <span>Send</span><span class="arrow">↑</span>
-            </button>
+          <div class="cbar">
+            <button class="cbtn" id="addbtn" type="button" title="Attach files or screenshots">+</button>
+            <input type="file" id="fileinput" multiple style="display:none"
+              accept="image/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv,.log">
+            <button class="chip" id="modelchip" type="button" title="Chat model">
+              <span id="modelname">Haiku</span><span class="caret">▾</span></button>
+            <button class="chip" id="optchip" type="button" title="Effort · tools · executor">
+              <span>⚙</span><span class="caret">▾</span></button>
+            <span class="grow"></span>
+            <button class="cbtn" id="micbtn" type="button" title="Dictate">🎤</button>
+            <button class="sendbtn" id="send" type="button" onclick="send()" title="Send">↑</button>
           </div>
+        </div>
+        <div class="pop" id="modelpop">
+          <div class="phead">Chat model</div>
+          <div class="pitem on" data-v="claude-haiku-4-5-20251001">Haiku<span class="pk">✓</span></div>
+          <div class="pitem" data-v="claude-sonnet-5">Sonnet<span class="pk">✓</span></div>
+          <div class="pitem" data-v="claude-opus-5">Opus<span class="pk">✓</span></div>
+          <div class="pitem" data-v="kimi-k3">Kimi K3<span class="pk">✓</span></div>
+        </div>
+        <div class="pop" id="optpop">
+          <div class="phead">Effort</div>
+          <div class="prow" id="effort">
+            <button type="button" data-v="low" class="on">low</button>
+            <button type="button" data-v="high">high</button>
+            <button type="button" data-v="max">max</button></div>
+          <div class="phead">Tools</div>
+          <div class="prow" id="toolset">
+            <button type="button" data-v="build" class="on">build</button>
+            <button type="button" data-v="research">research</button></div>
+          <div class="phead">Executor · for tasks</div>
+          <div class="prow" id="executor">
+            <button type="button" data-v="claude-sonnet-5" class="on">Sonnet</button>
+            <button type="button" data-v="claude-opus-5">Opus</button>
+            <button type="button" data-v="kimi-k3">Kimi</button>
+            <button type="button" data-v="both">Both</button></div>
         </div>
       </div>
     </footer>
@@ -1455,15 +1490,97 @@ console.log('=== BRIDGE UI v2 LOADED ===');
 let SID = localStorage.getItem('bridge_sid') || null;
 const $ = i => document.getElementById(i);
 
-/* segmented settings */
-document.querySelectorAll('.seg').forEach(seg=>{
-  seg.addEventListener('click', e=>{
-    const b = e.target.closest('button'); if(!b) return;
-    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
-    b.classList.add('on');
+/* ── compact settings: chips + popover selector menus ───── */
+const CFG = {chatmodel:'claude-haiku-4-5-20251001', effort:'low',
+             toolset:'build', executor:'claude-sonnet-5'};
+const MODEL_LABEL = {'claude-haiku-4-5-20251001':'Haiku',
+  'claude-sonnet-5':'Sonnet','claude-opus-5':'Opus','kimi-k3':'Kimi K3'};
+const setting = id => CFG[id] ?? '';
+
+function closePops(){ document.querySelectorAll('.pop.on').forEach(p=>p.classList.remove('on')); }
+function openPop(pop, anchor){
+  const wasOn = pop.classList.contains('on');
+  closePops(); if(wasOn) return;
+  pop.style.visibility='hidden'; pop.classList.add('on');
+  const r=anchor.getBoundingClientRect(), w=pop.offsetWidth;
+  pop.style.left=Math.max(10, Math.min(r.left, window.innerWidth-w-10))+'px';
+  pop.style.bottom=(window.innerHeight - r.top + 8)+'px';
+  pop.style.visibility='';
+}
+$('modelchip').addEventListener('click', e=>{ e.stopPropagation(); openPop($('modelpop'), $('modelchip')); });
+$('optchip').addEventListener('click', e=>{ e.stopPropagation(); openPop($('optpop'), $('optchip')); });
+document.addEventListener('click', closePops);
+document.querySelectorAll('.pop').forEach(p=>p.addEventListener('click', e=>e.stopPropagation()));
+
+$('modelpop').querySelectorAll('.pitem').forEach(it=>{
+  it.addEventListener('click', ()=>{
+    CFG.chatmodel = it.dataset.v;
+    $('modelpop').querySelectorAll('.pitem').forEach(x=>x.classList.toggle('on', x===it));
+    $('modelname').textContent = MODEL_LABEL[CFG.chatmodel] || CFG.chatmodel;
+    closePops();
   });
 });
-const setting = id => ($(id).querySelector('button.on')||{}).dataset.v ?? '';
+$('optpop').querySelectorAll('.prow').forEach(row=>{
+  const key=row.id;
+  row.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      CFG[key]=b.dataset.v;
+      row.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+    });
+  });
+});
+
+/* ── attachments (preview only — not sent to the model yet) ─ */
+let ATTACH=[];
+$('addbtn').addEventListener('click', ()=>$('fileinput').click());
+$('fileinput').addEventListener('change', e=>{
+  for(const f of e.target.files) addAttach(f);
+  e.target.value='';
+});
+function addAttach(f){
+  const a={name:f.name, isImg:(f.type||'').startsWith('image/'), url:null};
+  ATTACH.push(a);
+  if(a.isImg){ const rd=new FileReader(); rd.onload=()=>{ a.url=rd.result; renderAttach(); }; rd.readAsDataURL(f); }
+  renderAttach();
+}
+function renderAttach(){
+  const el=$('attachrow'); el.innerHTML='';
+  ATTACH.forEach((a,i)=>{
+    const d=document.createElement('div'); d.className='attach';
+    d.innerHTML = (a.isImg && a.url ? '<img alt="" src="'+a.url+'">' : '<span>📄</span>')
+      + '<span class="an"></span><button class="ax" type="button">×</button>';
+    d.querySelector('.an').textContent = a.name;
+    d.querySelector('.ax').onclick = ()=>{ ATTACH.splice(i,1); renderAttach(); };
+    el.appendChild(d);
+  });
+  if(ATTACH.length){
+    const note=document.createElement('div');
+    note.style.cssText='font-size:11px;color:var(--faint);width:100%';
+    note.textContent="preview only — attachments aren't sent to the model yet";
+    el.appendChild(note);
+  }
+}
+
+/* ── dictation via Web Speech API when the browser supports it ─ */
+(function(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const mic = $('micbtn');
+  if(!SR){ mic.style.display='none'; return; }
+  let rec=null, on=false;
+  mic.addEventListener('click', ()=>{
+    if(on){ rec && rec.stop(); return; }
+    rec = new SR(); rec.lang='en-US'; rec.interimResults=true; rec.continuous=false;
+    const base = $('box').value;
+    rec.onresult = ev=>{
+      let t=''; for(const res of ev.results) t += res[0].transcript;
+      $('box').value = (base ? base+' ' : '') + t;
+      $('box').dispatchEvent(new Event('input'));
+    };
+    rec.onend = ()=>{ on=false; mic.style.color=''; };
+    rec.onerror = ()=>{ on=false; mic.style.color=''; };
+    on=true; mic.style.color='var(--accent)'; rec.start();
+  });
+})();
 
 /* Provider is inferred from the model id, so each role needs only one picker. */
 const providerFor = m => m.startsWith('claude') ? 'anthropic'
@@ -1582,7 +1699,25 @@ function addUser(text){
 }
 function addBot(text){
   const t=turn('bot'); const b=document.createElement('div');
-  b.className='body'; b.innerHTML=md(text); t.appendChild(b); scroll(); return t;
+  b.className='body'; b.innerHTML=md(text); t.appendChild(b);
+  const tools=document.createElement('div'); tools.className='msgtools';
+  const cp=document.createElement('button'); cp.type='button'; cp.className='copybtn';
+  cp.textContent='⧉ Copy';
+  cp.addEventListener('click', ()=>copyText(text, cp));
+  tools.appendChild(cp); t.appendChild(tools);
+  scroll(); return t;
+}
+function copyText(txt, btn){
+  const ok=()=>{ if(!btn) return; const o=btn.textContent; btn.textContent='✓ Copied';
+    setTimeout(()=>{ btn.textContent=o; }, 1200); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(ok).catch(()=>fbCopy(txt, ok));
+  } else fbCopy(txt, ok);
+}
+function fbCopy(txt, done){
+  const ta=document.createElement('textarea'); ta.value=txt;
+  ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta);
+  ta.select(); try{ document.execCommand('copy'); }catch(e){} ta.remove(); done&&done();
 }
 function addTool(text){
   const t=turn('bot'); const b=document.createElement('div');
@@ -1653,18 +1788,13 @@ async function send(){
 /* Confirm card. Nothing enters the agent loop until Run is clicked. */
 function renderProposal(text, r){
   const ex = execConfig();
-  const sug = r.suggested || {};
-  const budget = parseFloat(setting('budget')) || sug.budget_usd || 1;
-  const turnsRaw = setting('turns');
-  const turns = turnsRaw ? parseInt(turnsRaw) : (sug.max_turns || null);
   const kind = r.classification==='DO_SMALL' ? 'quick task' : 'multi-step task';
 
   const t = turn('bot');
   const card = document.createElement('div'); card.className='proposal';
   card.innerHTML =
     '<div class="ptitle">Run this as a '+esc(kind)+'?</div>'+
-    '<div class="pmeta">executor <b>'+esc(ex.label)+'</b> · budget <b>$'+
-      budget.toFixed(2)+'</b> · turns <b>'+(turns?turns:'auto')+'</b> · tools <b>'+
+    '<div class="pmeta">executor <b>'+esc(ex.label)+'</b> · tools <b>'+
       esc(setting('toolset'))+'</b></div>';
   const row=document.createElement('div'); row.className='prow';
   const run=document.createElement('button'); run.className='btn primary'; run.textContent='Run';
@@ -1682,10 +1812,9 @@ function renderProposal(text, r){
         provider:ex.provider, model:ex.model,
         advisor_provider:ex.advisor_provider, advisor_model:ex.advisor_model,
         advise_every:ex.advise_every,
-        reasoning_effort:setting('effort'),
-        budget_usd:budget, tool_set:setting('toolset'), max_turns:turns})});
+        reasoning_effort:setting('effort'), tool_set:setting('toolset')})});
       SID=dr.session_id; localStorage.setItem('bridge_sid',SID);
-      const n=turn('bot'); addMeta(n,'agent run · '+ex.label+' · cap $'+budget.toFixed(2));
+      const n=turn('bot'); addMeta(n,'agent run · '+ex.label);
       await poll();
     }catch(e){ addBot('**Error** — '+e.message); }
     busy(false); scroll();
