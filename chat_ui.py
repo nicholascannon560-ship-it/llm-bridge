@@ -120,7 +120,7 @@ CHAT_RESEARCH = os.getenv("UI_CHAT_RESEARCH", "off").lower() in ("on", "1", "tru
 # Hard cap on read-only tool-calling turns per chat message. Small on purpose:
 # chat recon is meant to be a few lookups, not an agent run. On the last turn a
 # forced tool_choice="none" call extracts a text answer.
-CHAT_RESEARCH_MAX_STEPS = int(os.getenv("UI_CHAT_RESEARCH_MAX_STEPS", "2"))
+CHAT_RESEARCH_MAX_STEPS = int(os.getenv("UI_CHAT_RESEARCH_MAX_STEPS", "3"))
 # Must resolve to a read-only tool set; assert_tool_set_safe rejects any set
 # that carries a write/deploy tool.
 CHAT_RESEARCH_TOOL_SET = os.getenv("UI_CHAT_RESEARCH_TOOL_SET", "research")
@@ -821,6 +821,19 @@ async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
             break  # spend ceiling — stop looping, force a final answer below
 
     if not answered:
+        # Forced final answer. Without an explicit instruction, a model cut off
+        # mid-research (tools now forbidden) tends to emit the tool call it still
+        # wanted as raw JSON text instead of prose — so tell it plainly to answer
+        # from what it already has.
+        messages.append({
+            "role": "user",
+            "content": (
+                "Stop searching now and answer using only what you have already "
+                "found above. Write a normal prose answer — do not output tool "
+                "calls, JSON, or ask to look at more files. If something is still "
+                "unknown, say so briefly."
+            ),
+        })
         resp = await router.chat(ChatRequest(
             provider=CHAT_RESEARCH_PROVIDER,
             model=CHAT_RESEARCH_MODEL,
