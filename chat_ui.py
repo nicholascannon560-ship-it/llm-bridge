@@ -9,8 +9,9 @@ Two ways to talk to the same conversation:
           background thread; the page polls for progress.
 
 Both modes send the SAME system prompt and the SAME tool schemas, so they
-share one cached prefix. Moonshot caching is implicit — it matches on a
-byte-identical prefix — which drives two rules everything here obeys:
+share one cached prefix *while they run on the same model*. Caching is implicit
+and per-model — it matches on a byte-identical prefix — which drives two rules
+everything here obeys:
 
   1. The system prompt is built once per session and never regenerated.
      (AgentHarness._build_system_prompt interpolates a task_id and a rolling
@@ -20,6 +21,15 @@ byte-identical prefix — which drives two rules everything here obeys:
      on every remaining turn.
 
 Kimi K3 input is 0.30c/1k fresh vs 0.03c/1k cached, so a hit is 90% off.
+
+Because the cache is per-model, though, Chat (cheap model) and Do (bigger
+executor) do NOT share it: replaying the whole transcript across that boundary
+re-bills every token fresh, both on the way in AND on the way back. So the
+chat -> executor handoff does not pass the raw transcript. Chat distils a
+compact brief and hands the executor only that brief + the command; only the
+executor's final answer rejoins the chat thread (see HANDOFF_BRIEF and
+_build_handoff_brief). Within one model, rules 1-2 still hold and caching works
+exactly as before.
 
 Sessions live in memory, mirror to disk, and mirror again to a private git
 repo (default: the change-log repo, under bridge-sessions/). The git mirror
@@ -87,6 +97,16 @@ ADVISOR_PROVIDER = os.getenv("UI_ADVISOR_PROVIDER", "anthropic")
 ADVISOR_MODEL = os.getenv("UI_ADVISOR_MODEL", "claude-opus-5")
 # How often (in turns) the advisor reviews the executor in "Both" mode.
 ADVISE_EVERY = int(os.getenv("UI_ADVISE_EVERY", "3"))
+
+# Model-alternation handoff. Chat runs on the cheap model (Haiku) and the
+# executor on a bigger one (Kimi/Sonnet/Opus). Prompt cache is PER-MODEL, so
+# replaying the whole chat transcript to the executor bills every token fresh —
+# and folding the executor's full tool-by-tool transcript back into the chat
+# thread then re-bills THAT on the next cheap turn. With this on, Chat hands the
+# executor only a compact brief + the command, and only the executor's final
+# answer rejoins the chat thread. Set UI_HANDOFF_BRIEF=off to restore the old
+# full-transcript handoff (known-good fallback, one env var, no redeploy needed).
+HANDOFF_BRIEF = os.getenv("UI_HANDOFF_BRIEF", "on").lower() not in ("off", "0", "false")
 
 _DIRTY: set = set()
 _DIRTY_LOCK = threading.Lock()
@@ -507,6 +527,71 @@ async def _classify(message: str, history: List[Dict[str, Any]]) -> str:
     return "DO_SMALL" if any(v in low for v in verbs) else "CHAT"
 
 
+# ── chat → executor handoff brief ────────────────────────────────────────────
+
+_BRIEF_PROMPT = """You are compressing a planning conversation into a short brief for an EXECUTOR agent that is about to DO the task with real tools. The executor CANNOT see this conversation — the brief is all it gets besides the command itself.
+
+Write a compact brief (<=200 words, plain text) that carries ONLY what the executor needs:
+- the concrete goal and any decisions already reached,
+- constraints, gotchas, and exact values named (repo/service/file names, IDs, flags, numbers),
+- anything explicitly ruled out.
+
+No preamble, no sign-off, no restating the command verb-for-verb, no filler. If the conversation holds nothing the executor needs, reply with the single word NONE."""
+
+
+def _brief_messages(brief: str) -> List[Dict[str, Any]]:
+    """The compact two-message prefix that stands in for the full transcript."""
+    return [
+        {"role": "user", "content": "Context carried over from planning:\n\n" + brief},
+        {"role": "assistant", "content": "Understood — proceeding with the task."},
+    ]
+
+
+async def _build_handoff_brief(history: List[Dict[str, Any]], command: str) -> str:
+    """Distill the chat-so-far into a short brief for the executor, using the
+    cheap chat model. Returns "" when there is nothing worth carrying over.
+
+    This is the core of the model-alternation fix: the executor never replays
+    the full transcript (which its model would re-bill fresh) — only this brief.
+    Any failure falls back to "" (executor runs on the command alone), never an
+    exception, so the handoff can't break a run.
+    """
+    ctx = []
+    for m in history:
+        c = m.get("content")
+        if isinstance(c, str) and c.strip() and m.get("role") in ("user", "assistant"):
+            ctx.append(f"{m.get('role')}: {c.strip()}")
+    if not ctx:
+        return ""
+    convo = "\n".join(ctx)[-8000:]  # bound the cheap model's input
+    prompt = (
+        _BRIEF_PROMPT
+        + "\n\n=== conversation ===\n" + convo
+        + "\n\n=== command the executor will run ===\n" + command[:1000]
+        + "\n\n=== brief ==="
+    )
+    try:
+        from llm_gateway import ChatMessage, ChatRequest, get_router
+
+        resp = await get_router().chat(
+            ChatRequest(
+                provider=CHAT_PROVIDER,
+                model=CHAT_MODEL,
+                messages=[ChatMessage(role="user", content=prompt)],
+                max_tokens=400,
+                temperature=0.3,
+                reasoning_effort="low",
+            )
+        )
+        brief = (resp.content or "").strip()
+    except Exception as e:
+        print(f"[chat_ui] handoff brief failed: {e}", flush=True)
+        return ""
+    if not brief or brief.strip().upper().strip("*.# ") == "NONE":
+        return ""
+    return brief
+
+
 # ── routes ──────────────────────────────────────────────────────────────────
 
 @ui_router.post("/ui/login")
@@ -677,7 +762,9 @@ async def ui_do(body: DoRequestBody = Body(...)):
         )
 
     with s.lock:
-        history = list(s.messages)
+        # The planning conversation, captured BEFORE the "Do it" command is
+        # appended — this is what the handoff brief is distilled from.
+        chat_history = list(s.messages)
         s.messages.append({"role": "user", "content": body.message})
         if s.title == "new session":
             s.title = body.message[:60]
@@ -691,8 +778,16 @@ async def ui_do(body: DoRequestBody = Body(...)):
 
     def _worker() -> None:
         try:
-            result = asyncio.run(
-                run_agent(
+            async def _go():
+                # Brief in: hand the executor a compact brief distilled from the
+                # planning chat, not the full transcript its (different) model
+                # would re-bill token-for-token. Built here on the worker's own
+                # loop so the HTTP response returns "started" immediately.
+                exec_history = chat_history
+                if HANDOFF_BRIEF:
+                    brief = await _build_handoff_brief(chat_history, body.message)
+                    exec_history = _brief_messages(brief) if brief else []
+                return await run_agent(
                     task=body.message,
                     tool_set=body.tool_set,
                     provider=body.provider,
@@ -702,23 +797,35 @@ async def ui_do(body: DoRequestBody = Body(...)):
                     max_turns=body.max_turns,
                     cost_budget_cents=body.budget_usd * 100.0,
                     task_id=task_id,
-                    history=history,
+                    history=exec_history,
                     system_prompt=s.system_prompt,
                     advisor_provider=body.advisor_provider,
                     advisor_model=body.advisor_model,
                     advise_every=body.advise_every,
                 )
-            )
+
+            result = asyncio.run(_go())
             with s.lock:
-                # Replace history with exactly what the harness sent, so the
-                # next call replays a byte-identical prefix and stays cached.
-                returned = result.get("messages")
-                if returned:
-                    s.messages = returned
-                s.messages.append({
-                    "role": "assistant",
-                    "content": result.get("final_answer") or "(no final answer)",
-                })
+                if HANDOFF_BRIEF:
+                    # Summary out: the executor's full tool-by-tool transcript
+                    # stays OUT of the chat thread (the cheap chat model would
+                    # re-bill it on the next turn). Only the compact final answer
+                    # rejoins the conversation; the full run lives in DO_STATE +
+                    # Railway logs for audit.
+                    s.messages.append({
+                        "role": "assistant",
+                        "content": result.get("final_answer") or "(no final answer)",
+                    })
+                else:
+                    # Legacy handoff: replace history with exactly what the
+                    # harness sent, so a same-model next call stays cached.
+                    returned = result.get("messages")
+                    if returned:
+                        s.messages = returned
+                    s.messages.append({
+                        "role": "assistant",
+                        "content": result.get("final_answer") or "(no final answer)",
+                    })
                 s.cost_cents += result.get("total_cost_cents", 0.0)
                 toks = result.get("total_tokens") or {}
                 s.prompt_tokens += toks.get("prompt", 0)
