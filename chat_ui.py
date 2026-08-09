@@ -120,10 +120,21 @@ CHAT_RESEARCH = os.getenv("UI_CHAT_RESEARCH", "off").lower() in ("on", "1", "tru
 # Hard cap on read-only tool-calling turns per chat message. Small on purpose:
 # chat recon is meant to be a few lookups, not an agent run. On the last turn a
 # forced tool_choice="none" call extracts a text answer.
-CHAT_RESEARCH_MAX_STEPS = int(os.getenv("UI_CHAT_RESEARCH_MAX_STEPS", "4"))
+CHAT_RESEARCH_MAX_STEPS = int(os.getenv("UI_CHAT_RESEARCH_MAX_STEPS", "2"))
 # Must resolve to a read-only tool set; assert_tool_set_safe rejects any set
 # that carries a write/deploy tool.
 CHAT_RESEARCH_TOOL_SET = os.getenv("UI_CHAT_RESEARCH_TOOL_SET", "research")
+# The research loop runs on a CAPABLE model regardless of the chat-model chip:
+# a weak model (Haiku) flails — hesitates, makes poor tool choices, and burns
+# extra billed turns — so Sonnet is both more reliable and usually cheaper
+# end-to-end here. Overrides body.provider/model for the loop only.
+CHAT_RESEARCH_PROVIDER = os.getenv("UI_CHAT_RESEARCH_PROVIDER", "anthropic")
+CHAT_RESEARCH_MODEL = os.getenv("UI_CHAT_RESEARCH_MODEL", "claude-sonnet-5")
+# Guardrails against a runaway transcript: cap the size of each tool result fed
+# back (github_read windows / repo_search hits balloon the prompt), and stop the
+# loop once it has spent this many cents — then force one final text answer.
+CHAT_RESEARCH_TOOL_CHARS = int(os.getenv("UI_CHAT_RESEARCH_TOOL_CHARS", "4000"))
+CHAT_RESEARCH_MAX_CENTS = float(os.getenv("UI_CHAT_RESEARCH_MAX_CENTS", "8"))
 
 _DIRTY: set = set()
 _DIRTY_LOCK = threading.Lock()
@@ -756,10 +767,22 @@ async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
         totals["cached_tokens"] += u.get("cached_tokens", 0)
         cost += resp.cost_cents or 0.0
 
+    def _clip(blob: str) -> str:
+        if len(blob) <= CHAT_RESEARCH_TOOL_CHARS:
+            return blob
+        return blob[:CHAT_RESEARCH_TOOL_CHARS] + (
+            "\n... [truncated %d chars — narrow the read/search]"
+            % (len(blob) - CHAT_RESEARCH_TOOL_CHARS)
+        )
+
+    # Answered-with-text stops cleanly; hitting the step cap or the cent cap
+    # with tools still pending falls through to one forced tool_choice="none"
+    # call so the user always gets prose, never a dangling tool call.
+    answered = False
     for _ in range(CHAT_RESEARCH_MAX_STEPS):
         resp = await router.chat(ChatRequest(
-            provider=body.provider,
-            model=body.model,
+            provider=CHAT_RESEARCH_PROVIDER,
+            model=CHAT_RESEARCH_MODEL,
             messages=_mk(messages),
             max_tokens=body.max_tokens,
             temperature=1.0,
@@ -770,6 +793,7 @@ async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
         _tally(resp)
         if not resp.tool_calls:
             final = resp.content or ""
+            answered = True
             break
         steps += 1
         messages.append({
@@ -791,14 +815,15 @@ async def _run_chat_research(s: "Session", body: "ChatRequestBody"):
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.get("id"),
-                "content": json.dumps(result, default=str),
+                "content": _clip(json.dumps(result, default=str)),
             })
-    else:
-        # Hit the step cap with tools still pending — force a text answer so the
-        # user always gets prose, not a dangling tool call.
+        if cost >= CHAT_RESEARCH_MAX_CENTS:
+            break  # spend ceiling — stop looping, force a final answer below
+
+    if not answered:
         resp = await router.chat(ChatRequest(
-            provider=body.provider,
-            model=body.model,
+            provider=CHAT_RESEARCH_PROVIDER,
+            model=CHAT_RESEARCH_MODEL,
             messages=_mk(messages),
             max_tokens=body.max_tokens,
             temperature=1.0,
