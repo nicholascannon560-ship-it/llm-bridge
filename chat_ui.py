@@ -1519,14 +1519,26 @@ textarea::placeholder{color:var(--faint)}
 /* ── login ──────────────────────────────────────────────── */
 #login{position:fixed;inset:0;background:var(--bg);z-index:20;
   display:flex;align-items:center;justify-content:center}
-.card{display:flex;flex-direction:column;gap:13px;width:min(320px,88vw);
+.card{display:flex;flex-direction:column;gap:16px;width:min(300px,90vw);
   align-items:stretch;text-align:center}
 .card .brand{justify-content:center;font-size:16px;margin-bottom:2px}
-.card input{
-  padding:10px 13px;background:var(--surface);border:1px solid var(--line);
-  color:var(--fg);border-radius:10px;font:inherit;outline:none;text-align:center;
-}
-.card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.subtle{font-size:13px;color:var(--dim)}
+.pindots{display:flex;gap:13px;justify-content:center;margin:2px 0}
+.pd{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--line);
+  background:transparent;transition:background .12s,border-color .12s}
+.pd.on{background:var(--accent);border-color:var(--accent)}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.key{height:56px;border-radius:15px;border:1px solid var(--line);
+  background:var(--surface);color:var(--fg);font:inherit;font-size:23px;
+  font-weight:500;cursor:pointer;-webkit-user-select:none;user-select:none;
+  transition:background .1s,transform .05s}
+.key:hover{background:var(--raised)}
+.key:active{transform:scale(.95);background:var(--accent-soft)}
+.subkey{font-size:16px;color:var(--dim);background:none;border-color:transparent}
+.subkey:hover{background:var(--raised)}
+.card.shake{animation:shk .34s}
+@keyframes shk{0%,100%{transform:none}20%,60%{transform:translateX(-7px)}
+  40%,80%{transform:translateX(7px)}}
 .err{color:#c0392b;font-size:12.5px;min-height:1em}
 @media (prefers-color-scheme:dark){.err{color:#f08a7a}}
 @media (max-width:640px){
@@ -1536,12 +1548,28 @@ textarea::placeholder{color:var(--faint)}
 </style></head><body>
 
 <div id="login">
-  <div class="card">
+  <div class="card" id="pincard">
     <div class="brand"><span class="dot"></span> bridge console</div>
-    <input id="pw" type="password" placeholder="password" autofocus
-      onkeydown="if(event.key==='Enter')login()">
-    <button class="btn primary" onclick="login()">Unlock v2</button>
+    <div class="subtle">Enter your 6-digit PIN</div>
+    <div class="pindots" id="pindots">
+      <span class="pd"></span><span class="pd"></span><span class="pd"></span>
+      <span class="pd"></span><span class="pd"></span><span class="pd"></span>
+    </div>
     <div class="err" id="lerr"></div>
+    <div class="keys">
+      <button type="button" class="key" data-d="1">1</button>
+      <button type="button" class="key" data-d="2">2</button>
+      <button type="button" class="key" data-d="3">3</button>
+      <button type="button" class="key" data-d="4">4</button>
+      <button type="button" class="key" data-d="5">5</button>
+      <button type="button" class="key" data-d="6">6</button>
+      <button type="button" class="key" data-d="7">7</button>
+      <button type="button" class="key" data-d="8">8</button>
+      <button type="button" class="key" data-d="9">9</button>
+      <button type="button" class="key subkey" id="pinclear">C</button>
+      <button type="button" class="key" data-d="0">0</button>
+      <button type="button" class="key subkey" id="pinback">⌫</button>
+    </div>
   </div>
 </div>
 
@@ -1767,13 +1795,43 @@ async function api(path, opts={}){
   if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || r.statusText);
   return r.json();
 }
-async function login(){
-  $('lerr').textContent='';
-  try{
-    await api('/ui/login',{method:'POST',body:JSON.stringify({password:$('pw').value})});
-    $('login').style.display='none'; $('pw').value=''; boot();
-  }catch(e){ $('lerr').textContent = e.message; }
+/* ── 6-digit PIN pad ─────────────────────────────────────── */
+let PIN='';
+let pinBusy=false;
+function pinDots(){
+  const d=$('pindots').children;
+  for(let i=0;i<d.length;i++) d[i].classList.toggle('on', i<PIN.length);
 }
+function pinPush(dgt){
+  if(pinBusy || PIN.length>=6) return;
+  PIN+=dgt; pinDots();
+  if(PIN.length===6) submitPin();
+}
+function pinBack(){ if(pinBusy) return; PIN=PIN.slice(0,-1); pinDots(); }
+function pinClear(){ if(pinBusy) return; PIN=''; pinDots(); $('lerr').textContent=''; }
+async function submitPin(){
+  pinBusy=true;
+  const pin=PIN;
+  try{
+    await api('/ui/login',{method:'POST',body:JSON.stringify({password:pin})});
+    PIN=''; pinDots(); $('lerr').textContent='';
+    $('login').style.display='none'; boot();
+  }catch(e){
+    $('lerr').textContent='Wrong PIN';
+    const c=$('pincard'); if(c){ c.classList.add('shake'); setTimeout(()=>c.classList.remove('shake'),380); }
+    PIN=''; pinDots();
+  }finally{ pinBusy=false; }
+}
+document.querySelectorAll('.key[data-d]').forEach(b=>
+  b.addEventListener('click', ()=>pinPush(b.dataset.d)));
+$('pinback').addEventListener('click', pinBack);
+$('pinclear').addEventListener('click', pinClear);
+document.addEventListener('keydown', e=>{
+  if($('login').style.display==='none') return;   // only while the pad is up
+  if(e.key>='0' && e.key<='9') pinPush(e.key);
+  else if(e.key==='Backspace'){ e.preventDefault(); pinBack(); }
+  else if(e.key==='Escape') pinClear();
+});
 
 /* ── drawer / session list ──────────────────────────────── */
 function toggleDrawer(force){
