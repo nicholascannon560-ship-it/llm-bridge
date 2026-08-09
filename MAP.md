@@ -80,6 +80,7 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-08 | prompts: tell the executor to BATCH independent tool calls into one turn (harness already runs all tool_calls per turn; llm_gateway returns all tool_use blocks) — flips the old "wait for a tool result before the next tool" rule; loop now only for real dependency chains | files: agent_loop/harness.py, chat_ui.py
 - 2026-08-08 | chat_ui: brief-in/summary-out handoff (UI_HANDOFF_BRIEF, default on) so a chat<->executor model switch no longer re-bills the full transcript; chat distils a brief, only the final answer folds back | files: chat_ui.py
 - 2026-08-08 | agent loop: repo_search tool (branch-aware content grep -> path:line, read-only) + read-narrow discipline added to both system prompts (locate with repo_search, then read a tight window) | files: agent_loop/tools.py, chat_ui.py, agent_loop/harness.py
 - 2026-08-08 | agent loop: added github_patch (old_string/new_string edit) so the agent stops resending whole files on every edit; registered in WRITE_TOOL_NAMES so browse+write stays blocked | files: agent_loop/tools.py

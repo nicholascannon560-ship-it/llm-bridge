@@ -426,7 +426,9 @@ How you are being used:
 
 Rules:
 1. Think step by step and keep answers tight. Every turn costs money.
-2. Wait for a tool result before calling the next tool.
+2. Batch independent tool calls into a single turn — they all run and return together, so
+   several independent reads/searches cost one turn, not many. Only wait for a result before
+   the next call when that call actually depends on it.
 3. If a tool errors, try another approach rather than repeating it verbatim.
 4. Never claim code works because it looks correct. run_tests is the only
    thing that proves it.

@@ -258,7 +258,9 @@ You have access to the following tools:
 Rules:
 1. Think step by step. Break complex tasks into smaller steps.
 2. Call tools using the OpenAI function-calling format.
-3. Wait for tool results before calling the next tool.
+3. Batch independent tool calls into ONE turn — the loop executes every call you return and
+   hands you all results together, so N independent reads or searches cost one model turn, not
+   N. Only split a call into a later turn when it genuinely depends on an earlier result.
 4. If a tool returns an error, try an alternative approach.
 5. When the task is complete, respond with a final summary. Do NOT call more tools.
 6. Be concise — each turn costs money and time.
