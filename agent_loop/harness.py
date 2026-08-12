@@ -17,6 +17,7 @@ Designed to be called from:
 
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -98,6 +99,67 @@ CENTS_PER_PROMPT_TOKEN = float(os.environ.get("AGENT_CENTS_PER_PROMPT_TOKEN", "0
 # from outside — which is exactly how a healthy 10-minute run got read as hung.
 # Read it via GET /agent/status. No commits, no I/O.
 RUN_STATE: Dict[str, Any] = {"active": False, "task_id": None}
+
+# Live event feed for the console. RUN_STATE only ever exposed `last_tool`, so a
+# watcher could see THAT the agent was working but never WHAT it did — the whole
+# tool-by-tool trace was locked inside self.transcript until the run ended. These
+# are the same records, published as they happen, with a monotonic seq so a
+# browser can poll incrementally instead of re-reading the world.
+EVENT_BUFFER_MAX = int(os.environ.get("AGENT_EVENT_BUFFER_MAX", "400"))
+RUN_EVENTS: List[Dict[str, Any]] = []
+_EVENTS_LOCK = threading.Lock()
+_EVENT_SEQ = 0
+
+# Cooperative cancellation. The loop checks this between turns, so a stop lands
+# at the next turn boundary rather than mid-tool-call — an in-flight github_commit
+# is never abandoned half-applied.
+_STOP_REQUESTED: Dict[str, Any] = {"task_id": None}
+
+
+def _emit(kind: str, **data: Any) -> None:
+    """Publish one run event. Never raises — observability must not break a run."""
+    global _EVENT_SEQ
+    try:
+        with _EVENTS_LOCK:
+            _EVENT_SEQ += 1
+            RUN_EVENTS.append({
+                "seq": _EVENT_SEQ,
+                "kind": kind,
+                "at": datetime.now(timezone.utc).isoformat(),
+                **data,
+            })
+            if len(RUN_EVENTS) > EVENT_BUFFER_MAX:
+                del RUN_EVENTS[:-EVENT_BUFFER_MAX]
+    except Exception:
+        pass
+
+
+def run_events(since: int = 0) -> Dict[str, Any]:
+    """Events with seq > `since`, plus the current cursor."""
+    with _EVENTS_LOCK:
+        events = [e for e in RUN_EVENTS if e["seq"] > since]
+        return {"events": events, "cursor": _EVENT_SEQ}
+
+
+def reset_events() -> None:
+    """Drop buffered events at the start of a run so one run's feed is its own."""
+    with _EVENTS_LOCK:
+        RUN_EVENTS.clear()
+
+
+def request_stop(task_id: Optional[str] = None) -> Dict[str, Any]:
+    """Ask the active run to stop at the next turn boundary."""
+    _STOP_REQUESTED["task_id"] = task_id or RUN_STATE.get("task_id")
+    _emit("stop_requested", task_id=_STOP_REQUESTED["task_id"])
+    return {"stopping": True, "task_id": _STOP_REQUESTED["task_id"]}
+
+
+def _stop_is_requested(task_id: str) -> bool:
+    return _STOP_REQUESTED.get("task_id") == task_id
+
+
+def clear_stop() -> None:
+    _STOP_REQUESTED["task_id"] = None
 
 
 def current_run_state() -> Dict[str, Any]:
@@ -321,8 +383,28 @@ Rules:
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
 
+        reset_events()
+        clear_stop()
+        _emit("run_start", task=self.task[:300], task_id=self.task_id,
+              max_turns=self.max_turns,
+              cost_budget_cents=self.cost_budget_cents,
+              model=self.model, provider=self.provider)
+
         for turn in range(1, self.max_turns + 1):
             turn_record = {"turn": turn, "timestamp": datetime.now(timezone.utc).isoformat()}
+
+            if _stop_is_requested(self.task_id):
+                status = "stopped_by_user"
+                final_answer = f"Stopped by request after {turn - 1} turn(s)."
+                turn_record["type"] = "stopped"
+                turn_record["note"] = final_answer
+                self._record(turn_record)
+                final_answer = await self._wrap_up(status, final_answer)
+                break
+
+            _emit("turn_start", turn=turn, max_turns=self.max_turns,
+                  cost_cents=round(self.total_cost_cents, 3),
+                  cost_budget_cents=self.cost_budget_cents)
 
             # Pre-flight checks: stop BEFORE paying for a call that cannot fit
             # or cannot be afforded. The old post-call check let one oversized
@@ -392,6 +474,14 @@ Rules:
 
             tool_calls = llm_result.get("tool_calls")
 
+            # The model's own prose between tool calls — the "here's what I'm
+            # doing and why" that makes a trace readable rather than a wall of
+            # tool names. Only when it accompanies tool calls; a bare final
+            # answer is emitted as run_end instead, so it never shows twice.
+            interim = (llm_result.get("content") or "").strip()
+            if interim and tool_calls:
+                _emit("assistant_text", turn=turn, text=interim)
+
             if not tool_calls:
                 final_answer = llm_result.get("content", "")
                 # finish_reason == "length" means the model ran out of
@@ -440,7 +530,20 @@ Rules:
                 final_answer = await self._wrap_up(status, final_answer)
                 break
 
+            for i, tc in enumerate(tool_calls):
+                _emit("tool_call", turn=turn, index=i,
+                      name=tc["function"]["name"],
+                      args=tc["function"]["arguments"][:600])
+
             tool_results = await self._execute_tools(tool_calls)
+
+            for i, (tc, res) in enumerate(zip(tool_calls, tool_results)):
+                is_err = isinstance(res, dict) and "error" in res
+                _emit("tool_result", turn=turn, index=i,
+                      name=tc["function"]["name"],
+                      status="error" if is_err else "ok",
+                      preview=str(res)[:800])
+
             turn_record["type"] = "tool_loop"
             turn_record["tool_calls"] = [
                 {"name": tc["function"]["name"], "args_preview": tc["function"]["arguments"][:200]}
@@ -475,8 +578,11 @@ Rules:
                     isinstance(r, dict) and "error" in r for r in tool_results
                 )
                 if all_errored:
+                    _emit("advisor", turn=turn, reason="every tool call this turn errored")
                     await self._consult_advisor(turn, "every tool call this turn errored")
                 elif turn % self.advise_every == 0:
+                    _emit("advisor", turn=turn,
+                          reason=f"scheduled review every {self.advise_every} turns")
                     await self._consult_advisor(
                         turn, f"scheduled review every {self.advise_every} turns")
 
@@ -486,6 +592,12 @@ Rules:
                 status, "Max turns reached without a final answer.")
 
         summary = self._summary(status, final_answer)
+
+        _emit("run_end", status=status, final_answer=final_answer,
+              turns_used=len(self.transcript),
+              cost_cents=round(self.total_cost_cents, 3),
+              cost_budget_cents=self.cost_budget_cents)
+        clear_stop()
 
         RUN_STATE.update({
             "active": False,

@@ -43,10 +43,16 @@ DEFAULT_MODELS = {
 # routing and /estimate_cost. Verified July 2026.
 #
 # "cached_input" is the prompt-cache-hit rate where the provider publishes one.
+# Rates are CENTS PER 1000 TOKENS. Convert from the published $/Mtok by
+# dividing by 10: $5.00/Mtok == 500 cents/Mtok == 0.50 cents/Ktok. Getting the
+# unit wrong here does not just misreport spend — cost_budget_cents in the agent
+# loop is checked against these numbers, so a 10x-high rate cuts runs off at a
+# tenth of their real budget. (Opus 5 was entered in $/Mtok and did exactly
+# that until 2026-08-12.)
 COST_TABLE = {
     "anthropic": {
-        # Opus 5: $5.00 / $25.00 per Mtok
-        "claude-opus-5": {"input": 5.00, "output": 25.00, "cached_input": 0.50},
+        # Opus 5: $5.00 / $25.00 per Mtok, cached input $0.50/Mtok
+        "claude-opus-5": {"input": 0.50, "output": 2.50, "cached_input": 0.05},
         # Sonnet 5: $3.00 / $15.00 per Mtok
         "claude-sonnet-5": {"input": 0.30, "output": 1.50, "cached_input": 0.03},
         # Haiku 4.5: $1.00 / $5.00 per Mtok.
@@ -70,11 +76,33 @@ COST_TABLE = {
     },
 }
 
+def public_rates(provider: str, model: str) -> Optional[Dict[str, float]]:
+    """COST_TABLE row converted back to published $/Mtok, for display.
+
+    One place does the cents/Ktok -> $/Mtok conversion, so the model picker can
+    never drift from what the biller actually charges.
+    """
+    rates = COST_TABLE.get(provider, {}).get(model)
+    if not rates:
+        return None
+    return {
+        "input": round(rates["input"] * 10, 4),
+        "output": round(rates["output"] * 10, 4),
+        "cached_input": round(rates.get("cached_input", rates["input"]) * 10, 4),
+    }
+
+
 USAGE_LOG_PATH = os.environ.get("LLM_USAGE_LOG", "llm_usage.jsonl")
 
 # Agent-loop turns at reasoning_effort="max" measured 20-36s; tool round trips
 # push higher. 60s was the old hardcoded ceiling and is too tight.
 MOONSHOT_TIMEOUT_SEC = float(os.environ.get("MOONSHOT_TIMEOUT_SEC", "120"))
+
+# Streaming holds one connection open for the whole generation, so it needs a
+# longer ceiling than a blocking call. httpx treats this as a PER-CHUNK read
+# timeout, which is what SSE wants: it bounds the gap between tokens, not the
+# total length of a long answer.
+STREAM_TIMEOUT_SEC = float(os.environ.get("LLM_STREAM_TIMEOUT_SEC", "300"))
 
 # A 429 used to kill an entire agent run on its first turn: raise_for_status
 # fired, the exception propagated out of run_agent, and command_channel wrote the
@@ -223,6 +251,33 @@ class LLMProvider:
 
     async def chat_stream(self, req: ChatRequest) -> AsyncGenerator[str, None]:
         raise NotImplementedError
+
+    async def chat_stream_events(
+        self, req: ChatRequest
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream a reply as structured events, preserving cache + accounting.
+
+        `chat_stream` yields bare text and builds its own minimal payload, so it
+        loses prompt caching and reports no usage — streaming through it makes a
+        conversation *more* expensive, not less. This yields dicts instead:
+            {"type": "delta",  "text": str}
+            {"type": "done",   "content": str, "usage": {...},
+             "cost_cents": float, "model": str}
+        so a caller gets live tokens AND the same billing data `chat()` returns.
+
+        The default falls back to a single non-streaming `chat()` call, so a
+        provider without a real streaming path still satisfies the contract.
+        """
+        resp = await self.chat(req)
+        if resp.content:
+            yield {"type": "delta", "text": resp.content}
+        yield {
+            "type": "done",
+            "content": resp.content,
+            "usage": resp.usage or {},
+            "cost_cents": resp.cost_cents or 0.0,
+            "model": resp.model,
+        }
 
     def estimate_cost(self, model: str, prompt_tokens: int, completion_tokens: int,
                       cached_tokens: int = 0) -> float:
@@ -486,9 +541,15 @@ class AnthropicProvider(LLMProvider):
             elif isinstance(content, list) and content and isinstance(content[-1], dict):
                 content[-1]["cache_control"] = cc
 
-    async def chat(self, req: ChatRequest) -> ChatResponse:
-        start = time.time()
+    def _build_payload(self, req: ChatRequest) -> dict:
+        """Build the wire payload, cache breakpoints included.
 
+        Shared by chat() and chat_stream_events() so the streaming path sends a
+        byte-identical prefix to the blocking one — same tools, same system, same
+        cache_control markers. Any divergence here would give streaming its own
+        cache entry and silently double the prefix cost of a conversation that
+        uses both paths.
+        """
         # Tools are honored only when the caller actually wants them. Chat and
         # advisor calls pass tool_choice="none" (schemas sent only to share a
         # cache prefix), and must stay on the robust text-flatten path.
@@ -516,6 +577,12 @@ class AnthropicProvider(LLMProvider):
 
         # Opt into prompt caching (no-op if the prefix is too short to cache).
         self._inject_cache_control(payload)
+        return payload
+
+    async def chat(self, req: ChatRequest) -> ChatResponse:
+        start = time.time()
+
+        payload = self._build_payload(req)
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             r = await client.post(
@@ -625,6 +692,84 @@ class AnthropicProvider(LLMProvider):
                                 yield event["delta"].get("text", "")
                         except json.JSONDecodeError:
                             pass
+
+
+    async def chat_stream_events(
+        self, req: ChatRequest
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        payload = dict(self._build_payload(req))
+        payload["stream"] = True
+
+        text_parts: List[str] = []
+        # Anthropic splits usage across two events: message_start carries the
+        # input side (including both cache counters), message_delta the output
+        # side. Neither alone is enough to price the call, so accumulate both.
+        input_tokens = cached_tokens = cache_creation = completion_tokens = 0
+
+        async with httpx.AsyncClient(timeout=STREAM_TIMEOUT_SEC) as client:
+            async with client.stream(
+                "POST",
+                self.BASE_URL,
+                headers={
+                    "x-api-key": self.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            ) as r:
+                if r.status_code >= 400:
+                    body = (await r.aread()).decode("utf-8", "replace")[:500]
+                    raise httpx.HTTPStatusError(
+                        f"anthropic stream {r.status_code}: {body}",
+                        request=r.request, response=r,
+                    )
+                async for line in r.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    raw = line[6:]
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    etype = event.get("type")
+                    if etype == "content_block_delta":
+                        delta = event.get("delta") or {}
+                        if delta.get("type") == "text_delta":
+                            piece = delta.get("text") or ""
+                            if piece:
+                                text_parts.append(piece)
+                                yield {"type": "delta", "text": piece}
+                    elif etype == "message_start":
+                        u = (event.get("message") or {}).get("usage") or {}
+                        input_tokens = u.get("input_tokens", 0) or 0
+                        cached_tokens = u.get("cache_read_input_tokens", 0) or 0
+                        cache_creation = u.get("cache_creation_input_tokens", 0) or 0
+                    elif etype == "message_delta":
+                        u = event.get("usage") or {}
+                        completion_tokens = u.get("output_tokens", 0) or 0
+                    elif etype == "error":
+                        err = event.get("error") or {}
+                        raise RuntimeError(
+                            f"anthropic stream error: "
+                            f"{err.get('type')}: {err.get('message')}"
+                        )
+
+        # input_tokens is the UNCACHED remainder only — the true prompt total is
+        # input + cache_read + cache_creation (same reconstruction as chat()).
+        prompt_tokens = input_tokens + cached_tokens + cache_creation
+        yield {
+            "type": "done",
+            "content": "".join(text_parts),
+            "usage": {"prompt_tokens": prompt_tokens,
+                      "completion_tokens": completion_tokens,
+                      "cached_tokens": cached_tokens},
+            "cost_cents": self.estimate_cost(
+                payload["model"], prompt_tokens, completion_tokens, cached_tokens
+            ),
+            "model": payload["model"],
+        }
 
 
 class MoonshotProvider(LLMProvider):
@@ -742,6 +887,89 @@ class MoonshotProvider(LLMProvider):
                             yield delta.get("content", "")
                         except (json.JSONDecodeError, KeyError):
                             pass
+
+
+    async def chat_stream_events(
+        self, req: ChatRequest
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        # to_wire() (not a {role, content} comprehension) so tool_calls and
+        # tool_call_id survive — the same break that made multi-turn tool loops
+        # impossible on the blocking path applies here.
+        payload = {
+            "model": req.model or DEFAULT_MODELS["moonshot"],
+            "messages": [m.to_wire() for m in req.messages],
+            "max_tokens": req.max_tokens,
+            "stream": True,
+            # Moonshot omits usage from a stream unless asked, and without it
+            # every streamed turn would price as free.
+            "stream_options": {"include_usage": True},
+        }
+        if req.temperature == 1.0:
+            payload["temperature"] = 1.0
+        if req.tools:
+            payload["tools"] = req.tools
+            if req.tool_choice is not None:
+                payload["tool_choice"] = req.tool_choice
+        if req.reasoning_effort:
+            payload["reasoning_effort"] = req.reasoning_effort
+
+        text_parts: List[str] = []
+        prompt_tokens = completion_tokens = cached_tokens = 0
+
+        async with httpx.AsyncClient(timeout=STREAM_TIMEOUT_SEC) as client:
+            async with client.stream(
+                "POST",
+                self.BASE_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            ) as r:
+                if r.status_code >= 400:
+                    body = (await r.aread()).decode("utf-8", "replace")[:500]
+                    raise httpx.HTTPStatusError(
+                        f"moonshot stream {r.status_code}: {body}",
+                        request=r.request, response=r,
+                    )
+                async for line in r.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    raw = line[6:]
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    # The usage-bearing frame arrives last and carries an empty
+                    # choices list, so read usage before touching choices[0].
+                    u = event.get("usage") or {}
+                    if u:
+                        prompt_tokens = u.get("prompt_tokens", 0) or 0
+                        completion_tokens = u.get("completion_tokens", 0) or 0
+                        cached_tokens = u.get("cached_tokens") or (
+                            u.get("prompt_tokens_details") or {}
+                        ).get("cached_tokens", 0) or 0
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
+                    piece = (choices[0].get("delta") or {}).get("content") or ""
+                    if piece:
+                        text_parts.append(piece)
+                        yield {"type": "delta", "text": piece}
+
+        yield {
+            "type": "done",
+            "content": "".join(text_parts),
+            "usage": {"prompt_tokens": prompt_tokens,
+                      "completion_tokens": completion_tokens,
+                      "cached_tokens": cached_tokens},
+            "cost_cents": self.estimate_cost(
+                payload["model"], prompt_tokens, completion_tokens, cached_tokens
+            ),
+            "model": payload["model"],
+        }
 
 
 class OpenAIProvider(LLMProvider):
@@ -881,6 +1109,31 @@ class LLMRouter:
         provider = self.providers[provider_name]
         async for chunk in provider.chat_stream(req):
             yield chunk
+
+    async def chat_stream_events(
+        self, req: ChatRequest
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Structured streaming (see LLMProvider.chat_stream_events).
+
+        Logs usage on the terminal event so a streamed turn lands in
+        llm_usage.jsonl exactly like a blocking one — otherwise moving the UI to
+        streaming would quietly empty the spend log.
+        """
+        provider_name = self.auto_select(req)
+        provider = self.providers[provider_name]
+        async for event in provider.chat_stream_events(req):
+            if event.get("type") == "done":
+                usage = event.get("usage") or {}
+                self._log_usage(ChatResponse(
+                    provider=provider_name,
+                    model=event.get("model") or req.model or "",
+                    content=event.get("content") or "",
+                    usage=usage,
+                    cost_cents=event.get("cost_cents") or 0.0,
+                    latency_ms=0.0,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                ))
+            yield event
 
     def _log_usage(self, resp: ChatResponse):
         """Append usage record to log file."""

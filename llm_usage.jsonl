@@ -1,0 +1,3 @@
+{"timestamp": "2026-08-12T01:48:26.815686+00:00", "provider": "anthropic", "model": "claude-opus-5", "prompt_tokens": 12000, "completion_tokens": 300, "cost_cents": 0.0, "latency_ms": 0.0, "bridge_key_hash": "", "cached_tokens": 9000}
+{"timestamp": "2026-08-12T01:48:47.422463+00:00", "provider": "anthropic", "model": "claude-opus-5", "prompt_tokens": 12000, "completion_tokens": 300, "cost_cents": 2.7, "latency_ms": 0.0, "bridge_key_hash": "", "cached_tokens": 9000}
+{"timestamp": "2026-08-12T01:48:47.429719+00:00", "provider": "anthropic", "model": "claude-opus-5", "prompt_tokens": 12000, "completion_tokens": 300, "cost_cents": 2.7, "latency_ms": 0.0, "bridge_key_hash": "", "cached_tokens": 9000}
