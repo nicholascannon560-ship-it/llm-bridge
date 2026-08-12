@@ -1311,7 +1311,9 @@ body{
 /* ── header ─────────────────────────────────────────────── */
 header{
   display:flex;align-items:center;gap:12px;padding:12px 16px;
-  border-bottom:1px solid var(--line-soft);background:var(--bg);
+  border-bottom:1px solid var(--line-soft);
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   position:sticky;top:0;z-index:6;
 }
 .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14.5px}
