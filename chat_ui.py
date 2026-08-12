@@ -1289,11 +1289,11 @@ PAGE = r"""<!doctype html>
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --bg:#262624; --surface:#30302e; --raised:#35352f;
-    --line:#42423d; --line-soft:#3a3a35;
-    --fg:#f5f4ef; --dim:#a8a49b; --faint:#807c74;
-    --accent:#d97757; --accent-hover:#e08a6e; --accent-soft:#3d2f28;
-    --user-bg:#3a3a35;
+    --bg:#1e1e20; --surface:#2a2a2d; --raised:#333337;
+    --line:#3e3e43; --line-soft:#36363b;
+    --fg:#f3f3f1; --dim:#a3a09a; --faint:#7d7a74;
+    --accent:#818cf8; --accent-hover:#a5b4fc; --accent-soft:#312e5e;
+    --user-bg:#3a3a3f;
   }
 }
 *{box-sizing:border-box}
