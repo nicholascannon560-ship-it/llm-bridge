@@ -1437,11 +1437,13 @@ main{flex:1;overflow-y:auto;scroll-behavior:smooth}
 footer{padding:6px 20px 20px;background:linear-gradient(transparent,var(--bg) 22%)}
 .dock{max-width:46rem;margin:0 auto}
 .composer{
-  background:var(--surface);border:1px solid var(--line);border-radius:20px;
-  padding:8px 10px;transition:border-color .15s,box-shadow .15s;
+  background:var(--surface);border:1px solid var(--line);border-radius:24px;
+  padding:10px 12px;
+  box-shadow:0 6px 24px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05);
+  transition:border-color .15s,box-shadow .15s;
 }
 .composer:focus-within{border-color:var(--accent);
-  box-shadow:0 0 0 3px var(--accent-soft)}
+  box-shadow:0 0 0 3px var(--accent-soft),0 8px 28px rgba(0,0,0,.08)}
 textarea{
   width:100%;border:none;background:none;color:var(--fg);font:inherit;
   resize:none;outline:none;min-height:24px;max-height:220px;line-height:1.55;
