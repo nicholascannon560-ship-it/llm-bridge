@@ -15,9 +15,11 @@ Designed to be called from:
   - A scheduled worker (future)
 """
 
+import asyncio
 import json
 import os
 import threading
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -59,6 +61,11 @@ COST_BUDGET_CENTS = float(os.environ.get("AGENT_COST_BUDGET_CENTS", "400"))
 # not the intended stop: on a budgeted run the cost cap should be what ends it,
 # so the default is generous enough that spend, not turn count, governs length.
 DEFAULT_MAX_TURNS = int(os.environ.get("AGENT_DEFAULT_MAX_TURNS", "100"))
+# Spend is a WARNING line, not a cutoff. Every multiple of this crossed emits a
+# spend_warning event into the run feed; the run keeps going. Set to 0 to
+# silence. The old behaviour — a hard stop at cost_budget_cents, defaulted to
+# $1/run by the console — is what made long runs feel like they died early.
+SPEND_WARN_CENTS = float(os.environ.get("AGENT_SPEND_WARN_CENTS", "200"))
 
 DEFAULT_MAX_TOKENS = {
     "low": int(os.environ.get("AGENT_MAX_TOKENS_LOW", "4096")),
@@ -156,6 +163,54 @@ def request_stop(task_id: Optional[str] = None) -> Dict[str, Any]:
 
 def _stop_is_requested(task_id: str) -> bool:
     return _STOP_REQUESTED.get("task_id") == task_id
+
+
+# ── commit approval ─────────────────────────────────────────────────────────
+# The loop runs freely — reads, logs, searches, tests, deploys all go without a
+# prompt. Writing code into a repo is the one action that pauses and asks. This
+# replaces the old "confirm the whole task before it starts" gate: the question
+# is now attached to the specific irreversible act, so ordinary work has no
+# friction and the confirmation actually carries information (you see the file
+# and the message you are approving).
+APPROVAL_TOOLS = set(
+    (os.environ.get("AGENT_APPROVAL_TOOLS")
+     or "github_commit,github_patch,github_commit_tree,github_create_repo,"
+        "github_create_branch").split(",")
+) - {""}
+
+# How long a pending commit waits for an answer before giving up. It resolves as
+# DENIED, never as approved — a UI that closed mid-run must not become a silent
+# yes.
+APPROVAL_TIMEOUT_SEC = float(os.environ.get("AGENT_APPROVAL_TIMEOUT_SEC", "1800"))
+
+_APPROVALS: Dict[str, Dict[str, Any]] = {}
+_APPROVAL_LOCK = threading.Lock()
+
+
+def pending_approvals() -> List[Dict[str, Any]]:
+    with _APPROVAL_LOCK:
+        return [
+            {"id": k, "name": v["name"], "args": v["args"]}
+            for k, v in _APPROVALS.items() if v["decision"] is None
+        ]
+
+
+def resolve_approval(approval_id: str, approved: bool) -> Dict[str, Any]:
+    """Answer a pending commit request. Returns whether it was still open."""
+    with _APPROVAL_LOCK:
+        rec = _APPROVALS.get(approval_id)
+        if rec is None:
+            return {"ok": False, "detail": "unknown or expired approval"}
+        if rec["decision"] is not None:
+            return {"ok": False, "detail": "already decided"}
+        rec["decision"] = bool(approved)
+    _emit("approval_resolved", id=approval_id, approved=bool(approved))
+    return {"ok": True, "approved": bool(approved)}
+
+
+def _clear_approvals() -> None:
+    with _APPROVAL_LOCK:
+        _APPROVALS.clear()
 
 
 def clear_stop() -> None:
@@ -295,6 +350,7 @@ class AgentHarness:
         # next turn's cost, because the observed per-turn cost is the only
         # signal that tracks a provider charging far above raw token math.
         self._last_turn_cost_cents = 0.0
+        self._spend_warn_level = 0
 
     def _build_system_prompt(self) -> str:
         tool_names = [t["function"]["name"] for t in self.tools]
@@ -385,6 +441,7 @@ Rules:
 
         reset_events()
         clear_stop()
+        _clear_approvals()
         _emit("run_start", task=self.task[:300], task_id=self.task_id,
               max_turns=self.max_turns,
               cost_budget_cents=self.cost_budget_cents,
@@ -427,20 +484,12 @@ Rules:
                 self._record(turn_record)
                 final_answer = await self._wrap_up(status, final_answer)
                 break
-            projected = self._projected_next_cost_cents(est_tokens)
-            if (self.total_cost_cents >= self.cost_budget_cents
-                    or self.total_cost_cents + projected >= self.cost_budget_cents):
-                status = "cost_budget_reached"
-                final_answer = (
-                    f"Stopped before turn {turn}: spent {self.total_cost_cents:.1f}c "
-                    f"of {self.cost_budget_cents:.1f}c and the next call "
-                    f"(~{projected:.1f}c projected) would pass the budget."
-                )
-                turn_record["type"] = "budget_stop"
-                turn_record["note"] = final_answer
-                self._record(turn_record)
-                final_answer = await self._wrap_up(status, final_answer)
-                break
+            # Spend is warned about, not cut off. A run ends when the work is
+            # done, when you press Stop, or when it hits a hard technical limit
+            # (context) — not at an arbitrary dollar line. Every SPEND_WARN_CENTS
+            # crossed emits a loud event so a runaway is visible in the feed
+            # while it is still cheap to stop.
+            self._warn_on_spend()
 
             try:
                 llm_result = await self._call_llm()
@@ -519,17 +568,6 @@ Rules:
                 self._record(turn_record)
                 final_answer = await self._wrap_up(status, final_answer)
                 break
-            if self.total_cost_cents >= self.cost_budget_cents:
-                status = "cost_budget_reached"
-                final_answer = (
-                    f"Stopped at turn {turn}: spent {self.total_cost_cents:.1f}c "
-                    f"(budget {self.cost_budget_cents:.1f}c)."
-                )
-                turn_record["type"] = "budget_stop"
-                self._record(turn_record)
-                final_answer = await self._wrap_up(status, final_answer)
-                break
-
             for i, tc in enumerate(tool_calls):
                 _emit("tool_call", turn=turn, index=i,
                       name=tc["function"]["name"],
@@ -836,21 +874,81 @@ Rules:
             reasoning_effort=self.reasoning_effort,
         )
 
-        resp = await router.chat(chat_req)
+        # Stream the turn: text reaches the operator as it is written instead of
+        # after the whole turn lands. The done event carries the same fields the
+        # blocking call returned, so the loop below is unchanged.
+        content = ""
+        done: Dict[str, Any] = {}
+        async for ev in router.chat_stream_events(chat_req):
+            kind = ev.get("type")
+            if kind == "delta":
+                piece = ev.get("text") or ""
+                content += piece
+                _emit("assistant_delta", text=piece)
+            elif kind == "done":
+                done = ev
+
+        tool_calls = done.get("tool_calls")
+        content = done.get("content") or content
 
         self.messages.append({
             "role": "assistant",
-            "content": resp.content,
-            "tool_calls": resp.tool_calls,
+            "content": content,
+            "tool_calls": tool_calls,
         })
 
         return {
-            "content": resp.content,
-            "tool_calls": resp.tool_calls,
-            "finish_reason": resp.finish_reason,
-            "usage": resp.usage,
-            "cost_cents": resp.cost_cents,
+            "content": content,
+            "tool_calls": tool_calls,
+            "finish_reason": done.get("finish_reason"),
+            "usage": done.get("usage") or {},
+            "cost_cents": done.get("cost_cents") or 0.0,
         }
+
+    def _warn_on_spend(self) -> None:
+        """Emit one warning per SPEND_WARN_CENTS threshold crossed."""
+        if SPEND_WARN_CENTS <= 0:
+            return
+        crossed = int(self.total_cost_cents // SPEND_WARN_CENTS)
+        if crossed > self._spend_warn_level:
+            self._spend_warn_level = crossed
+            _emit("spend_warning", cost_cents=round(self.total_cost_cents, 2),
+                  threshold_cents=crossed * SPEND_WARN_CENTS)
+
+    async def _await_approval(self, tool_name: str, args: Dict[str, Any]):
+        """Block a commit-class tool until the operator answers.
+
+        Returns True to proceed, False if declined, None if no approval was
+        needed. Waiting happens between tool calls, so nothing is left half
+        applied; a stop request or a timeout both resolve as DENIED so a closed
+        browser can never turn into a silent yes.
+        """
+        if tool_name not in APPROVAL_TOOLS:
+            return None
+
+        approval_id = f"ap-{uuid.uuid4().hex[:8]}"
+        preview = json.dumps(args)[:600]
+        with _APPROVAL_LOCK:
+            _APPROVALS[approval_id] = {"name": tool_name, "args": preview,
+                                       "decision": None}
+        _emit("approval_request", id=approval_id, name=tool_name, args=preview)
+
+        waited = 0.0
+        while waited < APPROVAL_TIMEOUT_SEC:
+            with _APPROVAL_LOCK:
+                decision = _APPROVALS[approval_id]["decision"]
+            if decision is not None:
+                return decision
+            if _stop_is_requested(self.task_id):
+                _emit("approval_resolved", id=approval_id, approved=False,
+                      reason="run stopped")
+                return False
+            await asyncio.sleep(0.4)
+            waited += 0.4
+
+        _emit("approval_resolved", id=approval_id, approved=False,
+              reason="timed out")
+        return False
 
     async def _execute_tools(self, tool_calls: List[Dict]) -> List[Dict]:
         results = []
@@ -863,7 +961,16 @@ Rules:
                 args = {}
                 result = {"error": "Invalid JSON in tool arguments"}
             else:
-                result = await run_tool(tool_name, args)
+                approved = await self._await_approval(tool_name, args)
+                if approved is False:
+                    # Hand the refusal back as a tool result rather than killing
+                    # the run: the model can then explain, adjust, or continue
+                    # with the rest of the work.
+                    result = {"error": "The operator declined this commit. Do not "
+                                       "retry it. Explain what you would have "
+                                       "committed and continue with other work."}
+                else:
+                    result = await run_tool(tool_name, args)
 
             self.messages.append({
                 "role": "tool",

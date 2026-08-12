@@ -82,29 +82,36 @@ check(
     "never leaves a leading orphan tool result (provider would 400)",
 )
 
-print("5. chat mode forbids tools")
+print("5. one mode: the console has a single send path")
 src = open(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "chat_ui.py")
 ).read()
-chat_fn = src[src.index("async def ui_chat") : src.index("_DO_SLOT")]
-check('tool_choice="none"' in chat_fn, "chat sends tool_choice='none'")
-check("_tool_schemas()" in chat_fn, "chat still sends schemas (shared cache prefix)")
-check("run_tool" not in chat_fn, "chat never executes a tool")
+# The chat/executor split is gone, and with it the router call, the
+# confirmation card, and the handoff brief that only existed because the two
+# halves ran on different models.
+for gone in ("async def ui_chat", "async def ui_turn", "async def ui_auto",
+             "async def _classify", "_build_handoff_brief", "_ROUTER_PROMPT"):
+    check(gone not in src, f"removed: {gone}")
+check("async def ui_do" in src, "/ui/do is the single send path")
+check("async def ui_approve" in src, "commit approval endpoint exists")
 
-print("6. budget is per-request and bounded")
-body = chat_ui.DoRequestBody(message="x", budget_usd=5)
-check(body.budget_usd == 5, "budget_usd accepted")
-check(body.max_turns is None, "max_turns defaults to None -> harness default")
-try:
-    chat_ui.DoRequestBody(message="x", budget_usd=0)
-    check(False, "zero budget rejected")
-except Exception:
-    check(True, "zero budget rejected")
-try:
-    chat_ui.DoRequestBody(message="x", budget_usd=999)
-    check(False, "absurd budget rejected")
-except Exception:
-    check(True, "absurd budget rejected")
+print("6. writing to a repo is gated; reading is not")
+from agent_loop import harness as _h
+check("github_commit" in _h.APPROVAL_TOOLS, "github_commit requires approval")
+check("github_patch" in _h.APPROVAL_TOOLS, "github_patch requires approval")
+check("github_read" not in _h.APPROVAL_TOOLS, "reads are never gated")
+check("repo_search" not in _h.APPROVAL_TOOLS, "searches are never gated")
+
+print("7. spend warns, it does not cut the run off")
+check(_h.SPEND_WARN_CENTS > 0, "a spend warning threshold is set")
+check("cost_budget_reached" not in src, "console no longer stops runs on cost")
+loop_src = open(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                 "..", "agent_loop", "harness.py")
+).read()
+check("spend_warning" in loop_src, "loop emits a spend warning event")
+check(loop_src.count('status = "cost_budget_reached"') == 0,
+      "loop has no cost-based stop condition left")
 
 print()
 if fails:

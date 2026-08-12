@@ -260,9 +260,11 @@ class LLMProvider:
         `chat_stream` yields bare text and builds its own minimal payload, so it
         loses prompt caching and reports no usage — streaming through it makes a
         conversation *more* expensive, not less. This yields dicts instead:
-            {"type": "delta",  "text": str}
-            {"type": "done",   "content": str, "usage": {...},
-             "cost_cents": float, "model": str}
+            {"type": "delta",      "text": str}
+            {"type": "tool_start", "name": str}          (a tool call is forming)
+            {"type": "done",       "content": str, "tool_calls": list|None,
+             "finish_reason": str, "usage": {...}, "cost_cents": float,
+             "model": str}
         so a caller gets live tokens AND the same billing data `chat()` returns.
 
         The default falls back to a single non-streaming `chat()` call, so a
@@ -274,6 +276,8 @@ class LLMProvider:
         yield {
             "type": "done",
             "content": resp.content,
+            "tool_calls": resp.tool_calls,
+            "finish_reason": resp.finish_reason,
             "usage": resp.usage or {},
             "cost_cents": resp.cost_cents or 0.0,
             "model": resp.model,
@@ -701,9 +705,16 @@ class AnthropicProvider(LLMProvider):
         payload["stream"] = True
 
         text_parts: List[str] = []
-        # Anthropic splits usage across two events: message_start carries the
-        # input side (including both cache counters), message_delta the output
-        # side. Neither alone is enough to price the call, so accumulate both.
+        # Anthropic streams each content block by index: a tool_use block opens
+        # with its id+name, then its arguments arrive as input_json_delta
+        # fragments. Accumulate per index so a streamed turn can still drive a
+        # tool loop — without this, streaming would only work for plain text and
+        # the agent loop could never use it.
+        tool_blocks: Dict[int, Dict[str, Any]] = {}
+        stop_reason = None
+        # Usage is split across two events: message_start carries the input side
+        # (including both cache counters), message_delta the output side.
+        # Neither alone is enough to price the call, so accumulate both.
         input_tokens = cached_tokens = cache_creation = completion_tokens = 0
 
         async with httpx.AsyncClient(timeout=STREAM_TIMEOUT_SEC) as client:
@@ -734,13 +745,24 @@ class AnthropicProvider(LLMProvider):
                     except json.JSONDecodeError:
                         continue
                     etype = event.get("type")
-                    if etype == "content_block_delta":
+                    if etype == "content_block_start":
+                        blk = event.get("content_block") or {}
+                        if blk.get("type") == "tool_use":
+                            tool_blocks[event.get("index")] = {
+                                "id": blk.get("id"), "name": blk.get("name"), "json": "",
+                            }
+                            yield {"type": "tool_start", "name": blk.get("name")}
+                    elif etype == "content_block_delta":
                         delta = event.get("delta") or {}
                         if delta.get("type") == "text_delta":
                             piece = delta.get("text") or ""
                             if piece:
                                 text_parts.append(piece)
                                 yield {"type": "delta", "text": piece}
+                        elif delta.get("type") == "input_json_delta":
+                            blk = tool_blocks.get(event.get("index"))
+                            if blk is not None:
+                                blk["json"] += delta.get("partial_json") or ""
                     elif etype == "message_start":
                         u = (event.get("message") or {}).get("usage") or {}
                         input_tokens = u.get("input_tokens", 0) or 0
@@ -749,6 +771,8 @@ class AnthropicProvider(LLMProvider):
                     elif etype == "message_delta":
                         u = event.get("usage") or {}
                         completion_tokens = u.get("output_tokens", 0) or 0
+                        stop_reason = (event.get("delta") or {}).get(
+                            "stop_reason") or stop_reason
                     elif etype == "error":
                         err = event.get("error") or {}
                         raise RuntimeError(
@@ -759,9 +783,18 @@ class AnthropicProvider(LLMProvider):
         # input_tokens is the UNCACHED remainder only — the true prompt total is
         # input + cache_read + cache_creation (same reconstruction as chat()).
         prompt_tokens = input_tokens + cached_tokens + cache_creation
+        tool_calls = [
+            {"id": b["id"], "type": "function",
+             "function": {"name": b["name"], "arguments": b["json"] or "{}"}}
+            for _, b in sorted(tool_blocks.items())
+        ]
         yield {
             "type": "done",
             "content": "".join(text_parts),
+            "tool_calls": tool_calls or None,
+            "finish_reason": ("tool_calls" if stop_reason == "tool_use"
+                              else "length" if stop_reason == "max_tokens"
+                              else "stop"),
             "usage": {"prompt_tokens": prompt_tokens,
                       "completion_tokens": completion_tokens,
                       "cached_tokens": cached_tokens},
@@ -914,6 +947,11 @@ class MoonshotProvider(LLMProvider):
             payload["reasoning_effort"] = req.reasoning_effort
 
         text_parts: List[str] = []
+        # OpenAI-shaped streams deliver tool calls as indexed fragments: the
+        # first carries id+name, later ones append argument text. Accumulate by
+        # index so a streamed turn can drive the agent's tool loop.
+        tool_frags: Dict[int, Dict[str, Any]] = {}
+        finish_reason = None
         prompt_tokens = completion_tokens = cached_tokens = 0
 
         async with httpx.AsyncClient(timeout=STREAM_TIMEOUT_SEC) as client:
@@ -954,14 +992,35 @@ class MoonshotProvider(LLMProvider):
                     choices = event.get("choices") or []
                     if not choices:
                         continue
-                    piece = (choices[0].get("delta") or {}).get("content") or ""
+                    finish_reason = choices[0].get("finish_reason") or finish_reason
+                    delta = choices[0].get("delta") or {}
+                    piece = delta.get("content") or ""
                     if piece:
                         text_parts.append(piece)
                         yield {"type": "delta", "text": piece}
+                    for tc in delta.get("tool_calls") or []:
+                        idx = tc.get("index", 0)
+                        slot = tool_frags.setdefault(
+                            idx, {"id": None, "name": None, "args": ""})
+                        if tc.get("id"):
+                            slot["id"] = tc["id"]
+                        fn = tc.get("function") or {}
+                        if fn.get("name"):
+                            slot["name"] = fn["name"]
+                            yield {"type": "tool_start", "name": fn["name"]}
+                        slot["args"] += fn.get("arguments") or ""
 
+        tool_calls = [
+            {"id": s["id"] or f"call_{i}", "type": "function",
+             "function": {"name": s["name"], "arguments": s["args"] or "{}"}}
+            for i, s in sorted(tool_frags.items()) if s["name"]
+        ]
         yield {
             "type": "done",
             "content": "".join(text_parts),
+            "tool_calls": tool_calls or None,
+            "finish_reason": ("tool_calls" if tool_calls
+                              else "length" if finish_reason == "length" else "stop"),
             "usage": {"prompt_tokens": prompt_tokens,
                       "completion_tokens": completion_tokens,
                       "cached_tokens": cached_tokens},
