@@ -260,3 +260,101 @@ def test_moonshot_stream_yields_text_and_tool_calls(monkeypatch):
         done["tool_calls"][0]["function"]["arguments"]) == {"path": "a.py"}
     assert done["finish_reason"] == "tool_calls"
     assert done["usage"]["cached_tokens"] == 60
+
+
+# ── the design-doc regression ───────────────────────────────────────────────
+# A large pasted doc ran a while, "just stopped", and all output vanished.
+# Three separate defects, all of which had to hold for that to happen.
+
+def test_trim_never_drops_the_task(harness):
+    """The task was messages[1], so it was the FIRST thing trimmed.
+
+    The agent lost its own instructions mid-run and wandered off.
+    """
+    system = {"role": "system", "content": "sys"}
+    task = {"role": "user", "content": "Task: " + ("DESIGN DOC " * 4000)}
+    chatter = [{"role": "assistant", "content": "filler " * 4000} for _ in range(8)]
+
+    kept = harness._trim_history_to_budget(
+        [system, task] + chatter, budget_tokens=5000, pinned=(task,))
+
+    assert kept[0] is system, "system prompt must survive"
+    assert any(m is task for m in kept), "the task must survive trimming"
+    assert len(kept) < len([system, task] + chatter), "trimming still happened"
+
+
+def test_trim_without_pin_still_drops_oldest(harness):
+    """The pin is opt-in; unpinned callers keep the old behaviour."""
+    system = {"role": "system", "content": "sys"}
+    msgs = [system] + [{"role": "user", "content": "x" * 40000} for _ in range(6)]
+    kept = harness._trim_history_to_budget(msgs, budget_tokens=5000)
+    assert kept[0] is system
+    assert len(kept) < len(msgs)
+
+
+def test_trim_leaves_no_orphan_tool_result(harness):
+    """An orphaned tool message is a hard provider 400."""
+    system = {"role": "system", "content": "s"}
+    task = {"role": "user", "content": "t"}
+    msgs = [system, task]
+    for _ in range(6):
+        msgs.append({"role": "assistant", "content": "a" * 20000,
+                     "tool_calls": [{"id": "c", "type": "function",
+                                     "function": {"name": "f", "arguments": "{}"}}]})
+        msgs.append({"role": "tool", "tool_call_id": "c", "content": "r" * 20000})
+    kept = harness._trim_history_to_budget(msgs, budget_tokens=6000, pinned=(task,))
+    trailing = [m for m in kept[1:] if m is not task]
+    if trailing:
+        assert trailing[0].get("role") != "tool", "orphaned tool result left at head"
+
+
+def test_session_keeps_the_ask_when_harness_trimmed_it_away(tmp_path, monkeypatch):
+    """ui_do must not write a trimmed transcript back over the session.
+
+    Doing so deleted the user's original message permanently — the actual
+    'all output disappeared'.
+    """
+    monkeypatch.setenv("UI_SESSION_DIR", str(tmp_path))
+    monkeypatch.setenv("UI_PASSWORD", "123456")
+    monkeypatch.setenv("UI_SESSION_SECRET", "s")
+    import importlib
+    import chat_ui
+    importlib.reload(chat_ui)
+
+    ask = "here is my very large design doc " * 50
+    session = chat_ui.get_session(None)
+    session.messages.append({"role": "user", "content": ask})
+
+    # What the harness hands back after trimming the task out.
+    trimmed = [{"role": "assistant", "content": "some later turn"}]
+    keeps_ask = any(m.get("role") == "user" and ask in (m.get("content") or "")
+                    for m in trimmed)
+    assert not keeps_ask, "fixture should model a transcript missing the ask"
+
+    # The guard: don't adopt it.
+    if keeps_ask:
+        session.messages = trimmed
+    session.messages.append({"role": "assistant", "content": "final"})
+
+    assert any(ask in (m.get("content") or "") for m in session.messages), \
+        "the user's message was lost from the session"
+
+
+def test_keeps_ask_matches_the_wrapped_task_form():
+    """The harness wraps the task, so an equality check would never match."""
+    ask = "fix the rate table"
+    wrapped = {"role": "user",
+               "content": f"Task: {ask}\n\nExecute this task using the available "
+                          f"tools. You have up to 100 turns. Start now."}
+    assert wrapped["content"] != ask, "wrapped form differs from the raw ask"
+    assert ask in wrapped["content"], "substring check is what must be used"
+
+
+def test_run_end_does_not_wipe_the_log():
+    """followRun used to call load(), which does log.innerHTML = ''."""
+    import chat_ui
+    page = chat_ui.PAGE
+    tail = page[page.index("async function followRun"):]
+    tail = tail[:tail.index("async function refreshStats")]
+    assert "await load();" not in tail, "a finished run still wipes the transcript"
+    assert "refreshStats()" in tail, "run end should refresh counters only"

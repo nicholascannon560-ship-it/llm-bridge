@@ -242,24 +242,50 @@ def _est_turn_cost_cents(est_prompt_tokens: int, max_completion_tokens: int) -> 
 
 
 def _trim_history_to_budget(
-    messages: List[Dict[str, Any]], budget_tokens: int
+    messages: List[Dict[str, Any]],
+    budget_tokens: int,
+    pinned: "tuple" = (),
 ) -> List[Dict[str, Any]]:
     """Drop oldest messages until the estimated prompt fits `budget_tokens`.
 
-    messages[0] is the system prompt and is never dropped. Cutting a
-    tool_calls/tool pair mid-pair produces an orphaned tool message, which
-    providers reject outright — so after any cut we walk forward past any
-    orphaned tool messages (and the assistant message that called them, when
-    it is now the head and calls tools whose results were dropped).
+    messages[0] is the system prompt and is never dropped. Neither is anything
+    in `pinned` — which in practice is the message stating the task.
+
+    That pin is load-bearing. On a fresh session the message list is
+    [system, task, ...], so the old unconditional `del msgs[1]` deleted THE
+    TASK first the moment the prompt outgrew the budget. A long run on a big
+    task (a pasted design doc, say) would silently lose its own instructions a
+    few turns in and then wander or stop early, with nothing in the transcript
+    explaining why. Whatever else gets dropped to fit, the agent keeps knowing
+    what it was asked to do.
+
+    Cutting a tool_calls/tool pair mid-pair produces an orphaned tool message,
+    which providers reject outright — so after any cut we walk forward past any
+    orphaned tool messages.
     """
     if budget_tokens <= 0:
         return messages
+    pinned_ids = {id(m) for m in pinned}
     msgs = list(messages)
+
+    def _next_droppable() -> int:
+        for i in range(1, len(msgs)):
+            if id(msgs[i]) not in pinned_ids:
+                return i
+        return -1
+
     while len(msgs) > 1 and _est_prompt_tokens(msgs) > budget_tokens:
-        del msgs[1]
-        # Clean the boundary: no leading orphan tool messages.
-        while len(msgs) > 1 and msgs[1].get("role") == "tool":
-            del msgs[1]
+        i = _next_droppable()
+        if i < 0:
+            # Only the system prompt and the task are left. They are already
+            # over budget on their own; the pre-flight context check below is
+            # what stops the run, and it can now say so honestly.
+            break
+        del msgs[i]
+        # Clean the boundary: no orphan tool results left at the cut point.
+        while i < len(msgs) and msgs[i].get("role") == "tool" \
+                and id(msgs[i]) not in pinned_ids:
+            del msgs[i]
     return msgs
 
 
@@ -415,11 +441,14 @@ Rules:
         # History goes between the system prompt and the new task so the cached
         # prefix keeps growing; only the final user message is ever new.
         self.messages.extend(self.history)
-        self.messages.append({
+        task_message = {
             "role": "user",
             "content": f"Task: {self.task}\n\nExecute this task using the available tools. "
                        f"You have up to {self.max_turns} turns. Start now."
-        })
+        }
+        self.messages.append(task_message)
+        # Trimming must never reclaim the instructions themselves.
+        self._pinned = (task_message,)
 
         final_answer = ""
         status = "incomplete"
@@ -468,7 +497,9 @@ Rules:
             # turn consume an entire (possibly newly raised) budget, after
             # which every retry did the same — the run looked permanently
             # broken when it was just permanently oversized.
-            self.messages = _trim_history_to_budget(self.messages, HISTORY_TOKEN_BUDGET)
+            self.messages = _trim_history_to_budget(
+                self.messages, HISTORY_TOKEN_BUDGET,
+                pinned=getattr(self, "_pinned", ()))
             est_tokens = _est_prompt_tokens(self.messages)
             context_ceiling = CONTEXT_BUDGET_TOKENS - CONTEXT_SAFETY_MARGIN_TOKENS
             if est_tokens >= context_ceiling:

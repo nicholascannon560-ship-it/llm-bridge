@@ -644,13 +644,27 @@ async def ui_do(body: DoRequestBody = Body(...)):
 
             result = asyncio.run(_go())
             with s.lock:
-                # Keep exactly what the harness sent. One model runs everything,
-                # so replaying its own transcript on the next turn hits the same
-                # cache entry it just warmed — and the model can see what it
-                # already did instead of being handed a summary of itself.
+                # Adopting the harness transcript keeps the next turn's prefix
+                # warm and lets the model see its own tool work. But the harness
+                # trims its WORKING copy from the FRONT to fit the context
+                # budget, so on a long run `returned` can be missing the very
+                # message that started it. Writing that back deleted the user's
+                # ask — and every early turn — from the session permanently,
+                # which is exactly how a large design doc vanished. Only adopt a
+                # transcript that still contains the ask; otherwise keep our own
+                # record, which already has it.
                 returned = result.get("messages")
-                if returned:
+                keeps_ask = any(
+                    m.get("role") == "user"
+                    and body.message in (m.get("content") or "")
+                    for m in (returned or [])
+                )
+                if returned and keeps_ask:
                     s.messages = returned
+                elif returned:
+                    print(f"[chat_ui] harness trimmed the originating message out of "
+                          f"its transcript ({len(returned)} msgs); keeping the "
+                          f"session's own history for {s.id}", flush=True)
                 s.messages.append({
                     "role": "assistant",
                     "content": result.get("final_answer") or "(no final answer)",
@@ -1388,10 +1402,18 @@ function turn(cls){
   $("log").appendChild(d);
   return d;
 }
+/* Restored history may hold the harness's task wrapper. The bytes have to stay
+   exactly as sent (the prompt cache matches on them), so strip it for display
+   only. */
+function unwrapTask(text){
+  return (text || "")
+    .replace(/^Task:\s/, "")
+    .replace(/\n\nExecute this task using the available tools\.[\s\S]*?Start now\.$/, "");
+}
 function addUser(text){
   const t = turn("user");
   const b = document.createElement("div");
-  b.className = "bubble"; b.textContent = text;
+  b.className = "bubble"; b.textContent = unwrapTask(text);
   t.appendChild(b); keepDown(true); return t;
 }
 function addBot(text, metaText){
@@ -1723,7 +1745,19 @@ async function followRun(host, bar){
   }
   closeStream();
   RUN.active = false;
-  await load();
+  // Refresh the counters only. This used to call load(), which wipes #log and
+  // re-renders from stored messages — so every completed run erased the tool
+  // cards, approvals and prose you had just watched, and replaced them with a
+  // thinner reconstruction. The DOM is already the truth; only the numbers in
+  // the header need catching up.
+  refreshStats();
+}
+
+async function refreshStats(){
+  try {
+    const s = await api("/ui/session" + (SID ? "?session_id=" + SID : ""));
+    stats(s);
+  } catch (e) {}
 }
 
 async function stopRun(){
@@ -1743,9 +1777,17 @@ function renderAll(msgs){
     if (m.role === "user") { addUser(m.content || ""); last = null; }
     else if (m.role === "assistant") {
       const c = (m.content || "").trim();
-      // Skip an assistant turn identical to the previous one, and never dump
-      // raw tool plumbing into the transcript — the tool cards cover that.
       if (c && c !== last) { addBot(c); last = c; }
+      // Restored history has no live feed behind it, so without this a run
+      // that was mostly tool work reads as a blank gap after a reload.
+      const names = (m.tool_calls || [])
+        .map(tc => (tc.function || {}).name).filter(Boolean);
+      if (names.length) {
+        const n = document.createElement("div");
+        n.className = "runbar";
+        n.textContent = "used " + names.join(", ");
+        $("log").appendChild(n);
+      }
     }
   }
   if (!msgs.length) showHero();
