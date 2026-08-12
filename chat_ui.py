@@ -1373,7 +1373,9 @@ header{
 main{flex:1;overflow-y:auto;scroll-behavior:smooth}
 #log{max-width:46rem;margin:0 auto;padding:28px 20px 8px;
   display:flex;flex-direction:column;gap:22px}
-.turn{display:flex;flex-direction:column;gap:6px}
+.turn{display:flex;flex-direction:column;gap:6px;
+  animation:rise .28s cubic-bezier(.2,.8,.3,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .turn.user{align-items:flex-end}
 .bubble{
   background:var(--user-bg);padding:10px 15px;border-radius:16px;
