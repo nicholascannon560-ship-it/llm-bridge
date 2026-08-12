@@ -1277,11 +1277,11 @@ PAGE = r"""<!doctype html>
 <title>bridge console</title>
 <style>
 :root{
-  --bg:#faf9f5; --surface:#fff; --raised:#f4f2ec;
-  --line:#e6e2d7; --line-soft:#efece3;
-  --fg:#1f1e1d; --dim:#6f6b63; --faint:#938f86;
-  --accent:#d97757; --accent-hover:#c8613f; --accent-soft:#f6e5dd;
-  --user-bg:#f0ede4;
+  --bg:#f8f7f4; --surface:#fff; --raised:#f1efe9;
+  --line:#e7e4db; --line-soft:#efece4;
+  --fg:#232220; --dim:#73706a; --faint:#9b978e;
+  --accent:#4f46e5; --accent-hover:#4338ca; --accent-soft:#eceafd;
+  --user-bg:#efede6;
   --radius:12px;
   --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
     "Helvetica Neue",Arial,sans-serif;
