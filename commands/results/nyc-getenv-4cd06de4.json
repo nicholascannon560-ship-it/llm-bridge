@@ -1,0 +1,23 @@
+{
+  "id": "nyc-getenv-4cd06de4",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "project": {
+      "id": "9bf58686-c894-424a-8811-55635dfa2762",
+      "name": "pleasing-comfort",
+      "environments": {
+        "edges": [
+          {
+            "node": {
+              "id": "5c44a8b4-4016-4290-8ced-9e4238840b3e",
+              "name": "production"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T02:32:24.030798+00:00"
+}
