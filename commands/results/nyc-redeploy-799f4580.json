@@ -1,0 +1,10 @@
+{
+  "id": "nyc-redeploy-799f4580",
+  "status": "ok",
+  "action": "redeploy",
+  "result": {
+    "serviceInstanceDeploy": true
+  },
+  "error": null,
+  "processed_at": "2026-08-13T02:54:43.204928+00:00"
+}
