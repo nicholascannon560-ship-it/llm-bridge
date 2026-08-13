@@ -1,8 +1,0 @@
-{
-  "action": "agent_run",
-  "task": "Set up a new Railway project called \"nyc-temp-nowcaster\" and connect it to the GitHub repo \"nicholascannon560-ship-it/nyc-temp-nowcaster\".\n\nSteps:\n1. Create a new Railway project named \"nyc-temp-nowcaster\" using railway_gql mutation projectCreate.\n2. Create a service inside that project named \"nyc-temp-nowcaster\" using serviceCreate.\n3. Connect the service to the GitHub repo. Try railway_gql mutation serviceConnect with repo \"nicholascannon560-ship-it/nyc-temp-nowcaster\" and branch \"main\". If that doesn't work, try environment variable RAILWAY_GIT_REPO_URL or use serviceInstanceUpdate.\n4. Set environment variables: \n   - NOWCAST_PAPER_MODE=true\n   - NOWCAST_DRY_RUN=true\n   - PORT=8000\n5. Trigger a deployment.\n6. Return the project ID, service ID, and deployment URL.\n\nIf any step fails, report the exact GraphQL error and stop.",
-  "max_turns": 20,
-  "provider": "moonshot",
-  "model": "kimi-k3",
-  "reasoning_effort": "low"
-}
