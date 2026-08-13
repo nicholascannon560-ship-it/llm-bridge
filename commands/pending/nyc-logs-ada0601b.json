@@ -1,4 +1,0 @@
-{
-  "action": "railway_gql",
-  "query": "query {\n  deploymentLogs(deploymentId: \"08c8c125-36cd-45ca-a8d1-c3b6f498f705\", limit: 100) {\n    edges {\n      node {\n        message\n        timestamp\n        severity\n      }\n    }\n  }\n}"
-}
