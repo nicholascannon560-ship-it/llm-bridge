@@ -1,0 +1,13 @@
+{
+  "id": "nyc-domain2-7230eae2",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "serviceDomainCreate": {
+      "id": "4fb57aa4-585c-4dc6-b4d3-1666f4aeedf8",
+      "domain": "web-production-e417f.up.railway.app"
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T13:38:49.727831+00:00"
+}
