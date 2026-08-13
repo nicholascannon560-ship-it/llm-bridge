@@ -1,0 +1,22 @@
+{
+  "id": "nyc-deploy3-af76c958",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a7d4e407-82c7-452d-b473-2868ab2ec61f",
+              "status": "SUCCESS",
+              "createdAt": "2026-08-13T03:20:00.293Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T03:21:46.634595+00:00"
+}
