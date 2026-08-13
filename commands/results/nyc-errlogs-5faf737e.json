@@ -1,0 +1,531 @@
+{
+  "id": "nyc-errlogs-5faf737e",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": [
+      {
+        "message": "Starting Container",
+        "timestamp": "2026-08-13T03:20:43.367407084Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     Waiting for application startup.",
+        "timestamp": "2026-08-13T03:20:44.189824470Z",
+        "severity": "error"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-08-13T03:20:44.189831470Z",
+        "severity": "info"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-08-13T03:20:44.189836229Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     Application startup complete.",
+        "timestamp": "2026-08-13T03:20:44.189840239Z",
+        "severity": "error"
+      },
+      {
+        "message": "INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)",
+        "timestamp": "2026-08-13T03:20:44.189843739Z",
+        "severity": "error"
+      },
+      {
+        "message": "INFO:     Started server process [1]",
+        "timestamp": "2026-08-13T03:20:44.189890689Z",
+        "severity": "error"
+      },
+      {
+        "message": "INFO:     100.64.0.2:58604 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:42.250175034Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.3:58618 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:42.250182394Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.4:19744 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:43.639842123Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.5:41458 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:45.515051368Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.6:49866 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:47.646934282Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.6:49866 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:48.660339172Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.7:16266 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:51.314561016Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.8:14798 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:54.439134889Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.3:18502 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:40:54.878119313Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.9:16268 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:54.912719029Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.4:58700 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:54.912728589Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.7:12452 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:54.912732549Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.10:47596 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:54.912735819Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.2:55776 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:56.262551229Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.11:34564 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:57.568821915Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.5:18538 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:43:59.957244597Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.8:54266 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:44:01.705221924Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.10:12268 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:44:05.400922459Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     100.64.0.12:32892 - \"GET /health HTTP/1.1\" 200 OK",
+        "timestamp": "2026-08-13T13:44:35.402080135Z",
+        "severity": "info"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-08-13T13:44:35.402084725Z",
+        "severity": "warn"
+      },
+      {
+        "message": "INFO:     100.64.0.13:11526 - \"POST /predict HTTP/1.1\" 500 Internal Server Error",
+        "timestamp": "2026-08-13T13:44:35.402087605Z",
+        "severity": "info"
+      },
+      {
+        "message": "ERROR:    Exception in ASGI application",
+        "timestamp": "2026-08-13T13:44:35.402090825Z",
+        "severity": "error"
+      },
+      {
+        "message": "Traceback (most recent call last):",
+        "timestamp": "2026-08-13T13:44:35.402094375Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/protocols/http/h11_impl.py\", line 416, in run_asgi",
+        "timestamp": "2026-08-13T13:44:35.402097204Z",
+        "severity": "error"
+      },
+      {
+        "message": "    result = await app(  # type: ignore[func-returns-value]",
+        "timestamp": "2026-08-13T13:44:35.402099874Z",
+        "severity": "error"
+      },
+      {
+        "message": "             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.402102464Z",
+        "severity": "error"
+      },
+      {
+        "message": "        self.scope, self.receive, self.send",
+        "timestamp": "2026-08-13T13:44:35.402105114Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.402108034Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T13:44:35.402110704Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T13:44:35.402113244Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/middleware/proxy_headers.py\", line 63, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402116844Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return await self.app(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402119354Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.402122024Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/applications.py\", line 1163, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402124924Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await super().__call__(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402127654Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/applications.py\", line 96, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402130354Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await self.middleware_stack(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402132914Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/middleware/errors.py\", line 186, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402827999Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc",
+        "timestamp": "2026-08-13T13:44:35.402832119Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/middleware/errors.py\", line 164, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402836189Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await self.app(scope, receive, _send)",
+        "timestamp": "2026-08-13T13:44:35.402839039Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/middleware/exceptions.py\", line 63, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402841829Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402844449Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py\", line 53, in wrapped_app",
+        "timestamp": "2026-08-13T13:44:35.402847479Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc",
+        "timestamp": "2026-08-13T13:44:35.402849949Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py\", line 42, in wrapped_app",
+        "timestamp": "2026-08-13T13:44:35.402854939Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await app(scope, receive, sender)",
+        "timestamp": "2026-08-13T13:44:35.402857459Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/middleware/asyncexitstack.py\", line 18, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402859928Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await self.app(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402862508Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/routing.py\", line 670, in __call__",
+        "timestamp": "2026-08-13T13:44:35.402865358Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await self.middleware_stack(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402869238Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/routing.py\", line 2734, in app",
+        "timestamp": "2026-08-13T13:44:35.402872438Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await route.handle(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402874828Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/routing.py\", line 1281, in handle",
+        "timestamp": "2026-08-13T13:44:35.402877268Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await super().handle(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.402880488Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/routing.py\", line 280, in handle",
+        "timestamp": "2026-08-13T13:44:35.403741730Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await self.app(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.403744470Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/routing.py\", line 158, in app",
+        "timestamp": "2026-08-13T13:44:35.403765190Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await wrap_app_handling_exceptions(app, request)(scope, receive, send)",
+        "timestamp": "2026-08-13T13:44:35.403768080Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py\", line 53, in wrapped_app",
+        "timestamp": "2026-08-13T13:44:35.403771140Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc",
+        "timestamp": "2026-08-13T13:44:35.403774480Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py\", line 42, in wrapped_app",
+        "timestamp": "2026-08-13T13:44:35.403777400Z",
+        "severity": "error"
+      },
+      {
+        "message": "    await app(scope, receive, sender)",
+        "timestamp": "2026-08-13T13:44:35.403779940Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/routing.py\", line 144, in app",
+        "timestamp": "2026-08-13T13:44:35.403808420Z",
+        "severity": "error"
+      },
+      {
+        "message": "    response = await f(request)",
+        "timestamp": "2026-08-13T13:44:35.403810910Z",
+        "severity": "error"
+      },
+      {
+        "message": "               ^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.403813620Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/routing.py\", line 706, in app",
+        "timestamp": "2026-08-13T13:44:35.403816060Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raw_response = await run_endpoint_function(",
+        "timestamp": "2026-08-13T13:44:35.403914809Z",
+        "severity": "error"
+      },
+      {
+        "message": "                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.403917679Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ...<3 lines>...",
+        "timestamp": "2026-08-13T13:44:35.403922179Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T13:44:35.403925699Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T13:44:35.403928849Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/fastapi/routing.py\", line 352, in run_endpoint_function",
+        "timestamp": "2026-08-13T13:44:35.403931859Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return await dependant.call(**values)",
+        "timestamp": "2026-08-13T13:44:35.403934739Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.403937369Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 150, in predict",
+        "timestamp": "2026-08-13T13:44:35.403940229Z",
+        "severity": "error"
+      },
+      {
+        "message": "    model = _get_model()",
+        "timestamp": "2026-08-13T13:44:35.405702503Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 30, in _get_model",
+        "timestamp": "2026-08-13T13:44:35.405714763Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from model.quantile_lgb import QuantileLGBModel",
+        "timestamp": "2026-08-13T13:44:35.405730693Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/model/quantile_lgb.py\", line 9, in <module>",
+        "timestamp": "2026-08-13T13:44:35.405736103Z",
+        "severity": "error"
+      },
+      {
+        "message": "    import lightgbm as lgb",
+        "timestamp": "2026-08-13T13:44:35.405740823Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/lightgbm/__init__.py\", line 11, in <module>",
+        "timestamp": "2026-08-13T13:44:35.405745953Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from .basic import Booster, Dataset, EvalResult, Sequence, register_logger",
+        "timestamp": "2026-08-13T13:44:35.405750843Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/lightgbm/basic.py\", line 9, in <module>",
+        "timestamp": "2026-08-13T13:44:35.405757923Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from .libpath import _LIB  # isort: skip",
+        "timestamp": "2026-08-13T13:44:35.405763263Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.405769293Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/lightgbm/libpath.py\", line 49, in <module>",
+        "timestamp": "2026-08-13T13:44:35.405773772Z",
+        "severity": "error"
+      },
+      {
+        "message": "    _LIB = ctypes.cdll.LoadLibrary(_find_lib_path()[0])",
+        "timestamp": "2026-08-13T13:44:35.405778542Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/ctypes/__init__.py\", line 482, in LoadLibrary",
+        "timestamp": "2026-08-13T13:44:35.405783382Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return self._dlltype(name)",
+        "timestamp": "2026-08-13T13:44:35.405788222Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.405792502Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/ctypes/__init__.py\", line 361, in __init__",
+        "timestamp": "2026-08-13T13:44:35.405805632Z",
+        "severity": "error"
+      },
+      {
+        "message": "    self._handle = self._load_library(name, mode, handle, winmode)",
+        "timestamp": "2026-08-13T13:44:35.405811472Z",
+        "severity": "error"
+      },
+      {
+        "message": "                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T13:44:35.405816352Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/ctypes/__init__.py\", line 403, in _load_library",
+        "timestamp": "2026-08-13T13:44:35.405820482Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _dlopen(name, mode)",
+        "timestamp": "2026-08-13T13:44:35.405824502Z",
+        "severity": "error"
+      },
+      {
+        "message": "OSError: libgomp.so.1: cannot open shared object file: No such file or directory",
+        "timestamp": "2026-08-13T13:44:35.406759433Z",
+        "severity": "error"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-13T13:46:54.626579+00:00"
+}
