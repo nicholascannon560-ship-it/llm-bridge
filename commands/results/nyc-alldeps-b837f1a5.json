@@ -1,0 +1,26 @@
+{
+  "id": "nyc-alldeps-b837f1a5",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "service": {
+      "id": "9384159d-d46f-468d-9c1a-21f9746321a4",
+      "name": "web",
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a7d4e407-82c7-452d-b473-2868ab2ec61f",
+              "status": "SUCCESS",
+              "createdAt": "2026-08-13T03:20:00.293Z",
+              "updatedAt": "2026-08-13T03:20:45.788Z",
+              "canRedeploy": true
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T13:33:38.138582+00:00"
+}
