@@ -1,0 +1,10 @@
+{
+  "id": "nyc-env-nowc-e13f06",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "variableUpsert": true
+  },
+  "error": null,
+  "processed_at": "2026-08-13T02:34:33.060245+00:00"
+}
