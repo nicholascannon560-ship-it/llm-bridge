@@ -1,0 +1,5 @@
+{
+  "action": "get_logs",
+  "deployment_id": "d793806b-b97c-4a05-adfc-7ad477a98734",
+  "limit": 200
+}
