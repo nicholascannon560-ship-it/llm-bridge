@@ -1,0 +1,144 @@
+{
+  "id": "nyc-list3-1d8e7f88",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "me": {
+      "workspaces": [
+        {
+          "name": "nicholascannon560-ship-it's Projects",
+          "projects": {
+            "edges": [
+              {
+                "node": {
+                  "id": "a5b04789-476f-46c4-8aa3-a1820f63a5b7",
+                  "name": "fraction-calc",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "9ab2da53-3e5e-4eda-82c7-305469948852",
+                          "name": "fraction-calc"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "c175d8c3-b5f1-4f1f-bafb-fc2c017af3f7",
+                  "name": "resolume-bridge",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "9a82677f-89c7-494c-89bb-060f09cd7feb",
+                          "name": "resolume-bridge-relay"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "625df217-dc9a-491c-8f1b-9fd50863d13e",
+                  "name": "contractor-payroll",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "97a007f1-dd56-4ce0-8b8b-23bf26f5b59f",
+                          "name": "web"
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "adeb15cc-dcce-4593-a1d5-3fe44544c6d3",
+                          "name": "postgres"
+                        }
+                      },
+                      {
+                        "node": {
+                          "id": "dbbd8434-41b6-4ba2-91b4-981f8223f427",
+                          "name": "weekly-cron"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "cb4a98c2-f856-4a30-a684-e1164a5d1b81",
+                  "name": "jason-boyd-site",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "70d3bd14-3bd0-4679-be3c-0fb2807595b0",
+                          "name": "web"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "9bcbda74-660b-448d-ad18-b59aba01066f",
+                  "name": "llm-bridge",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "509d2aef-f1a5-4854-9a57-e44cf9c079a0",
+                          "name": "llm-bridge"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "58ea2a26-8c2a-49fc-bd7c-43da5c75432c",
+                  "name": "tali",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "078ccf3b-4c1d-4efb-93b6-d087db79e149",
+                          "name": "web"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node": {
+                  "id": "b37dd9c0-edb0-455f-aa9f-88f585476d97",
+                  "name": "KalshiML",
+                  "services": {
+                    "edges": [
+                      {
+                        "node": {
+                          "id": "8039f258-225d-4f3a-944e-42fa3392de2a",
+                          "name": "KalshiML"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T01:58:33.742165+00:00"
+}
