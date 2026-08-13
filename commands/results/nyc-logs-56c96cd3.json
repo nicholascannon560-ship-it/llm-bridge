@@ -1,0 +1,46 @@
+{
+  "id": "nyc-logs-56c96cd3",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": [
+      {
+        "message": "Starting Container",
+        "timestamp": "2026-08-13T03:20:43.367407084Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     Waiting for application startup.",
+        "timestamp": "2026-08-13T03:20:44.189824470Z",
+        "severity": "error"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-08-13T03:20:44.189831470Z",
+        "severity": "info"
+      },
+      {
+        "message": "",
+        "timestamp": "2026-08-13T03:20:44.189836229Z",
+        "severity": "info"
+      },
+      {
+        "message": "INFO:     Application startup complete.",
+        "timestamp": "2026-08-13T03:20:44.189840239Z",
+        "severity": "error"
+      },
+      {
+        "message": "INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)",
+        "timestamp": "2026-08-13T03:20:44.189843739Z",
+        "severity": "error"
+      },
+      {
+        "message": "INFO:     Started server process [1]",
+        "timestamp": "2026-08-13T03:20:44.189890689Z",
+        "severity": "error"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-13T12:51:35.825882+00:00"
+}
