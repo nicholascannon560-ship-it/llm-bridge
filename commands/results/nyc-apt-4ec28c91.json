@@ -1,0 +1,10 @@
+{
+  "id": "nyc-apt-4ec28c91",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "variableUpsert": true
+  },
+  "error": null,
+  "processed_at": "2026-08-13T13:50:22.353895+00:00"
+}
