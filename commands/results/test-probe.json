@@ -1,0 +1,12 @@
+{
+  "id": "test-probe",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T15:34:41.693237+00:00"
+}
