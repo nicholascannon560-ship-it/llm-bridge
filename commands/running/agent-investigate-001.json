@@ -1,0 +1,10 @@
+{
+  "id": "agent-investigate-001",
+  "action": "agent_run",
+  "status": "running",
+  "result": {
+    "status": "started",
+    "task_id": "agent-investigate-001"
+  },
+  "started_at": "2026-08-13T16:42:24.399466+00:00"
+}
