@@ -1,0 +1,15 @@
+{
+  "turn": 1,
+  "timestamp": "2026-08-13T16:42:26.196038+00:00",
+  "type": "llm_error",
+  "error": "HTTPStatusError: moonshot stream 429: {\"error\":{\"message\":\"Your account org-033ae0b312d64ea4be78522424759cb3 \\u003cak-fbfyawrgo7ti11bc9q4i\\u003e is suspended due to insufficient balance, please recharge your account or check your plan and billing details\",\"type\":\"exceeded_current_quota_error\"}}",
+  "task_id": "agent-investigate-001",
+  "cost_cents_total": 0.0,
+  "tokens_total": {
+    "prompt": 0,
+    "completion": 0,
+    "cached": 0
+  },
+  "provider": "moonshot",
+  "model": "kimi-k3"
+}
