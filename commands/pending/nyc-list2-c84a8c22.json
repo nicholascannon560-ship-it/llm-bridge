@@ -1,4 +1,0 @@
-{
-  "action": "railway_gql",
-  "query": "query {\n  me {\n    workspaces {\n      name\n      projects {\n        edges {\n          node {\n            id\n            name\n            services {\n              edges {\n                node {\n                  id\n                  name\n                  source {\n                    repo\n                  }\n                }\n              }\n            }\n          }\n        }\n      }\n    }\n  }\n}"
-}
