@@ -1,0 +1,766 @@
+{
+  "id": "nyc-logs3-b00eced6",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": [
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:55:17.095379839Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked",
+        "timestamp": "2026-08-13T02:55:17.095382699Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked",
+        "timestamp": "2026-08-13T02:55:17.095385779Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap_external>\", line 1023, in exec_module",
+        "timestamp": "2026-08-13T02:55:17.095388819Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed",
+        "timestamp": "2026-08-13T02:55:17.095391449Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 10, in <module>",
+        "timestamp": "2026-08-13T02:55:17.095394219Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from common.logging import configure_logging, logger",
+        "timestamp": "2026-08-13T02:55:17.095396669Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/common/logging.py\", line 2, in <module>",
+        "timestamp": "2026-08-13T02:55:17.096460902Z",
+        "severity": "error"
+      },
+      {
+        "message": "    import structlog",
+        "timestamp": "2026-08-13T02:55:17.096464092Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'structlog'",
+        "timestamp": "2026-08-13T02:55:17.096467052Z",
+        "severity": "error"
+      },
+      {
+        "message": "Traceback (most recent call last):",
+        "timestamp": "2026-08-13T02:55:18.919446447Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/bin/uvicorn\", line 6, in <module>",
+        "timestamp": "2026-08-13T02:55:18.919450987Z",
+        "severity": "error"
+      },
+      {
+        "message": "    sys.exit(main())",
+        "timestamp": "2026-08-13T02:55:18.919454597Z",
+        "severity": "error"
+      },
+      {
+        "message": "             ~~~~^^",
+        "timestamp": "2026-08-13T02:55:18.919458317Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1569, in __call__",
+        "timestamp": "2026-08-13T02:55:18.919461987Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return self.main(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:55:18.919465567Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:18.919468927Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1490, in main",
+        "timestamp": "2026-08-13T02:55:18.919472697Z",
+        "severity": "error"
+      },
+      {
+        "message": "    rv = self.invoke(ctx)",
+        "timestamp": "2026-08-13T02:55:18.919475857Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1353, in invoke",
+        "timestamp": "2026-08-13T02:55:18.919480787Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return ctx.invoke(self.callback, **ctx.params)",
+        "timestamp": "2026-08-13T02:55:18.919484267Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:18.919487547Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 907, in invoke",
+        "timestamp": "2026-08-13T02:55:18.919490757Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return callback(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:55:18.919493777Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 440, in main",
+        "timestamp": "2026-08-13T02:55:18.919499677Z",
+        "severity": "error"
+      },
+      {
+        "message": "    run(",
+        "timestamp": "2026-08-13T02:55:18.919503577Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~^",
+        "timestamp": "2026-08-13T02:55:18.919508117Z",
+        "severity": "error"
+      },
+      {
+        "message": "        app,",
+        "timestamp": "2026-08-13T02:55:18.919512836Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^",
+        "timestamp": "2026-08-13T02:55:18.919516836Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ...<48 lines>...",
+        "timestamp": "2026-08-13T02:55:18.919521506Z",
+        "severity": "error"
+      },
+      {
+        "message": "        reset_contextvars=reset_contextvars,",
+        "timestamp": "2026-08-13T02:55:18.919525996Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:18.919531266Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T02:55:18.919535496Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T02:55:18.919539596Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 609, in run",
+        "timestamp": "2026-08-13T02:55:18.919544206Z",
+        "severity": "error"
+      },
+      {
+        "message": "    config.load_app()",
+        "timestamp": "2026-08-13T02:55:18.922938812Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~~~~~~~~~~~~~^^",
+        "timestamp": "2026-08-13T02:55:18.922950222Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/config.py\", line 428, in load_app",
+        "timestamp": "2026-08-13T02:55:18.922958542Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return import_from_string(self.app)",
+        "timestamp": "2026-08-13T02:55:18.922965472Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 22, in import_from_string",
+        "timestamp": "2026-08-13T02:55:18.922971042Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc from None",
+        "timestamp": "2026-08-13T02:55:18.922976372Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 19, in import_from_string",
+        "timestamp": "2026-08-13T02:55:18.922981462Z",
+        "severity": "error"
+      },
+      {
+        "message": "    module = importlib.import_module(module_str)",
+        "timestamp": "2026-08-13T02:55:18.922985962Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/importlib/__init__.py\", line 88, in import_module",
+        "timestamp": "2026-08-13T02:55:18.922990351Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _bootstrap._gcd_import(name[level:], package, level)",
+        "timestamp": "2026-08-13T02:55:18.922995781Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:18.923000871Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1395, in _gcd_import",
+        "timestamp": "2026-08-13T02:55:18.923005411Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:55:18.923010981Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked",
+        "timestamp": "2026-08-13T02:55:18.923015981Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked",
+        "timestamp": "2026-08-13T02:55:18.923021011Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap_external>\", line 1023, in exec_module",
+        "timestamp": "2026-08-13T02:55:18.923025861Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed",
+        "timestamp": "2026-08-13T02:55:18.923030941Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 10, in <module>",
+        "timestamp": "2026-08-13T02:55:18.923035361Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from common.logging import configure_logging, logger",
+        "timestamp": "2026-08-13T02:55:18.923039671Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/common/logging.py\", line 2, in <module>",
+        "timestamp": "2026-08-13T02:55:18.924583900Z",
+        "severity": "error"
+      },
+      {
+        "message": "    import structlog",
+        "timestamp": "2026-08-13T02:55:18.924588560Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'structlog'",
+        "timestamp": "2026-08-13T02:55:18.924591760Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T02:55:20.298299875Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 609, in run",
+        "timestamp": "2026-08-13T02:55:20.298306615Z",
+        "severity": "error"
+      },
+      {
+        "message": "    rv = self.invoke(ctx)",
+        "timestamp": "2026-08-13T02:55:20.298313165Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~^",
+        "timestamp": "2026-08-13T02:55:20.298317855Z",
+        "severity": "error"
+      },
+      {
+        "message": "Traceback (most recent call last):",
+        "timestamp": "2026-08-13T02:55:20.298321565Z",
+        "severity": "error"
+      },
+      {
+        "message": "        app,",
+        "timestamp": "2026-08-13T02:55:20.298328294Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1353, in invoke",
+        "timestamp": "2026-08-13T02:55:20.298328644Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/bin/uvicorn\", line 6, in <module>",
+        "timestamp": "2026-08-13T02:55:20.298331604Z",
+        "severity": "error"
+      },
+      {
+        "message": "    sys.exit(main())",
+        "timestamp": "2026-08-13T02:55:20.298339294Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return ctx.invoke(self.callback, **ctx.params)",
+        "timestamp": "2026-08-13T02:55:20.298339344Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^",
+        "timestamp": "2026-08-13T02:55:20.298340094Z",
+        "severity": "error"
+      },
+      {
+        "message": "        reset_contextvars=reset_contextvars,",
+        "timestamp": "2026-08-13T02:55:20.298342494Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:20.298347854Z",
+        "severity": "error"
+      },
+      {
+        "message": "             ~~~~^^",
+        "timestamp": "2026-08-13T02:55:20.298348934Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ...<48 lines>...",
+        "timestamp": "2026-08-13T02:55:20.298350454Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1569, in __call__",
+        "timestamp": "2026-08-13T02:55:20.298357134Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 907, in invoke",
+        "timestamp": "2026-08-13T02:55:20.298357374Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:20.298359364Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return callback(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:55:20.298364874Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return self.main(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:55:20.298365374Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T02:55:20.298367844Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 440, in main",
+        "timestamp": "2026-08-13T02:55:20.298371164Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:20.298371204Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1490, in main",
+        "timestamp": "2026-08-13T02:55:20.298375664Z",
+        "severity": "error"
+      },
+      {
+        "message": "    run(",
+        "timestamp": "2026-08-13T02:55:20.298376074Z",
+        "severity": "error"
+      },
+      {
+        "message": "    config.load_app()",
+        "timestamp": "2026-08-13T02:55:20.299314147Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~~~~~~~~~~~~~^^",
+        "timestamp": "2026-08-13T02:55:20.299318747Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/config.py\", line 428, in load_app",
+        "timestamp": "2026-08-13T02:55:20.299321657Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed",
+        "timestamp": "2026-08-13T02:55:20.299324897Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return import_from_string(self.app)",
+        "timestamp": "2026-08-13T02:55:20.299324907Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 22, in import_from_string",
+        "timestamp": "2026-08-13T02:55:20.299327637Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc from None",
+        "timestamp": "2026-08-13T02:55:20.299330527Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 10, in <module>",
+        "timestamp": "2026-08-13T02:55:20.299330737Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 19, in import_from_string",
+        "timestamp": "2026-08-13T02:55:20.299333797Z",
+        "severity": "error"
+      },
+      {
+        "message": "    module = importlib.import_module(module_str)",
+        "timestamp": "2026-08-13T02:55:20.299336437Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from common.logging import configure_logging, logger",
+        "timestamp": "2026-08-13T02:55:20.299337607Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/importlib/__init__.py\", line 88, in import_module",
+        "timestamp": "2026-08-13T02:55:20.299338957Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _bootstrap._gcd_import(name[level:], package, level)",
+        "timestamp": "2026-08-13T02:55:20.299341297Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:20.299344327Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1395, in _gcd_import",
+        "timestamp": "2026-08-13T02:55:20.299346857Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:55:20.299349277Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked",
+        "timestamp": "2026-08-13T02:55:20.299352197Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked",
+        "timestamp": "2026-08-13T02:55:20.299354787Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap_external>\", line 1023, in exec_module",
+        "timestamp": "2026-08-13T02:55:20.299357867Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/common/logging.py\", line 2, in <module>",
+        "timestamp": "2026-08-13T02:55:20.299821684Z",
+        "severity": "error"
+      },
+      {
+        "message": "    import structlog",
+        "timestamp": "2026-08-13T02:55:20.299824434Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'structlog'",
+        "timestamp": "2026-08-13T02:55:20.299827004Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:21.756971745Z",
+        "severity": "error"
+      },
+      {
+        "message": "Traceback (most recent call last):",
+        "timestamp": "2026-08-13T02:55:21.756972825Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T02:55:21.756980205Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/bin/uvicorn\", line 6, in <module>",
+        "timestamp": "2026-08-13T02:55:21.756980405Z",
+        "severity": "error"
+      },
+      {
+        "message": "    sys.exit(main())",
+        "timestamp": "2026-08-13T02:55:21.756985375Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T02:55:21.756985725Z",
+        "severity": "error"
+      },
+      {
+        "message": "             ~~~~^^",
+        "timestamp": "2026-08-13T02:55:21.756990275Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 609, in run",
+        "timestamp": "2026-08-13T02:55:21.756992065Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1569, in __call__",
+        "timestamp": "2026-08-13T02:55:21.756994185Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return self.main(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:55:21.756998845Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:21.757002645Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1490, in main",
+        "timestamp": "2026-08-13T02:55:21.757008525Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~^",
+        "timestamp": "2026-08-13T02:55:21.757008725Z",
+        "severity": "error"
+      },
+      {
+        "message": "    rv = self.invoke(ctx)",
+        "timestamp": "2026-08-13T02:55:21.757015275Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1353, in invoke",
+        "timestamp": "2026-08-13T02:55:21.757022045Z",
+        "severity": "error"
+      },
+      {
+        "message": "        app,",
+        "timestamp": "2026-08-13T02:55:21.757023424Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return ctx.invoke(self.callback, **ctx.params)",
+        "timestamp": "2026-08-13T02:55:21.757031094Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^",
+        "timestamp": "2026-08-13T02:55:21.757032534Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:21.757037524Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ...<48 lines>...",
+        "timestamp": "2026-08-13T02:55:21.757040244Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 907, in invoke",
+        "timestamp": "2026-08-13T02:55:21.757045074Z",
+        "severity": "error"
+      },
+      {
+        "message": "        reset_contextvars=reset_contextvars,",
+        "timestamp": "2026-08-13T02:55:21.757047234Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return callback(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:55:21.757050834Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 440, in main",
+        "timestamp": "2026-08-13T02:55:21.757055024Z",
+        "severity": "error"
+      },
+      {
+        "message": "    run(",
+        "timestamp": "2026-08-13T02:55:21.757059504Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap_external>\", line 1023, in exec_module",
+        "timestamp": "2026-08-13T02:55:21.758361425Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed",
+        "timestamp": "2026-08-13T02:55:21.758368265Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 10, in <module>",
+        "timestamp": "2026-08-13T02:55:21.758373155Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from common.logging import configure_logging, logger",
+        "timestamp": "2026-08-13T02:55:21.758379265Z",
+        "severity": "error"
+      },
+      {
+        "message": "    config.load_app()",
+        "timestamp": "2026-08-13T02:55:21.758386335Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~~~~~~~~~~~~~^^",
+        "timestamp": "2026-08-13T02:55:21.758393125Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/config.py\", line 428, in load_app",
+        "timestamp": "2026-08-13T02:55:21.758397365Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return import_from_string(self.app)",
+        "timestamp": "2026-08-13T02:55:21.758406255Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 22, in import_from_string",
+        "timestamp": "2026-08-13T02:55:21.758410915Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc from None",
+        "timestamp": "2026-08-13T02:55:21.758414305Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 19, in import_from_string",
+        "timestamp": "2026-08-13T02:55:21.758417325Z",
+        "severity": "error"
+      },
+      {
+        "message": "    module = importlib.import_module(module_str)",
+        "timestamp": "2026-08-13T02:55:21.758421365Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/importlib/__init__.py\", line 88, in import_module",
+        "timestamp": "2026-08-13T02:55:21.758424775Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _bootstrap._gcd_import(name[level:], package, level)",
+        "timestamp": "2026-08-13T02:55:21.758427695Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:55:21.758430705Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1395, in _gcd_import",
+        "timestamp": "2026-08-13T02:55:21.758434095Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:55:21.758438025Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked",
+        "timestamp": "2026-08-13T02:55:21.758441375Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked",
+        "timestamp": "2026-08-13T02:55:21.758444275Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/common/logging.py\", line 2, in <module>",
+        "timestamp": "2026-08-13T02:55:21.760043783Z",
+        "severity": "error"
+      },
+      {
+        "message": "    import structlog",
+        "timestamp": "2026-08-13T02:55:21.760047203Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'structlog'",
+        "timestamp": "2026-08-13T02:55:21.760050093Z",
+        "severity": "error"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-13T03:17:32.518726+00:00"
+}
