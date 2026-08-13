@@ -1,0 +1,12 @@
+{
+  "id": "list-projects-001",
+  "status": "ok",
+  "action": "list_projects",
+  "result": {
+    "projects": {
+      "edges": []
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T15:49:26.102856+00:00"
+}
