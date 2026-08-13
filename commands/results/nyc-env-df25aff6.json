@@ -1,0 +1,9 @@
+{
+  "id": "nyc-env-df25aff6",
+  "status": "error",
+  "action": "railway_gql",
+  "result": null,
+  "error": "400: {\"errors\":[{\"message\":\"Field \\\"variableUpsert\\\" must not have a selection since type \\\"Boolean!\\\" has no subfields.\",\"locations\":[{\"line\":10,\"column\":5}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"8481154173999085802\"},{\"message\":\"Expected value of type \\\"String!\\\", found null.\",\"locations\":[{\"line\":6,\"column\":22}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"8481154173999085802\"}]}\n",
+  "processed_at": "2026-08-13T02:30:48.553161+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 709, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd, cmd_id)\n                               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 570, in _execute\n    return railway_query(query, cmd.get(\"variables\"))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/railway_extension.py\", line 27, in railway_query\n    raise HTTPException(status_code=resp.status_code, detail=resp.text)\nfastapi.exceptions.HTTPException: 400: {\"errors\":[{\"message\":\"Field \\\"variableUpsert\\\" must not have a selection since type \\\"Boolean!\\\" has no subfields.\",\"locations\":[{\"line\":10,\"column\":5}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"8481154173999085802\"},{\"message\":\"Expected value of type \\\"String!\\\", found null.\",\"locations\":[{\"line\":6,\"column\":22}],\"extensions\":{\"code\":\"GRAPHQL_VALIDATION_FAILED\"},\"traceId\":\"8481154173999085802\"}]}\n\n"
+}
