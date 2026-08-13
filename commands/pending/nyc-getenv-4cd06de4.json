@@ -1,4 +1,0 @@
-{
-  "action": "railway_gql",
-  "query": "query {\n  project(id: \"9bf58686-c894-424a-8811-55635dfa2762\") {\n    id\n    name\n    environments {\n      edges {\n        node {\n          id\n          name\n        }\n      }\n    }\n  }\n}"
-}
