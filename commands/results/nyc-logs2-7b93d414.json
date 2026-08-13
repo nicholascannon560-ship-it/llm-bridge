@@ -1,0 +1,516 @@
+{
+  "id": "nyc-logs2-7b93d414",
+  "status": "ok",
+  "action": "get_logs",
+  "result": {
+    "deploymentLogs": [
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/importlib/__init__.py\", line 88, in import_module",
+        "timestamp": "2026-08-13T02:47:38.297634250Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _bootstrap._gcd_import(name[level:], package, level)",
+        "timestamp": "2026-08-13T02:47:38.297638413Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:38.297642636Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1395, in _gcd_import",
+        "timestamp": "2026-08-13T02:47:38.297646872Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:47:38.297650723Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from pydantic_settings import BaseSettings",
+        "timestamp": "2026-08-13T02:47:38.298811873Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'pydantic_settings'",
+        "timestamp": "2026-08-13T02:47:38.298816896Z",
+        "severity": "error"
+      },
+      {
+        "message": "Traceback (most recent call last):",
+        "timestamp": "2026-08-13T02:47:40.171472764Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/bin/uvicorn\", line 6, in <module>",
+        "timestamp": "2026-08-13T02:47:40.171479446Z",
+        "severity": "error"
+      },
+      {
+        "message": "    sys.exit(main())",
+        "timestamp": "2026-08-13T02:47:40.171486319Z",
+        "severity": "error"
+      },
+      {
+        "message": "             ~~~~^^",
+        "timestamp": "2026-08-13T02:47:40.171493470Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1569, in __call__",
+        "timestamp": "2026-08-13T02:47:40.171501131Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return self.main(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:47:40.171506957Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:40.171512988Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1490, in main",
+        "timestamp": "2026-08-13T02:47:40.171518282Z",
+        "severity": "error"
+      },
+      {
+        "message": "    rv = self.invoke(ctx)",
+        "timestamp": "2026-08-13T02:47:40.171525992Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1353, in invoke",
+        "timestamp": "2026-08-13T02:47:40.171532698Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return ctx.invoke(self.callback, **ctx.params)",
+        "timestamp": "2026-08-13T02:47:40.171541742Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:40.171548157Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 907, in invoke",
+        "timestamp": "2026-08-13T02:47:40.171554056Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return callback(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:47:40.171560523Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 440, in main",
+        "timestamp": "2026-08-13T02:47:40.171567119Z",
+        "severity": "error"
+      },
+      {
+        "message": "    run(",
+        "timestamp": "2026-08-13T02:47:40.171573292Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~^",
+        "timestamp": "2026-08-13T02:47:40.171579869Z",
+        "severity": "error"
+      },
+      {
+        "message": "        app,",
+        "timestamp": "2026-08-13T02:47:40.171585895Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^",
+        "timestamp": "2026-08-13T02:47:40.171591220Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ...<48 lines>...",
+        "timestamp": "2026-08-13T02:47:40.171596650Z",
+        "severity": "error"
+      },
+      {
+        "message": "        reset_contextvars=reset_contextvars,",
+        "timestamp": "2026-08-13T02:47:40.171601899Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:40.171607805Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T02:47:40.171614651Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T02:47:40.171620911Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 609, in run",
+        "timestamp": "2026-08-13T02:47:40.171631446Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from config import settings",
+        "timestamp": "2026-08-13T02:47:40.172999069Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/config.py\", line 5, in <module>",
+        "timestamp": "2026-08-13T02:47:40.173010323Z",
+        "severity": "error"
+      },
+      {
+        "message": "    config.load_app()",
+        "timestamp": "2026-08-13T02:47:40.173010362Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~~~~~~~~~~~~~^^",
+        "timestamp": "2026-08-13T02:47:40.173020930Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/config.py\", line 428, in load_app",
+        "timestamp": "2026-08-13T02:47:40.173027591Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return import_from_string(self.app)",
+        "timestamp": "2026-08-13T02:47:40.173033350Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 22, in import_from_string",
+        "timestamp": "2026-08-13T02:47:40.173039151Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc from None",
+        "timestamp": "2026-08-13T02:47:40.173044581Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 19, in import_from_string",
+        "timestamp": "2026-08-13T02:47:40.173049672Z",
+        "severity": "error"
+      },
+      {
+        "message": "    module = importlib.import_module(module_str)",
+        "timestamp": "2026-08-13T02:47:40.173054612Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/importlib/__init__.py\", line 88, in import_module",
+        "timestamp": "2026-08-13T02:47:40.173059451Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _bootstrap._gcd_import(name[level:], package, level)",
+        "timestamp": "2026-08-13T02:47:40.173064788Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:40.173069843Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1395, in _gcd_import",
+        "timestamp": "2026-08-13T02:47:40.173074667Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:47:40.173079320Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked",
+        "timestamp": "2026-08-13T02:47:40.173083959Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked",
+        "timestamp": "2026-08-13T02:47:40.173089310Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap_external>\", line 1023, in exec_module",
+        "timestamp": "2026-08-13T02:47:40.173096391Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed",
+        "timestamp": "2026-08-13T02:47:40.173101341Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 9, in <module>",
+        "timestamp": "2026-08-13T02:47:40.173106339Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from pydantic_settings import BaseSettings",
+        "timestamp": "2026-08-13T02:47:40.174317957Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'pydantic_settings'",
+        "timestamp": "2026-08-13T02:47:40.174326279Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ...<48 lines>...",
+        "timestamp": "2026-08-13T02:47:41.862779953Z",
+        "severity": "error"
+      },
+      {
+        "message": "        reset_contextvars=reset_contextvars,",
+        "timestamp": "2026-08-13T02:47:41.862791851Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:41.862797926Z",
+        "severity": "error"
+      },
+      {
+        "message": "    )",
+        "timestamp": "2026-08-13T02:47:41.862805234Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ^",
+        "timestamp": "2026-08-13T02:47:41.862810250Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 609, in run",
+        "timestamp": "2026-08-13T02:47:41.862815473Z",
+        "severity": "error"
+      },
+      {
+        "message": "Traceback (most recent call last):",
+        "timestamp": "2026-08-13T02:47:41.862875333Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/bin/uvicorn\", line 6, in <module>",
+        "timestamp": "2026-08-13T02:47:41.862879666Z",
+        "severity": "error"
+      },
+      {
+        "message": "    sys.exit(main())",
+        "timestamp": "2026-08-13T02:47:41.862884134Z",
+        "severity": "error"
+      },
+      {
+        "message": "             ~~~~^^",
+        "timestamp": "2026-08-13T02:47:41.862888674Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1569, in __call__",
+        "timestamp": "2026-08-13T02:47:41.862898259Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return self.main(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:47:41.862902242Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:41.862906177Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1490, in main",
+        "timestamp": "2026-08-13T02:47:41.862911226Z",
+        "severity": "error"
+      },
+      {
+        "message": "    rv = self.invoke(ctx)",
+        "timestamp": "2026-08-13T02:47:41.862914998Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 1353, in invoke",
+        "timestamp": "2026-08-13T02:47:41.862919144Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return ctx.invoke(self.callback, **ctx.params)",
+        "timestamp": "2026-08-13T02:47:41.862922993Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:41.862926925Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/click/core.py\", line 907, in invoke",
+        "timestamp": "2026-08-13T02:47:41.862930995Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return callback(*args, **kwargs)",
+        "timestamp": "2026-08-13T02:47:41.862936582Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/main.py\", line 440, in main",
+        "timestamp": "2026-08-13T02:47:41.862941805Z",
+        "severity": "error"
+      },
+      {
+        "message": "    run(",
+        "timestamp": "2026-08-13T02:47:41.862946051Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~^",
+        "timestamp": "2026-08-13T02:47:41.862950389Z",
+        "severity": "error"
+      },
+      {
+        "message": "        app,",
+        "timestamp": "2026-08-13T02:47:41.862956053Z",
+        "severity": "error"
+      },
+      {
+        "message": "        ^^^^",
+        "timestamp": "2026-08-13T02:47:41.862961067Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/config.py\", line 5, in <module>",
+        "timestamp": "2026-08-13T02:47:41.863674441Z",
+        "severity": "error"
+      },
+      {
+        "message": "    config.load_app()",
+        "timestamp": "2026-08-13T02:47:41.863683172Z",
+        "severity": "error"
+      },
+      {
+        "message": "    ~~~~~~~~~~~~~~~^^",
+        "timestamp": "2026-08-13T02:47:41.863693008Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/config.py\", line 428, in load_app",
+        "timestamp": "2026-08-13T02:47:41.863698191Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return import_from_string(self.app)",
+        "timestamp": "2026-08-13T02:47:41.863705324Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 22, in import_from_string",
+        "timestamp": "2026-08-13T02:47:41.863710185Z",
+        "severity": "error"
+      },
+      {
+        "message": "    raise exc from None",
+        "timestamp": "2026-08-13T02:47:41.863716067Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/.venv/lib/python3.13/site-packages/uvicorn/importer.py\", line 19, in import_from_string",
+        "timestamp": "2026-08-13T02:47:41.863720821Z",
+        "severity": "error"
+      },
+      {
+        "message": "    module = importlib.import_module(module_str)",
+        "timestamp": "2026-08-13T02:47:41.863725734Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/mise/installs/python/3.13.14/lib/python3.13/importlib/__init__.py\", line 88, in import_module",
+        "timestamp": "2026-08-13T02:47:41.863730417Z",
+        "severity": "error"
+      },
+      {
+        "message": "    return _bootstrap._gcd_import(name[level:], package, level)",
+        "timestamp": "2026-08-13T02:47:41.863735381Z",
+        "severity": "error"
+      },
+      {
+        "message": "           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+        "timestamp": "2026-08-13T02:47:41.863740419Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1395, in _gcd_import",
+        "timestamp": "2026-08-13T02:47:41.863745592Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1360, in _find_and_load",
+        "timestamp": "2026-08-13T02:47:41.863750018Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 1331, in _find_and_load_unlocked",
+        "timestamp": "2026-08-13T02:47:41.863754951Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 935, in _load_unlocked",
+        "timestamp": "2026-08-13T02:47:41.863759230Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap_external>\", line 1023, in exec_module",
+        "timestamp": "2026-08-13T02:47:41.863763879Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"<frozen importlib._bootstrap>\", line 488, in _call_with_frames_removed",
+        "timestamp": "2026-08-13T02:47:41.863768014Z",
+        "severity": "error"
+      },
+      {
+        "message": "  File \"/app/main.py\", line 9, in <module>",
+        "timestamp": "2026-08-13T02:47:41.863771944Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from config import settings",
+        "timestamp": "2026-08-13T02:47:41.863775586Z",
+        "severity": "error"
+      },
+      {
+        "message": "    from pydantic_settings import BaseSettings",
+        "timestamp": "2026-08-13T02:47:41.864896169Z",
+        "severity": "error"
+      },
+      {
+        "message": "ModuleNotFoundError: No module named 'pydantic_settings'",
+        "timestamp": "2026-08-13T02:47:41.864904849Z",
+        "severity": "error"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-13T02:52:26.508430+00:00"
+}
