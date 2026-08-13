@@ -1,0 +1,23 @@
+{
+  "id": "nyc-svcs-39cd21ad",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "project": {
+      "id": "9bf58686-c894-424a-8811-55635dfa2762",
+      "name": "pleasing-comfort",
+      "services": {
+        "edges": [
+          {
+            "node": {
+              "id": "9384159d-d46f-468d-9c1a-21f9746321a4",
+              "name": "web"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T02:25:51.197454+00:00"
+}
