@@ -1,0 +1,23 @@
+{
+  "id": "nyc-status2-05938eea",
+  "status": "ok",
+  "action": "get_status",
+  "result": {
+    "service": {
+      "deployments": {
+        "edges": [
+          {
+            "node": {
+              "id": "a7d4e407-82c7-452d-b473-2868ab2ec61f",
+              "status": "SUCCESS",
+              "createdAt": "2026-08-13T03:20:00.293Z",
+              "updatedAt": "2026-08-13T03:20:45.788Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T12:56:37.633954+00:00"
+}
