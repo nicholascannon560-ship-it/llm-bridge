@@ -1,0 +1,4 @@
+{
+  "action": "railway_gql",
+  "query": "query { me { workspaces { name projects { edges { node { id name services { edges { node { id name source { repo } } } } } } } } } } }"
+}
