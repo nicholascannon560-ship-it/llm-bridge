@@ -1,0 +1,13 @@
+{
+  "id": "nyc-connect2-13d27247",
+  "status": "ok",
+  "action": "railway_gql",
+  "result": {
+    "serviceConnect": {
+      "id": "9384159d-d46f-468d-9c1a-21f9746321a4",
+      "name": "web"
+    }
+  },
+  "error": null,
+  "processed_at": "2026-08-13T02:29:11.964136+00:00"
+}
