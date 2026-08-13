@@ -1,0 +1,4 @@
+{
+  "action": "railway_gql",
+  "query": "mutation {\n  serviceDomainCreate(input: {\n    serviceId: \"9384159d-d46f-468d-9c1a-21f9746321a4\",\n    environmentId: \"5c44a8b4-4016-4290-8ced-9e4238840b3e\"\n  }) {\n    id\n    domain\n  }\n}"
+}
