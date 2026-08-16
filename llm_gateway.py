@@ -73,6 +73,12 @@ COST_TABLE = {
     "local": {
         "llama3.1": {"input": 0.0, "output": 0.0},
     },
+    "qwen": {
+        # OpenRouter / DeepInfra class pricing for Qwen3-Coder (~$0.15/$0.60 per Mtok).
+        # Set QWEN_MODEL via env if the served ID differs.
+        "qwen/qwen3-coder": {"input": 0.015, "output": 0.060},
+        "qwen3-coder": {"input": 0.015, "output": 0.060},
+    },
 }
 
 USAGE_LOG_PATH = os.environ.get("LLM_USAGE_LOG", "llm_usage.jsonl")
