@@ -26,12 +26,19 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MOONSHOT_API_KEY = os.environ.get("MOONSHOT_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
+# Custom OpenAI-compatible endpoint (Qwen via OpenRouter/DeepInfra today,
+# self-hosted vLLM on a rented GPU later — same wire format, same provider).
+# Set QWEN_BASE_URL (full /chat/completions URL) + QWEN_API_KEY to enable.
+QWEN_BASE_URL = os.environ.get("QWEN_BASE_URL", "")
+QWEN_API_KEY = os.environ.get("QWEN_API_KEY", "")
+
 # Default models per provider
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-5",
     "moonshot": "kimi-k3",
     "openai": "gpt-4o-mini",
     "local": "llama3.1",
+    "qwen": "qwen/qwen3-coder",
 }
 
 # Cost in CENTS per 1K tokens (input / output / cached_input).
