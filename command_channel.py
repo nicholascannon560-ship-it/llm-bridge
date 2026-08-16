@@ -298,7 +298,7 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        resp = await qwen.chat(chat_req)
+        resp = asyncio.run(qwen.chat(chat_req))
         return {
             "content": resp.content,
             "provider": resp.provider,
