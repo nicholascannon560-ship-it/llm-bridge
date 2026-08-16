@@ -567,6 +567,99 @@ class OpenAIProvider(LLMProvider):
                             pass
 
 
+class QwenProvider(LLMProvider):
+    """Qwen via any OpenAI-compatible endpoint.
+
+    Today: OpenRouter / DeepInfra / DashScope. Later: your own vLLM server on a
+    rented GPU — same class, different QWEN_BASE_URL. QWEN_BASE_URL is the full
+    /chat/completions URL.
+    """
+
+    def __init__(self, api_key: str, base_url: str):
+        super().__init__(api_key)
+        self.base_url = base_url
+
+    async def chat(self, req: ChatRequest) -> ChatResponse:
+        start = time.time()
+        messages = [m.to_wire() for m in req.messages]
+        payload = {
+            "model": req.model or DEFAULT_MODELS["qwen"],
+            "messages": messages,
+            "temperature": req.temperature,
+            "max_tokens": req.max_tokens,
+        }
+        if req.tools:
+            payload["tools"] = req.tools
+            if req.tool_choice:
+                payload["tool_choice"] = req.tool_choice
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            r = await client.post(
+                self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            r.raise_for_status()
+            data = r.json()
+
+        latency = (time.time() - start) * 1000
+        choice = data["choices"][0] if data.get("choices") else {}
+        msg = choice.get("message", {})
+        content = msg.get("content") or msg.get("reasoning_content", "")
+        tool_calls = msg.get("tool_calls")
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        cost = self.estimate_cost(payload["model"], prompt_tokens, completion_tokens)
+
+        return ChatResponse(
+            provider="qwen",
+            model=payload["model"],
+            content=content,
+            usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens},
+            cost_cents=cost,
+            latency_ms=latency,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            tool_calls=tool_calls,
+            finish_reason=choice.get("finish_reason"),
+        )
+
+    async def chat_stream(self, req: ChatRequest) -> AsyncGenerator[str, None]:
+        messages = [{"role": m.role, "content": m.content} for m in req.messages]
+        payload = {
+            "model": req.model or DEFAULT_MODELS["qwen"],
+            "messages": messages,
+            "temperature": req.temperature,
+            "max_tokens": req.max_tokens,
+            "stream": True,
+        }
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                self.base_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            ) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if line.startswith("data: "):
+                        data = line[6:]
+                        if data == "[DONE]":
+                            break
+                        try:
+                            event = json.loads(data)
+                            delta = event["choices"][0].get("delta", {})
+                            yield delta.get("content", "")
+                        except (json.JSONDecodeError, KeyError):
+                            pass
+
+
 # ── router / auto-selector ──────────────────────────────────────────────────
 
 class LLMRouter:
