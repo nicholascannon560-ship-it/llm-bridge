@@ -581,16 +581,33 @@ async def _tool_railway_get_logs(args: Dict) -> Dict:
 
 
 async def _tool_llm_chat(args: Dict) -> Dict:
-    router = get_router()
-    chat_req = ChatRequest(
-        provider=args.get("provider", "moonshot"),
-        model=args.get("model", "kimi-k3"),
-        messages=[ChatMessage(role="user", content=args["prompt"])],
-        max_tokens=args.get("max_tokens", 2048),
-        temperature=1.0,
-        reasoning_effort=args.get("reasoning_effort", "low")
-    )
-    resp = await router.chat(chat_req)
+    provider = args.get("provider", "moonshot")
+    if provider == "qwen":
+        # Qwen is not registered in LLMRouter (registration patch declined),
+        # so route directly to the provider class when env vars are present.
+        from llm_gateway import QwenProvider, QWEN_BASE_URL, QWEN_API_KEY, DEFAULT_MODELS
+        if not QWEN_BASE_URL or not QWEN_API_KEY:
+            return {"error": "qwen provider requested but QWEN_BASE_URL/QWEN_API_KEY not set"}
+        qwen = QwenProvider(QWEN_API_KEY, QWEN_BASE_URL)
+        chat_req = ChatRequest(
+            provider="qwen",
+            model=args.get("model") or DEFAULT_MODELS["qwen"],
+            messages=[ChatMessage(role="user", content=args["prompt"])],
+            max_tokens=args.get("max_tokens", 2048),
+            temperature=args.get("temperature", 0.7),
+        )
+        resp = await qwen.chat(chat_req)
+    else:
+        router = get_router()
+        chat_req = ChatRequest(
+            provider=provider,
+            model=args.get("model", "kimi-k3"),
+            messages=[ChatMessage(role="user", content=args["prompt"])],
+            max_tokens=args.get("max_tokens", 2048),
+            temperature=1.0,
+            reasoning_effort=args.get("reasoning_effort", "low")
+        )
+        resp = await router.chat(chat_req)
     return {
         "content": resp.content,
         "provider": resp.provider,
