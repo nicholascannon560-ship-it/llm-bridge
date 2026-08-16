@@ -283,8 +283,30 @@ def _llm_chat(cmd: dict[str, Any]) -> dict[str, Any]:
     # to "low" for mechanical advisor calls.
     reasoning_effort = cmd.get("reasoning_effort", "low")
 
-    if provider != "moonshot":
-        raise ValueError(f"llm_chat currently only supports provider=moonshot, got {provider}")
+    if provider not in ("moonshot", "qwen"):
+        raise ValueError(f"llm_chat supports provider=moonshot or qwen, got {provider}")
+
+    if provider == "qwen":
+        from llm_gateway import QwenProvider, QWEN_BASE_URL, QWEN_API_KEY, ChatRequest, ChatMessage, DEFAULT_MODELS
+        if not QWEN_BASE_URL or not QWEN_API_KEY:
+            raise RuntimeError("QWEN_BASE_URL/QWEN_API_KEY not set on the service")
+        qwen = QwenProvider(QWEN_API_KEY, QWEN_BASE_URL)
+        chat_req = ChatRequest(
+            provider="qwen",
+            model=model or DEFAULT_MODELS["qwen"],
+            messages=[ChatMessage(role=m.get("role", "user"), content=m.get("content", "")) for m in messages],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        resp = await qwen.chat(chat_req)
+        return {
+            "content": resp.content,
+            "provider": resp.provider,
+            "model": resp.model,
+            "usage": resp.usage,
+            "cost_cents": resp.cost_cents,
+            "finish_reason": resp.finish_reason,
+        }
 
     if not MOONSHOT_API_KEY:
         raise RuntimeError("MOONSHOT_API_KEY not set on the service")
