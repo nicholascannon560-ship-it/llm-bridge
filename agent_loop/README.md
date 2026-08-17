@@ -27,8 +27,8 @@ Tools come in **sets**, and the split is the point.
 
 | Set | Tools | Can write? | Sees untrusted web text? |
 |-----|-------|-----------|--------------------------|
-| `build` (default) | github_read, github_commit, railway_* , llm_chat, read/write_memory, http_get, kml_* | yes | no browser |
-| `research` | github_read, railway_get_*, llm_chat, read_memory, http_get, kml_*, **browser_read**, **browser_research** | no | yes |
+| `build` (default) | github_read, github_commit, railway_* , llm_chat, read/write_memory, http_get, web_search, kml_* | yes | snippets only (web_search) |
+| `research` | github_read, railway_get_*, llm_chat, read_memory, http_get, web_search, kml_*, **browser_read**, **browser_research** | no | yes |
 
 `resolve_tools()` / `assert_tool_set_safe()` refuse any set that puts a
 browsing tool next to `github_commit`, `railway_set_env`, `railway_redeploy`
