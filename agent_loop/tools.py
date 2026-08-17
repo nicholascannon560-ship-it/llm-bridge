@@ -871,6 +871,7 @@ _TOOL_HANDLERS = {
     "write_memory": _tool_write_memory,
     "read_memory": _tool_read_memory,
     "http_get": _tool_http_get,
+    "web_search": _tool_web_search,
     "kml_data_read": _tool_kml_data_read,
     "kml_app_logs": _tool_kml_app_logs,
     "github_list_repos": _tool_github_list_repos,
