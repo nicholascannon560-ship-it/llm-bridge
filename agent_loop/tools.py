@@ -678,6 +678,18 @@ async def _tool_http_get(args: Dict) -> Dict:
     return await _do_fetch(url, int(args.get("max_bytes") or 8000))
 
 
+async def _tool_web_search(args: Dict) -> Dict:
+    """Search via the bridge's own /search route rather than opening a second
+    egress path. Upstream host stays hardcoded in search_routes (DuckDuckGo),
+    so the caller supplies a query string, never a URL -- no SSRF surface."""
+    from search_routes import SearchRequest, search
+    query = (args.get("query") or "").strip()
+    if not query:
+        return {"error": "query is required"}
+    resp = await search(SearchRequest(query=query, max_results=args.get("max_results")))
+    return resp.model_dump() if hasattr(resp, "model_dump") else resp.dict()
+
+
 async def _tool_kml_data_read(args: Dict) -> Dict:
     from urllib.parse import quote
     path = (args.get("path") or "").strip().lstrip("/")
