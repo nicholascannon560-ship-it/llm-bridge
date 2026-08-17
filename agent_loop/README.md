@@ -45,6 +45,7 @@ run, act in a second one.
 | `llm_chat` | Sub-question to another model |
 | `read_memory` / `write_memory` | JSONL reflections (`write_memory` is build-only) |
 | `http_get`, `kml_data_read`, `kml_app_logs` | Allowlisted fetch through `fetch_routes` |
+| `web_search` | DuckDuckGo search via `search_routes` (upstream host hardcoded, no key). Returns titles/URLs/snippets; read a page via `http_get` (allowlisted) or `browser_read`. |
 
 ## Browsing: limits and permission
 
