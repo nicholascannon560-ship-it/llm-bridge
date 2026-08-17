@@ -395,6 +395,7 @@ READ_ONLY_TOOL_NAMES = [
     "llm_chat",
     "read_memory",
     "http_get",
+    "web_search",
     "kml_data_read",
     "kml_app_logs",
 ]
