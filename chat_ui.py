@@ -726,6 +726,11 @@ MODEL_CATALOG = [
      "note": "balanced"},
     {"id": "claude-opus-5", "provider": "anthropic", "label": "Opus 5",
      "note": "hardest reasoning"},
+    # Free during the Aug 2026 OpenRouter preview week, from an anonymous
+    # operator that RETAINS prompts and completions. Listed last and labelled
+    # so it is never picked by accident for repo or client work.
+    {"id": "stealth/ox-alpha", "provider": "openrouter", "label": "Ox Alpha (preview)",
+     "note": "free, 1M ctx — anonymous provider, retains prompts"},
 ]
 
 
