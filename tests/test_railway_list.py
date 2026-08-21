@@ -4,11 +4,48 @@ railway_extension.list_projects() / list_services() are plain sync
 functions returning dicts. The tool handler used to `await` them,
 raising "TypeError: object dict can't be used in 'await' expression"
 on every call, on both code paths (with and without project_id).
+
+The sandbox has no railway_extension, so we install stub bridge modules
+before importing agent_loop.tools — the same name-binding path used in
+the real bridge process.
 """
 import asyncio
 import sys
+import types
 
 sys.path.insert(0, ".")
+
+
+def _install_bridge_stubs():
+    if "llm_gateway" in sys.modules:
+        return
+
+    gw = types.ModuleType("llm_gateway")
+
+    class ChatRequest(dict):
+        pass
+
+    class ChatMessage(dict):
+        pass
+
+    gw.ChatRequest = ChatRequest
+    gw.ChatMessage = ChatMessage
+    gw.get_router = lambda: None
+    sys.modules["llm_gateway"] = gw
+
+    rx = types.ModuleType("railway_extension")
+    rx.railway_query = lambda query, variables=None: {}
+    rx.set_service_variable = lambda *a, **k: {}
+    rx.list_projects = lambda: {"projects": {"edges": []}}
+    rx.list_services = lambda pid: {"services": {"edges": []}}
+    rx.get_service_status = lambda service_id=None: {}
+    rx.get_logs = lambda deployment_id, limit=100: {}
+    rx.redeploy_service = lambda service_id, environment=None: {}
+    rx.BRIDGE_SERVICE_ID = "stub-service"
+    sys.modules["railway_extension"] = rx
+
+
+_install_bridge_stubs()
 
 from agent_loop import tools  # noqa: E402
 
@@ -34,7 +71,6 @@ def test_railway_list_without_project_id(monkeypatch):
 
     out = asyncio.run(tools._tool_railway_list({}))
     assert calls.get("projects") is True
-    assert "projects" in out
     assert out["projects"]["edges"][0]["node"]["name"] == "demo"
 
 
