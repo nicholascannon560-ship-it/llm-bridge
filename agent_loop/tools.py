@@ -729,9 +729,13 @@ async def _tool_github_list_repos(args: Dict) -> Dict:
 
 async def _tool_railway_list(args: Dict) -> Dict:
     pid = (args.get("project_id") or "").strip()
+    # Both helpers already return the GraphQL 'data' dict:
+    #   list_projects()  -> {"projects": {"edges": [...]}}
+    #   list_services()  -> {"project": {"services": {"edges": [...]}}}
+    # Return as-is; wrapping again double-nests the key.
     if pid:
-        return {"project_id": pid, "services": list_services(pid)}
-    return {"projects": list_projects()}
+        return list_services(pid)
+    return list_projects()
 
 
 
