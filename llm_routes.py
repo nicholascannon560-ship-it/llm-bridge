@@ -22,7 +22,7 @@ llm_router = APIRouter(prefix="/llm", tags=["llm"])
 # ── request/response models ───────────────────────────────────────────────────
 
 class ChatRequestModel(BaseModel):
-    provider: str = Field("auto", description="anthropic, moonshot, openai, local, or auto")
+    provider: str = Field("auto", description="anthropic, moonshot, openai, openrouter, local, or auto")
     model: Optional[str] = Field(None, description="Specific model name, or default for provider")
     messages: List[dict] = Field(..., description="Chat messages: [{role, content, tool_calls?, tool_call_id?}, ...]")
     temperature: float = Field(0.7, ge=0.0, le=2.0)
@@ -81,7 +81,7 @@ async def list_providers():
     available = router.available_providers()
 
     providers = []
-    for name in ["anthropic", "moonshot", "openai", "local"]:
+    for name in ["anthropic", "moonshot", "openai", "openrouter", "local"]:
         is_available = name in available
         providers.append(ProviderInfo(
             name=name,

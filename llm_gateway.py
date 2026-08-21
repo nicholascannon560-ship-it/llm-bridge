@@ -25,12 +25,14 @@ import httpx
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MOONSHOT_API_KEY = os.environ.get("MOONSHOT_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 # Default models per provider
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-5",
     "moonshot": "kimi-k3",
     "openai": "gpt-4o-mini",
+    "openrouter": "stealth/ox-alpha",
     "local": "llama3.1",
 }
 
@@ -71,6 +73,13 @@ COST_TABLE = {
         "gpt-4o": {"input": 0.50, "output": 1.50},
         "gpt-4o-mini": {"input": 0.015, "output": 0.060},
     },
+    "openrouter": {
+        # stealth/ox-alpha is $0/$0 during the Aug 2026 preview week. This is
+        # a PROMOTIONAL rate on an anonymous provider, not a durable price.
+        # When the preview ends these become real numbers and every
+        # budget_cents check that trusted the zero will be wrong.
+        "stealth/ox-alpha": {"input": 0.0, "output": 0.0},
+    },
     "local": {
         "llama3.1": {"input": 0.0, "output": 0.0},
     },
@@ -97,6 +106,7 @@ USAGE_LOG_PATH = os.environ.get("LLM_USAGE_LOG", "llm_usage.jsonl")
 # Agent-loop turns at reasoning_effort="max" measured 20-36s; tool round trips
 # push higher. 60s was the old hardcoded ceiling and is too tight.
 MOONSHOT_TIMEOUT_SEC = float(os.environ.get("MOONSHOT_TIMEOUT_SEC", "120"))
+OPENROUTER_TIMEOUT_SEC = float(os.environ.get("OPENROUTER_TIMEOUT_SEC", "120"))
 
 # Streaming holds one connection open for the whole generation, so it needs a
 # longer ceiling than a blocking call. httpx treats this as a PER-CHUNK read
@@ -1111,6 +1121,107 @@ class OpenAIProvider(LLMProvider):
                             pass
 
 
+class OpenRouterProvider(LLMProvider):
+    """OpenRouter client — OpenAI-compatible gateway to many third-party models.
+
+    Modelled on MoonshotProvider rather than OpenAIProvider because the
+    Moonshot path is the one that actually handles tool_calls and the
+    reasoning_content fallback; OpenAIProvider is a stub.
+
+    PRIVACY NOTE: OpenRouter routes to third-party providers. For the stealth
+    models in particular the operator is anonymous and OpenRouter's own model
+    page states prompts and completions ARE RETAINED by that provider (they
+    are merely not used for training). Do not route proprietary source,
+    customer data, or credentials through this provider. It is deliberately
+    left out of auto_select for that reason — callers must ask for it by name.
+    """
+
+    BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+    async def chat(self, req: ChatRequest) -> ChatResponse:
+        start = time.time()
+
+        messages = [m.to_wire() for m in req.messages]
+
+        payload = {
+            "model": req.model or DEFAULT_MODELS["openrouter"],
+            "messages": messages,
+            "max_tokens": req.max_tokens,
+        }
+        if req.temperature is not None:
+            payload["temperature"] = req.temperature
+        if req.tools:
+            payload["tools"] = req.tools
+            if req.tool_choice is not None:
+                payload["tool_choice"] = req.tool_choice
+        if req.reasoning_effort:
+            # OpenRouter takes a nested reasoning object, not the flat
+            # reasoning_effort string Moonshot accepts.
+            payload["reasoning"] = {"effort": req.reasoning_effort}
+
+        async with httpx.AsyncClient(timeout=OPENROUTER_TIMEOUT_SEC) as client:
+            r = await _post_with_retry(
+                client,
+                self.BASE_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    # OpenRouter attributes traffic with these; harmless if absent.
+                    "HTTP-Referer": "https://kalshiml-production-b2e9.up.railway.app",
+                    "X-Title": "llm-bridge",
+                },
+                json=payload,
+                label="openrouter",
+            )
+            r.raise_for_status()
+            data = r.json()
+
+        # OpenRouter can return HTTP 200 with an error body (upstream provider
+        # refused, rate limited, model unavailable). raise_for_status misses
+        # this entirely and the caller would see an empty completion.
+        if data.get("error"):
+            err = data["error"]
+            raise RuntimeError(
+                f"openrouter error {err.get('code')}: {err.get('message')}"
+            )
+
+        latency = (time.time() - start) * 1000
+        choice = data["choices"][0] if data.get("choices") else {}
+        msg = choice.get("message", {})
+        tool_calls = msg.get("tool_calls")
+        finish_reason = choice.get("finish_reason")
+        content = msg.get("content") or ""
+        if not content and not tool_calls:
+            content = msg.get("reasoning") or msg.get("reasoning_content", "") or ""
+
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        cached_tokens = (usage.get("prompt_tokens_details") or {}).get(
+            "cached_tokens", 0
+        ) or 0
+        cost = self.estimate_cost(
+            payload["model"], prompt_tokens, completion_tokens, cached_tokens
+        )
+
+        return ChatResponse(
+            provider="openrouter",
+            model=payload["model"],
+            content=content,
+            usage={
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "cached_tokens": cached_tokens,
+            },
+            cost_cents=cost,
+            latency_ms=latency,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            tool_calls=tool_calls,
+            finish_reason=finish_reason,
+        )
+
+
+
 # ── router / auto-selector ──────────────────────────────────────────────────
 
 class LLMRouter:
@@ -1124,6 +1235,8 @@ class LLMRouter:
             self.providers["moonshot"] = MoonshotProvider(MOONSHOT_API_KEY)
         if OPENAI_API_KEY:
             self.providers["openai"] = OpenAIProvider(OPENAI_API_KEY)
+        if OPENROUTER_API_KEY:
+            self.providers["openrouter"] = OpenRouterProvider(OPENROUTER_API_KEY)
 
     def available_providers(self) -> List[str]:
         return list(self.providers.keys())
@@ -1153,8 +1266,15 @@ class LLMRouter:
             return "anthropic"
         if "openai" in self.providers:
             return "openai"
+        # openrouter is intentionally LAST and appears in no budget or
+        # complexity branch above: its $0 preview pricing would otherwise make
+        # it win every cost-based route, silently sending work to an anonymous
+        # provider that retains prompts. Reached only if nothing else exists.
+        if "openrouter" in self.providers:
+            return "openrouter"
 
-        raise RuntimeError("No LLM providers configured. Set ANTHROPIC_API_KEY, MOONSHOT_API_KEY, or OPENAI_API_KEY.")
+        raise RuntimeError("No LLM providers configured. Set ANTHROPIC_API_KEY, MOONSHOT_API_KEY, "
+            "OPENAI_API_KEY, or OPENROUTER_API_KEY.")
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
         provider_name = self.auto_select(req)
