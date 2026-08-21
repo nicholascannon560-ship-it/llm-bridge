@@ -108,3 +108,4 @@
 - 2026-08-06 | llm-bridge-v2 service DELETED (was consuming queue commands) | files: none
 - 2026-08-06 | run_tests tool: agent executes code in zero-secret agent-sandbox repo via Actions | files: agent_loop/tools.py, agent-sandbox/.github/workflows/sandbox.yml
 - 2026-08-06 | agent_run `tools` takes full schema DICTS, not name strings | files: none (usage)
+- 2026-08-21 | FIXED railway_list tool: bogus awaits on sync helpers + double-nested return | files: agent_loop/tools.py, tests/test_railway_list.py (branch fix/railway-list-await)
