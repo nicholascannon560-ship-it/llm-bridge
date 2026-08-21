@@ -1209,11 +1209,21 @@ let MODELS = [];
 let BUSY = false;            // a chat stream or agent run is in flight
 let RUN = { active:false, cursor:0 };
 
-/* Provider is inferred from the model id, so each picker needs one value. */
-const providerFor = m => m.startsWith("claude") ? "anthropic"
-  : m.startsWith("kimi") ? "moonshot"
-  : m.startsWith("gpt") ? "openai" : "anthropic";
 const modelInfo = id => MODELS.find(m => m.id === id);
+/* Provider comes from the catalog entry, which is the same record the server
+   built from MODEL_CATALOG. It used to be guessed from the model-id prefix
+   with an "anthropic" default, which silently mis-routed any id that did not
+   start with claude/kimi/gpt — "stealth/ox-alpha" went to Anthropic and came
+   back as a 400. Prefix matching is kept only as a fallback for the brief
+   window before /ui/models resolves. */
+const providerFor = m => {
+  const info = modelInfo(m);
+  if (info && info.provider) return info.provider;
+  return m.startsWith("claude") ? "anthropic"
+    : m.startsWith("kimi") ? "moonshot"
+    : m.startsWith("gpt") ? "openai"
+    : m.startsWith("stealth/") ? "openrouter" : "anthropic";
+};
 const modelLabel = id => (modelInfo(id) || {}).label || id;
 
 
