@@ -730,8 +730,8 @@ async def _tool_github_list_repos(args: Dict) -> Dict:
 async def _tool_railway_list(args: Dict) -> Dict:
     pid = (args.get("project_id") or "").strip()
     if pid:
-        return {"project_id": pid, "services": await list_services(pid)}
-    return {"projects": await list_projects()}
+        return {"project_id": pid, "services": list_services(pid)}
+    return {"projects": list_projects()}
 
 
 
