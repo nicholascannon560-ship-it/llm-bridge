@@ -467,6 +467,11 @@ class DoRequestBody(BaseModel):
     max_turns: Optional[int] = Field(default=None, ge=1, le=500)
     tool_set: str = "build"
     max_tokens: Optional[int] = None
+    # Auto-commit for this run. None = defer to the global toggle
+    # (agent_loop.automode / AGENT_AUTO_MODE); True/False override it for this
+    # run only. The console sends it explicitly from its own switch, so what
+    # the operator sees in the composer is what the run actually does.
+    auto_mode: Optional[bool] = None
     # Advisor: a second model that reviews the executor mid-run and feeds
     # guidance back in. Off unless both a model and a cadence are given. This
     # is how "Both" mode works: Kimi executes, Claude advises.
@@ -640,6 +645,7 @@ async def ui_do(body: DoRequestBody = Body(...)):
                     advisor_provider=body.advisor_provider,
                     advisor_model=body.advisor_model,
                     advise_every=body.advise_every,
+                    auto_mode=body.auto_mode,
                 )
 
             result = asyncio.run(_go())
@@ -1047,6 +1053,8 @@ footer{flex:none;padding:0 20px 16px;background:linear-gradient(to top,var(--bg)
   background:var(--bg);border-radius:999px;padding:3.5px 10px;font-size:12px;color:var(--dim)}
 .chip:hover{background:var(--raised);color:var(--fg)}
 .chip b{color:var(--fg);font-weight:600}
+.chip.hot{border-color:var(--accent);color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .chip .rate{color:var(--faint);font-variant-numeric:tabular-nums}
 .grow{flex:1}
 .sendbtn{border:none;background:var(--accent);color:var(--accent-fg);width:32px;height:32px;
@@ -1064,6 +1072,8 @@ footer{flex:none;padding:0 20px 16px;background:linear-gradient(to top,var(--bg)
 .pop.on{display:block}
 .phead{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
   padding:8px 10px 4px}
+.pnote{font-size:11px;line-height:1.35;color:var(--faint);padding:2px 10px 8px}
+.pnote.warn{color:var(--accent)}
 .pitem{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;font-size:13px}
 .pitem:hover{background:var(--raised)}
 .pitem.on{background:var(--accent-soft)}
@@ -1191,6 +1201,12 @@ footer{flex:none;padding:0 20px 16px;background:linear-gradient(to top,var(--bg)
     <button data-v="build" class="on">build</button>
     <button data-v="research">research</button>
   </div>
+  <div class="phead">Auto-commit</div>
+  <div class="seg" id="automode">
+    <button data-v="off" class="on">ask first</button>
+    <button data-v="on">auto</button>
+  </div>
+  <div class="pnote" id="autonote">Commits pause for your approval.</div>
 </div>
 
 <script>
@@ -1201,6 +1217,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 /* ── settings ───────────────────────────────────────── */
 const CFG = Object.assign({
   chatmodel: "kimi-k3", effort: "low", toolset: "build", theme: "system",
+  automode: "off",
 }, JSON.parse(localStorage.getItem("bridge_cfg") || "{}"));
 const saveCfg = () => localStorage.setItem("bridge_cfg", JSON.stringify(CFG));
 
@@ -1628,6 +1645,7 @@ async function runTask(text){
         session_id: SID, message: text,
         provider: providerFor(CFG.chatmodel), model: CFG.chatmodel,
         reasoning_effort: CFG.effort, tool_set: CFG.toolset,
+        auto_mode: CFG.automode === "on",
       }),
     });
     SID = dr.session_id; localStorage.setItem("bridge_sid", SID);
@@ -1917,6 +1935,7 @@ document.querySelectorAll(".seg").forEach(seg => {
     b.onclick = () => {
       CFG[seg.id] = b.dataset.v; saveCfg();
       seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+      paintAuto();
     };
   });
 });
@@ -2017,6 +2036,28 @@ function paintSegs(){
     seg.querySelectorAll("button").forEach(b =>
       b.classList.toggle("on", b.dataset.v === CFG[seg.id]));
   });
+  paintAuto();
+}
+
+/* Auto-commit is the one setting that changes whether the operator is asked
+   before a commit lands, so it is surfaced on the composer chip itself — not
+   left hidden behind the popover. */
+function paintAuto(){
+  const on = CFG.automode === "on";
+  const chip = $("optchip"), note = $("autonote");
+  if (chip){
+    chip.textContent = on ? "⚙ auto" : "⚙";
+    chip.classList.toggle("hot", on);
+    chip.title = on
+      ? "Auto-commit ON — commits land without asking"
+      : "Effort, tools, auto-commit";
+  }
+  if (note){
+    note.textContent = on
+      ? "Commits land without asking. Secrets, protected env names and deletes are still blocked."
+      : "Commits pause for your approval.";
+    note.classList.toggle("warn", on);
+  }
 }
 
 async function boot(){
