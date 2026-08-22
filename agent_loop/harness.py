@@ -1079,5 +1079,6 @@ async def run_agent(
         advisor_provider=advisor_provider,
         advisor_model=advisor_model,
         advise_every=advise_every,
+        auto_mode=auto_mode,
     )
     return await harness.run()
