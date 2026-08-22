@@ -8,6 +8,8 @@ is also the cheapest way to prove the Browserbase wiring works after a deploy
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -39,6 +41,38 @@ async def get_agent_status():
     if not state.get("task_id"):
         return {"active": False, "note": "no agent run has started since this container booted"}
     return state
+
+
+class AutoModeRequest(BaseModel):
+    enabled: bool
+
+
+@agent_router.post("/agent/auto_mode")
+async def post_auto_mode(req: AutoModeRequest):
+    """Flip auto-commit mode live.
+
+    ON: agent runs commit directly instead of pausing to ask. Prompt-level
+    policy only — protected env names, secrets and delete guards are untouched.
+    Resets to the AGENT_AUTO_MODE env value on container restart.
+    """
+    from . import automode
+
+    state = automode.set_auto(req.enabled)
+    return {**state, "note": state["note"] + " Individual runs may still "
+            "override with \"auto_mode\": true/false on the agent_run command."}
+
+
+@agent_router.get("/agent/auto_mode")
+async def get_auto_mode():
+    from . import automode
+
+    return {
+        "auto_mode": automode.is_auto(),
+        "boot_default_env": os.getenv("AGENT_AUTO_MODE", "0"),
+        "usage": 'POST /agent/auto_mode {"enabled": true|false}; or set '
+                 'AGENT_AUTO_MODE=1 in Railway; or pass "auto_mode": true on '
+                 "an agent_run command for one run.",
+    }
 
 
 @agent_router.get("/agent/browser_budget")
