@@ -80,6 +80,10 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-22 | railway_list awaited sync list_projects/list_services -> asyncio.to_thread; other railway_* offloaded too | files: agent_loop/tools.py
+- 2026-08-22 | Railway deploys THIS branch (Agent-loop), not main -- main-only fixes never reach production | files: -
+- 2026-08-22 | AST audit guards the railway sync/async boundary repo-wide | files: tests/test_railway_sync_boundary.py
+
 - 2026-08-22 | auto-mode landed half on Agent-loop, half on feature/auto-mode: repaired | files: agent_loop/harness.py, agent_loop/automode.py, agent_loop/routes.py, command_channel.py
 - 2026-08-22 | GOTCHA: main.py guards the agent_loop import, so a parse error there boots GREEN with /agent/* gone | files: main.py, agent_loop/harness.py
 - 2026-08-12 | FIX 'ran a while then stopped, all output vanished' on a large pasted doc. THREE compounding bugs: (1) _trim_history_to_budget deleted msgs[1] = THE TASK first on a fresh session, so the agent lost its own instructions mid-run — task message is now pinned and never trimmed; (2) ui_do wrote the harness's TRIMMED transcript back over s.messages, permanently deleting the user's ask — now only adopted when the transcript still contains it (substring: the harness wraps it as 'Task: ...'); (3) followRun ended with load(), which does log.innerHTML='' — every finished run erased the tool cards/approvals/prose you just watched. Now refreshStats() only | files: agent_loop/harness.py, chat_ui.py, tests/test_one_mode.py

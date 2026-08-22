@@ -995,7 +995,7 @@ async def _tool_github_create_branch(args: Dict) -> Dict:
 
 async def _tool_railway_redeploy(args: Dict) -> Dict:
     sid = args.get("service_id", BRIDGE_SERVICE_ID)
-    result = redeploy_service(sid, environment="production")
+    result = await asyncio.to_thread(redeploy_service, sid, environment="production")
     return {"redeployed": True, "service_id": sid, "result": result}
 
 
@@ -1022,19 +1022,21 @@ async def _tool_railway_set_env(args: Dict) -> Dict:
             "hint": "permission grants and secrets are changed by hand in the Railway dashboard",
         }
     sid = args.get("service_id")
-    result = set_service_variable(name, value, service_id=sid, environment_name="production")
+    result = await asyncio.to_thread(
+        set_service_variable, name, value, service_id=sid, environment_name="production"
+    )
     return {"set": True, "name": name, "result": result}
 
 
 async def _tool_railway_get_status(args: Dict) -> Dict:
     sid = args.get("service_id") or BRIDGE_SERVICE_ID
-    return get_service_status(sid)
+    return await asyncio.to_thread(get_service_status, sid)
 
 
 async def _tool_railway_get_logs(args: Dict) -> Dict:
     did = args["deployment_id"]
     limit = args.get("limit", 100)
-    return get_logs(did, limit=limit)
+    return await asyncio.to_thread(get_logs, did, limit=limit)
 
 
 async def _tool_llm_chat(args: Dict) -> Dict:
@@ -1133,10 +1135,15 @@ async def _tool_github_list_repos(args: Dict) -> Dict:
 
 
 async def _tool_railway_list(args: Dict) -> Dict:
+    # Every railway_extension helper is a plain sync function doing a blocking
+    # requests.post() to Railway's GraphQL API. Never `await` one directly --
+    # awaiting its dict return raises "object dict can't be used in 'await'
+    # expression". Hand it to a worker thread so the event loop stays free
+    # during the HTTP round-trip.
     pid = (args.get("project_id") or "").strip()
     if pid:
-        return {"project_id": pid, "services": await list_services(pid)}
-    return {"projects": await list_projects()}
+        return {"project_id": pid, "services": await asyncio.to_thread(list_services, pid)}
+    return {"projects": await asyncio.to_thread(list_projects)}
 
 
 
