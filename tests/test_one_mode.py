@@ -36,6 +36,10 @@ def _bare_harness(h):
     """An AgentHarness shell with only what the approval path touches."""
     obj = h.AgentHarness.__new__(h.AgentHarness)
     obj.task_id = "task-test"
+    # __new__ skips __init__, so anything the approval path reads has to be set
+    # here. auto_mode short-circuits the gate, so it must default to OFF: these
+    # tests assert the gate actually blocks.
+    obj.auto_mode = False
     return obj
 
 
