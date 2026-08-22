@@ -328,6 +328,12 @@ class AgentHarness:
         # block, both of which change per run — fine for one-shot jobs, cache
         # poison for a conversation. Sessions pass a fixed string instead.
         self.system_prompt = system_prompt
+        # Auto mode: per-run override wins over the global operator toggle.
+        # Default OFF; when ON the agent is told to commit without asking and
+        # the commit approval gate below short-circuits to approved.
+        from .automode import is_auto as _automode_is_auto
+
+        self.auto_mode = bool(auto_mode) if auto_mode is not None else _automode_is_auto()
         # resolve_tools refuses any set that pairs a browsing tool with a
         # write tool. Raising here is deliberate: the run should not start.
         self.tools = resolve_tools(tools, tool_set)
