@@ -102,12 +102,43 @@ def test_harness_per_run_override_wins():
     assert AgentHarness(task="t", auto_mode=False).auto_mode is False
 
 
+MARKER = "AUTO MODE IS ON"
+
+
 def test_prompt_carries_auto_block_only_when_enabled():
-    marker = "AUTO MODE IS ON"
     off = AgentHarness(task="t", auto_mode=False)
-    assert marker not in off._build_system_prompt()
+    assert MARKER not in off._system_message()
     on = AgentHarness(task="t", auto_mode=True)
-    assert marker in on._build_system_prompt()
+    assert MARKER in on._system_message()
+
+
+def test_caller_supplied_system_prompt_still_gets_the_auto_block():
+    """The console path: a fixed system_prompt must not swallow auto mode.
+
+    `self.system_prompt or self._build_system_prompt()` meant a caller-supplied
+    prompt skipped the builder entirely — and the auto block lived inside the
+    builder. Every console run therefore went out without the commit-without-
+    asking instructions while the UI switch said auto. The gate short-circuited
+    but the model kept asking, which is indistinguishable from "auto mode is
+    broken" to whoever is looking at the screen.
+    """
+    fixed = "You are a fixed console prompt."
+
+    on = AgentHarness(task="t", system_prompt=fixed, auto_mode=True)
+    msg = on._system_message()
+    assert msg.startswith(fixed), "caller prompt must be used verbatim as the prefix"
+    assert MARKER in msg, "auto block must survive a caller-supplied prompt"
+
+    off = AgentHarness(task="t", system_prompt=fixed, auto_mode=False)
+    assert off._system_message() == fixed, "ask-first must leave the prompt untouched"
+
+
+def test_auto_block_is_appended_exactly_once():
+    """Guard the refactor: the block moved out of _build_system_prompt, so a
+    stray re-add there would double it on the default path."""
+    on = AgentHarness(task="t", auto_mode=True)
+    assert on._system_message().count(MARKER) == 1
+    assert MARKER not in on._build_system_prompt()
 
 
 def test_summary_records_auto_mode():

@@ -429,11 +429,30 @@ Rules:
    re-read what you have already seen. If a repo has a MAP.md, read the relevant task-slice
    first. Prefer github_patch over github_commit when editing an existing file.{memory_block}
 """
+        return prompt
+
+    def _system_message(self) -> str:
+        """The system prompt actually sent, whichever source supplied it.
+
+        Two sources exist: a caller-supplied prompt (the console passes a fixed
+        one so the cached prefix stays byte-identical between turns) and the
+        default built above. The auto-mode block used to be appended inside
+        _build_system_prompt, which the caller-supplied path never calls — so
+        every console run silently went out WITHOUT the instructions telling the
+        agent to commit without asking, and it kept asking no matter what the
+        switch said. Auto mode belongs to the run, not to one of the two prompt
+        sources, so it is applied here where both paths meet.
+
+        Cache impact is nil within a run: auto_mode is fixed at construction, so
+        the prefix is stable turn to turn. Flipping the switch invalidates the
+        prefix once, which is correct — it is a different instruction set.
+        """
+        base = self.system_prompt or self._build_system_prompt()
         if self.auto_mode:
             from .automode import AUTO_PROMPT_BLOCK
 
-            prompt += AUTO_PROMPT_BLOCK
-        return prompt
+            base += AUTO_PROMPT_BLOCK
+        return base
 
     async def run(self) -> Dict[str, Any]:
         if not BRIDGE_MODE:
@@ -448,7 +467,7 @@ Rules:
 
         self.messages.append({
             "role": "system",
-            "content": self.system_prompt or self._build_system_prompt(),
+            "content": self._system_message(),
         })
         # History goes between the system prompt and the new task so the cached
         # prefix keeps growing; only the final user message is ever new.
