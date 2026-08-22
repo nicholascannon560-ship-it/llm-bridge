@@ -410,6 +410,8 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
                     task_id=cmd_id or cmd.get("id"),
                     browser_auth=RunAuthorization(),
                     on_turn=_journal_writer(cmd_id) if JOURNAL_ENABLED else None,
+                    auto_mode=(None if cmd.get("auto_mode") is None
+                               else bool(cmd.get("auto_mode"))),
                 )
             )
         except Exception as exc:
