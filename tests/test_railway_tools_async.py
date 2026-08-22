@@ -66,6 +66,11 @@ def _install_stubs(tools, calls):
     tools.list_services = _sync(calls, "list_services", {"edges": [{"node": {"id": "s1"}}]})
     tools.get_service_status = _sync(calls, "get_service_status", {"status": "SUCCESS"})
     tools.get_logs = _sync(calls, "get_logs", {"lines": []})
+    tools.get_service_domains = _sync(
+        calls, "get_service_domains",
+        {"service_id": "svc-default", "domains": ["x.up.railway.app"],
+         "urls": ["https://x.up.railway.app"]},
+    )
     tools.redeploy_service = _sync(calls, "redeploy_service", {"ok": True})
     tools.set_service_variable = _sync(calls, "set_service_variable", {"ok": True})
 
@@ -103,6 +108,13 @@ def test_other_railway_handlers_still_work():
         out = _run(tools, "railway_get_logs", {"deployment_id": "d1", "limit": 5})
         assert out == {"lines": []}, out
         assert calls[-1][1:3] == (("d1",), {"limit": 5}), calls[-1][1:3]
+
+        out = _run(tools, "railway_get_domains", {})
+        assert out["urls"] == ["https://x.up.railway.app"], out
+        assert calls[-1][1] == ("svc-default",), "should default to BRIDGE_SERVICE_ID"
+
+        out = _run(tools, "railway_get_domains", {"service_id": "svc-y"})
+        assert calls[-1][1] == ("svc-y",), calls[-1][1]
 
         out = _run(tools, "railway_redeploy", {"service_id": "svc-x"})
         assert out == {"redeployed": True, "service_id": "svc-x", "result": {"ok": True}}, out

@@ -51,7 +51,22 @@ def list_projects():
         }
     }
     """
-    return railway_query(query)
+    data = railway_query(query)
+    if not (data.get("projects") or {}).get("edges"):
+        # The query succeeded and the API genuinely reports zero projects.
+        # That is a token *visibility* problem, not a permissions one: a
+        # project-scoped token can read and redeploy its own resources by
+        # UUID while appearing in no listing. Say so, rather than handing
+        # the caller a silent empty list.
+        data["_hint"] = (
+            "Railway returned zero projects. The RAILWAY_API_TOKEN can still "
+            "act on resources by UUID -- permission and visibility are separate "
+            "on Railway. A token minted under a different workspace, or scoped "
+            "to a single project, lists nothing. Use the by-ID tools "
+            "(railway_get_status, railway_get_logs, railway_get_domains), or "
+            "mint a token inside the correct workspace."
+        )
+    return data
 
 
 @router.get("/project/{project_id}/services")
@@ -233,6 +248,57 @@ def list_env_vars(service_id: str):
     # Note: Railway GraphQL doesn't expose env var names directly via public API
     # This returns service instance metadata instead
     return railway_query(query, {"id": service_id})
+
+
+@router.get("/service/{service_id}/domains")
+def get_service_domains(service_id: str):
+    """Return the public domains for a service, flattened.
+
+    Works by service ID, so it keeps working when `projects` listing comes
+    back empty -- which it does for a project-scoped RAILWAY_API_TOKEN, since
+    such a token can read and act on its own resources by UUID but appears in
+    no listing.
+
+    The inner selection is deliberately identical to the one already proven
+    against the live schema in list_env_vars. `customDomains` is NOT queried:
+    it is unverified here, and one bad field fails the whole document with
+    GRAPHQL_VALIDATION_FAILED -- the same way `source` on type Service and
+    `last:` on the deployments connection have bitten this file before.
+    """
+    query = """
+    query($id: String!) {
+        service(id: $id) {
+            serviceInstances {
+                edges {
+                    node {
+                        id
+                        domains {
+                            serviceDomains {
+                                domain
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    """
+    data = railway_query(query, {"id": service_id})
+    edges = (
+        (data.get("service") or {}).get("serviceInstances", {}).get("edges", [])
+    )
+    domains = []
+    for edge in edges:
+        node = edge.get("node") or {}
+        for entry in ((node.get("domains") or {}).get("serviceDomains") or []):
+            domain = entry.get("domain")
+            if domain and domain not in domains:
+                domains.append(domain)
+    return {
+        "service_id": service_id,
+        "domains": domains,
+        "urls": [f"https://{d}" for d in domains],
+    }
 
 
 # --- v1.2.0: generic GraphQL proxy (service configuration, volumes, domains) ---
