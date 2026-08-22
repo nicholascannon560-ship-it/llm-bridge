@@ -13,8 +13,23 @@ import types
 sys.path.insert(0, ".")
 
 
+def _real_modules_importable() -> bool:
+    """True when the bridge's own deps are present (httpx, fastapi, ...).
+
+    Only stub when they are NOT. Installing fakes into sys.modules
+    unconditionally leaks into every test collected after this one — it broke
+    test_cached_usage, which needs the real llm_gateway.UsageRecord.
+    """
+    try:
+        import llm_gateway  # noqa: F401
+        import railway_extension  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def _install_bridge_stubs():
-    if "llm_gateway" in sys.modules:
+    if "llm_gateway" in sys.modules or _real_modules_importable():
         return
 
     gw = types.ModuleType("llm_gateway")
@@ -114,3 +129,78 @@ def test_env_var_sets_boot_default(monkeypatch):
     assert automode._env_default() is True
     monkeypatch.setenv("AGENT_AUTO_MODE", "0")
     assert automode._env_default() is False
+
+
+# ── wiring guards ───────────────────────────────────────────────────────────
+# This feature shipped half-wired once: the harness half went to the deploy
+# branch while automode.py, the endpoint and the command pass-through stayed on
+# a feature branch. These tests fail loudly if any half goes missing again.
+
+
+@pytest.fixture()
+def routes_mod():
+    """The real agent_loop.routes, regardless of collection order.
+
+    test_delete_guard and test_result_race install a file-less stub
+    `agent_loop` package into sys.modules and never remove it. Same escape
+    hatch test_stream_and_rates uses: drop any file-less stub, re-import.
+    """
+    import importlib
+
+    for name in [n for n in list(sys.modules)
+                 if n == "agent_loop" or n.startswith("agent_loop.")]:
+        if not getattr(sys.modules[name], "__file__", None):
+            del sys.modules[name]
+    return importlib.import_module("agent_loop.routes")
+
+
+def test_auto_mode_endpoints_are_registered(routes_mod):
+    agent_router = routes_mod.agent_router
+
+    paths = {r.path for r in agent_router.routes}
+    assert "/agent/auto_mode" in paths
+    methods = {m for r in agent_router.routes if r.path == "/agent/auto_mode"
+               for m in r.methods}
+    assert {"GET", "POST"} <= methods
+
+
+def test_post_auto_mode_flips_the_toggle(routes_mod):
+    AutoModeRequest = routes_mod.AutoModeRequest
+    get_auto_mode, post_auto_mode = routes_mod.get_auto_mode, routes_mod.post_auto_mode
+
+    # Resolve automode through the same import state the fixture normalized, so
+    # this is the exact module instance the endpoint and the harness share.
+    import importlib
+    am = importlib.import_module("agent_loop.automode")
+
+    try:
+        out = asyncio.run(post_auto_mode(AutoModeRequest(enabled=True)))
+        assert out["auto_mode"] is True
+        assert am.is_auto() is True          # endpoint writes the shared toggle
+        assert asyncio.run(get_auto_mode())["auto_mode"] is True
+
+        out = asyncio.run(post_auto_mode(AutoModeRequest(enabled=False)))
+        assert out["auto_mode"] is False
+        assert am.is_auto() is False
+    finally:
+        am.set_auto(False)
+
+
+def test_command_channel_forwards_auto_mode_to_run_agent():
+    """The agent_run command must pass auto_mode through to run_agent.
+
+    Asserted against the source rather than a live run: _start_agent_run needs
+    GitHub credentials and a real event loop, but the regression that bit us was
+    purely a missing kwarg at this call site.
+    """
+    import ast
+
+    tree = ast.parse(open("command_channel.py").read())
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == "_start_agent_run")
+    call = next(n for n in ast.walk(fn)
+                if isinstance(n, ast.Call)
+                and getattr(n.func, "id", None) == "run_agent")
+    assert "auto_mode" in {kw.arg for kw in call.keywords}
+    # and the journal writer arg it was once truncated over is still intact
+    assert "on_turn" in {kw.arg for kw in call.keywords}
