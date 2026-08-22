@@ -475,5 +475,6 @@ async def run_agent(
         on_checkpoint=on_checkpoint,
         checkpoint_every=checkpoint_every,
         on_turn=on_turn,
+        auto_mode=auto_mode,
     )
     return await harness.run()
