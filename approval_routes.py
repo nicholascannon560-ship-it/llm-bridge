@@ -1,4 +1,5 @@
 # approval_routes.py
+import asyncio
 import uuid
 import time
 from typing import Any, Optional
@@ -81,14 +82,30 @@ async def _execute_approved_action(req: dict) -> dict:
     if action == "commit":
         from main import _do_commit
         return await _do_commit(payload)
+    # railway_extension helpers are all plain sync functions doing blocking
+    # requests.post() calls. Awaiting one raises "object dict can't be used in
+    # 'await' expression" -- offload to a thread instead so the event loop
+    # stays free during the HTTP round-trip.
     elif action == "redeploy":
         from railway_extension import redeploy_service
-        return await redeploy_service(payload["service_id"], payload.get("environment", "production"))
+        return await asyncio.to_thread(
+            redeploy_service,
+            payload["service_id"],
+            payload.get("environment", "production"),
+        )
     elif action == "set_env":
         from railway_extension import set_service_variable
-        return await set_service_variable(payload["service_id"], payload["name"], payload["value"])
+        return await asyncio.to_thread(
+            set_service_variable,
+            payload["name"],
+            payload["value"],
+            service_id=payload.get("service_id"),
+            environment_name=payload.get("environment", "production"),
+        )
     elif action == "railway_gql":
-        from railway_extension import railway_gql_query
-        return await railway_gql_query(payload["query"], payload.get("variables", {}))
+        from railway_extension import railway_query
+        return await asyncio.to_thread(
+            railway_query, payload["query"], payload.get("variables", {})
+        )
     else:
         raise HTTPException(status_code=400, detail=f"unknown action {action}")
