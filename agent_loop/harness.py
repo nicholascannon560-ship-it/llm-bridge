@@ -89,8 +89,15 @@ class AgentHarness:
         on_checkpoint=None,
         checkpoint_every: int = 0,
         on_turn=None,
+        auto_mode: Optional[bool] = None,
     ):
         self.task = task
+        # Auto mode: per-run override wins over the global operator toggle.
+        # Default OFF; the toggle only changes the agent's instructions, never
+        # removes a guard.
+        from .automode import is_auto as _automode_is_auto
+
+        self.auto_mode = bool(auto_mode) if auto_mode is not None else _automode_is_auto()
         # resolve_tools refuses any set that pairs a browsing tool with a
         # write tool. Raising here is deliberate: the run should not start.
         self.tools = resolve_tools(tools, tool_set)
