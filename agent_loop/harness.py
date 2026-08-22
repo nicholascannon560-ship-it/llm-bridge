@@ -457,6 +457,7 @@ async def run_agent(
     on_checkpoint=None,
     checkpoint_every: int = 0,
     on_turn=None,
+    auto_mode: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """One-shot agent run. Creates a harness, runs it, returns result."""
     harness = AgentHarness(
