@@ -966,8 +966,16 @@ Rules:
         applied; a stop request or a timeout both resolve as DENIED so a closed
         browser can never turn into a silent yes.
         """
+        Auto mode short-circuits this gate: the operator explicitly enabled
+        commit-without-asking for this run, so approval-class tools proceed
+        directly. Everything else (protected env names, secret handling)
+        still goes through normal tool-level guards.
+        """
         if tool_name not in APPROVAL_TOOLS:
             return None
+        if self.auto_mode:
+            _emit("approval_auto_approved", name=tool_name, reason="auto mode")
+            return True
 
         approval_id = f"ap-{uuid.uuid4().hex[:8]}"
         preview = json.dumps(args)[:600]
