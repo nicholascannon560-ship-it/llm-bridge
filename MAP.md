@@ -66,33 +66,48 @@
 Railway deploys the **`Agent-loop`** branch of this repo, not `main`. A fix on
 `main` never reaches production. The two branches have diverged.
 
-**A merge commit does not deploy.** The service has watch paths set
-(`/**`, `!/commands/**`, `!/revenue_agents/**`) and Railway evaluates them
-against the changed paths of the pushed commit. A merge commit does not
-present file changes the same way, so nothing matches and the deployment is
-created and immediately marked **SKIPPED** — 3-5 seconds, one build log line
-(`scheduling build on Metal builder`), no build steps. Measured 2026-08-22:
-every one of PRs #4, #5, #6, #7, #9 skipped (5/5); every ordinary
-single-parent commit deployed (7/7).
+**Never assume a push deployed.** Deployments on this service are often created
+and then marked **SKIPPED** within 3-5 seconds — one build log line
+(`scheduling build on Metal builder`), no build steps, no container. Nothing
+recovers a skipped deployment on its own. Cases where a skip appeared to
+self-heal were a *second* `reason: deploy` for the same commit, i.e. someone
+triggering a redeploy — not Railway retrying. PR #9 had nobody doing that and
+sat undeployed for nearly two hours while both branches looked merged and green.
 
-So:
-- **Squash-merge PRs into `Agent-loop`**, or push single commits. A squash
-  lands one single-parent commit and deploys normally.
-- If you do land a merge commit, it will NOT deploy on its own and nothing
-  will fix it later. Trigger one:
-  `POST /railway/service/509d2aef-f1a5-4854-9a57-e44cf9c079a0/redeploy`.
-- **Do not "fix" this by clearing the watch paths.** `commands/` has ~94
-  tracked files and the command channel writes there constantly; without
-  `!/commands/**` every agent command would redeploy production. The
-  negations are load-bearing.
-- A second SKIPPED cause exists: several commits pushed seconds apart, where
-  an earlier one is superseded. That one is harmless and self-resolving.
-- Green deploy != working code. Read the logs after (`get-logs`), and check
-  that the running commit is the one you expect — a stale container is the
-  failure mode that has wasted the most time here.
+**The cause is not established.** Ruled out by measurement on 2026-08-22:
+
+| Hypothesis | Refuted by |
+|---|---|
+| merge commits skip, single-parent deploy | `ea9dc0ac` — squashed, 1 parent, SKIPPED |
+| a file path or directory is excluded | `agent_loop/harness.py` both SKIPPED (`670b0631`) and SUCCESS (`75d0c48b`) |
+| root-level files don't match `/**` | `MAP.md` SKIPPED, `DEPLOY_TRIGGER.md` SUCCESS — both root |
+| the watch-path negations are catching it | no skipped commit touched `commands/` or `revenue_agents/` |
+
+One known-benign case: several commits pushed seconds apart, where earlier ones
+are superseded. That does not explain the lone pushes that skipped.
+
+**So, operationally — after every merge or push to `Agent-loop`:**
+
+1. Check `list-deployments` for the service. Find your `commitHash`.
+2. If its newest deployment is SKIPPED, or there is none, redeploy:
+   `POST /railway/service/509d2aef-f1a5-4854-9a57-e44cf9c079a0/redeploy`.
+3. Confirm the SUCCESS row reports **your** `commitHash`, then read the deploy
+   logs. A green deploy means the container started, not that the code works.
+
+A stale container that everyone believes is current is the failure mode that
+has cost the most time in this repo. Verify the running commit, every time.
+
+**Do not "fix" this by clearing the watch paths** (`/**`, `!/commands/**`,
+`!/revenue_agents/**`). `commands/` has ~94 tracked files and the command
+channel writes there constantly; without `!/commands/**` every agent command
+would redeploy production. The negations are load-bearing.
 
 `railway.json` claims `builder: NIXPACKS`; the live service uses `RAILPACK`.
 The file is not being applied. Harmless, but do not trust it.
+
+`AGENT_AUTO_MODE` is not set on the service, so auto mode boots OFF and any
+runtime toggle via `/agent/auto_mode` is lost on the next restart. Set it as a
+service variable if you want it to persist.
 
 ## Relationships
 - **Central control plane** for almost every other project
