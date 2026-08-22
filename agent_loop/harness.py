@@ -400,7 +400,7 @@ class AgentHarness:
             for m in recent_memories:
                 memory_block += f"  - [{m.get('tags', [])}] {m.get('entry', '')[:200]}\n"
 
-        return f"""You are an autonomous agent running inside the llm-bridge.
+        prompt = f"""You are an autonomous agent running inside the llm-bridge.
 Your task_id is: {self.task_id}
 
 You have access to the following tools:
@@ -966,7 +966,7 @@ Rules:
         needed. Waiting happens between tool calls, so nothing is left half
         applied; a stop request or a timeout both resolve as DENIED so a closed
         browser can never turn into a silent yes.
-        """
+
         Auto mode short-circuits this gate: the operator explicitly enabled
         commit-without-asking for this run, so approval-class tools proceed
         directly. Everything else (protected env names, secret handling)
