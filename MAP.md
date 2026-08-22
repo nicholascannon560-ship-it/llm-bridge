@@ -61,6 +61,39 @@
 - Multi-provider LLM gateway working (Moonshot/Kimi + Anthropic)
 - `reasoning_effort` now forwarded; timeout raised to 120s
 
+## Deploying (read before you merge)
+
+Railway deploys the **`Agent-loop`** branch of this repo, not `main`. A fix on
+`main` never reaches production. The two branches have diverged.
+
+**A merge commit does not deploy.** The service has watch paths set
+(`/**`, `!/commands/**`, `!/revenue_agents/**`) and Railway evaluates them
+against the changed paths of the pushed commit. A merge commit does not
+present file changes the same way, so nothing matches and the deployment is
+created and immediately marked **SKIPPED** — 3-5 seconds, one build log line
+(`scheduling build on Metal builder`), no build steps. Measured 2026-08-22:
+every one of PRs #4, #5, #6, #7, #9 skipped (5/5); every ordinary
+single-parent commit deployed (7/7).
+
+So:
+- **Squash-merge PRs into `Agent-loop`**, or push single commits. A squash
+  lands one single-parent commit and deploys normally.
+- If you do land a merge commit, it will NOT deploy on its own and nothing
+  will fix it later. Trigger one:
+  `POST /railway/service/509d2aef-f1a5-4854-9a57-e44cf9c079a0/redeploy`.
+- **Do not "fix" this by clearing the watch paths.** `commands/` has ~94
+  tracked files and the command channel writes there constantly; without
+  `!/commands/**` every agent command would redeploy production. The
+  negations are load-bearing.
+- A second SKIPPED cause exists: several commits pushed seconds apart, where
+  an earlier one is superseded. That one is harmless and self-resolving.
+- Green deploy != working code. Read the logs after (`get-logs`), and check
+  that the running commit is the one you expect — a stale container is the
+  failure mode that has wasted the most time here.
+
+`railway.json` claims `builder: NIXPACKS`; the live service uses `RAILPACK`.
+The file is not being applied. Harmless, but do not trust it.
+
 ## Relationships
 - **Central control plane** for almost every other project
 - Consumed by: KalshiML, tali, resolume-bridge, change-log workflows
@@ -80,6 +113,9 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-22 | SKIPPED deploys diagnosed: watch paths reject merge commits (5/5); squash-merge or redeploy | files: MAP.md
+- 2026-08-22 | AGENT_AUTO_MODE is not set on the service, so auto mode boots OFF and resets on every restart | files: -
+
 - 2026-08-22 | railway_get_domains(service_id) tool: base URL by ID, works when projects listing is empty | files: railway_extension.py, agent_loop/tools.py
 - 2026-08-22 | empty projects listing now returns _hint: token visibility != permission on Railway | files: railway_extension.py
 
