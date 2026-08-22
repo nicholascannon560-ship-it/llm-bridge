@@ -108,3 +108,4 @@
 - 2026-08-06 | llm-bridge-v2 service DELETED (was consuming queue commands) | files: none
 - 2026-08-06 | run_tests tool: agent executes code in zero-secret agent-sandbox repo via Actions | files: agent_loop/tools.py, agent-sandbox/.github/workflows/sandbox.yml
 - 2026-08-06 | agent_run `tools` takes full schema DICTS, not name strings | files: none (usage)
+- 2026-08-21 | Auto mode toggle: /agent/auto_mode + AGENT_AUTO_MODE env + per-run override; injects auto-commit prompt rules | files: agent_loop/automode.py, harness.py, routes.py, command_channel.py
