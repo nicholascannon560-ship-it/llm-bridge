@@ -429,6 +429,11 @@ Rules:
    re-read what you have already seen. If a repo has a MAP.md, read the relevant task-slice
    first. Prefer github_patch over github_commit when editing an existing file.{memory_block}
 """
+        if self.auto_mode:
+            from .automode import AUTO_PROMPT_BLOCK
+
+            prompt += AUTO_PROMPT_BLOCK
+        return prompt
 
     async def run(self) -> Dict[str, Any]:
         if not BRIDGE_MODE:
