@@ -415,7 +415,7 @@ def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
                     checkpoint_every=checkpoint_every,
                     task_id=cmd_id or cmd.get("id"),
                     browser_auth=RunAuthorization(),
-                    on_turn=_journal_writer(cmd_id) if JOURNAL_ENABLED else None,
+                    on_turn=_journal_writer(cmd_id) if JOUR
                 )
             )
         except Exception as exc:
