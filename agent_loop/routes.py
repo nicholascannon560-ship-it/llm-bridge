@@ -8,6 +8,8 @@ is also the cheapest way to prove the Browserbase wiring works after a deploy
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
