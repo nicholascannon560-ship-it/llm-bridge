@@ -27,6 +27,7 @@ try:
         list_projects,
         list_services,
         get_service_status,
+        get_service_domains,
         get_logs,
         redeploy_service,
         BRIDGE_SERVICE_ID,
@@ -153,6 +154,26 @@ TOOL_SCHEMAS = [
                     "limit": {"type": "integer", "description": "Max lines", "default": 100}
                 },
                 "required": ["deployment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "railway_get_domains",
+            "description": (
+                "Get the public domains of a Railway service by ID, as bare hostnames and as "
+                "https:// URLs. Use this to find a service's base URL before calling its "
+                "endpoints (/health and the like) with http_get. Works by ID, so it still "
+                "works when railway_list returns no projects -- a project-scoped token can "
+                "act on its own resources by UUID while appearing in no listing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service_id": {"type": "string", "description": "Service UUID (default: bridge)"}
+                },
+                "required": []
             }
         }
     },
@@ -391,6 +412,7 @@ READ_ONLY_TOOL_NAMES = [
     "github_list_repos",
     "railway_get_status",
     "railway_get_logs",
+    "railway_get_domains",
     "railway_list",
     "llm_chat",
     "read_memory",
@@ -597,6 +619,11 @@ async def _tool_railway_set_env(args: Dict) -> Dict:
 async def _tool_railway_get_status(args: Dict) -> Dict:
     sid = args.get("service_id") or BRIDGE_SERVICE_ID
     return await asyncio.to_thread(get_service_status, sid)
+
+
+async def _tool_railway_get_domains(args: Dict) -> Dict:
+    sid = args.get("service_id") or BRIDGE_SERVICE_ID
+    return await asyncio.to_thread(get_service_domains, sid)
 
 
 async def _tool_railway_get_logs(args: Dict) -> Dict:
@@ -875,6 +902,7 @@ _TOOL_HANDLERS = {
     "railway_set_env": _tool_railway_set_env,
     "railway_get_status": _tool_railway_get_status,
     "railway_get_logs": _tool_railway_get_logs,
+    "railway_get_domains": _tool_railway_get_domains,
     "llm_chat": _tool_llm_chat,
     "write_memory": _tool_write_memory,
     "read_memory": _tool_read_memory,

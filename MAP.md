@@ -80,6 +80,9 @@
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-22 | railway_get_domains(service_id) tool: base URL by ID, works when projects listing is empty | files: railway_extension.py, agent_loop/tools.py
+- 2026-08-22 | empty projects listing now returns _hint: token visibility != permission on Railway | files: railway_extension.py
+
 - 2026-08-22 | railway_extension helpers are sync: call via asyncio.to_thread, never await | files: agent_loop/tools.py, approval_routes.py
 - 2026-08-22 | approval set_env arg order fixed; railway_gql_query -> railway_query (name never existed) | files: approval_routes.py
 - 2026-08-22 | AST audit guards the railway sync/async boundary repo-wide | files: tests/test_railway_sync_boundary.py
