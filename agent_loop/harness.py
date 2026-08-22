@@ -872,6 +872,7 @@ Rules:
             "model": self.model,
             "tool_set": self.tool_set,
             "reasoning_effort": self.reasoning_effort,
+            "auto_mode": self.auto_mode,
             "last_prompt_tokens": self.total_tokens.get("last_prompt", 0),
             "max_tokens": self.max_tokens,
             # Everything after the system prompt, exactly as it was sent. A
