@@ -143,7 +143,7 @@ class AgentHarness:
             for m in recent_memories:
                 memory_block += f"  - [{m.get('tags', [])}] {m.get('entry', '')[:200]}\n"
 
-        return f"""You are an autonomous agent running inside the llm-bridge.
+        prompt = f"""You are an autonomous agent running inside the llm-bridge.
 Your task_id is: {self.task_id}
 
 You have access to the following tools:
@@ -166,6 +166,11 @@ Rules:
 10. Never put credentials, API keys, or tokens into a tool argument, a commit, or your final
    answer.{memory_block}
 """
+        if self.auto_mode:
+            from .automode import AUTO_PROMPT_BLOCK
+
+            prompt += AUTO_PROMPT_BLOCK
+        return prompt
 
     async def run(self) -> Dict[str, Any]:
         if not BRIDGE_MODE:
