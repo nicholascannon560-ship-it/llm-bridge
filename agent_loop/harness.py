@@ -314,6 +314,7 @@ class AgentHarness:
         advisor_provider: Optional[str] = None,
         advisor_model: Optional[str] = None,
         advise_every: int = 0,
+        auto_mode: Optional[bool] = None,
     ):
         self.task = task
         # Prior conversation, replayed verbatim ahead of the new task. Chat and
