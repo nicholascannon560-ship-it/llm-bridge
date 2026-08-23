@@ -1,0 +1,9 @@
+{
+  "id": "smoke-3",
+  "action": "agent_run_v2",
+  "status": "error",
+  "result": null,
+  "error": "name 'deadline' is not defined",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 785, in _worker\n    payload[\"result\"] = asyncio.run(_run_agent_v2(\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/.nix-profile/lib/python3.12/asyncio/runners.py\", line 194, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/root/.nix-profile/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"uvloop/loop.pyx\", line 1518, in uvloop.loop.Loop.run_until_complete\n  File \"/app/command_channel.py\", line 696, in _run_agent_v2\n    if time.monotonic() > deadline:\n                          ^^^^^^^^\nNameError: name 'deadline' is not defined\n",
+  "processed_at": "2026-08-23T14:44:19.108292+00:00"
+}
