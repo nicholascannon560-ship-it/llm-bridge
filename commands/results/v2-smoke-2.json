@@ -1,0 +1,9 @@
+{
+  "id": "v2-smoke-2",
+  "action": "agent_run_v2",
+  "status": "error",
+  "result": null,
+  "error": "name 'asyncio' is not defined",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 784, in _worker\n    payload[\"result\"] = asyncio.run(_run_agent_v2(\n                        ^^^^^^^\nNameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'\n",
+  "processed_at": "2026-08-23T13:06:52.839881+00:00"
+}
