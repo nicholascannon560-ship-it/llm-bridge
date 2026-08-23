@@ -351,6 +351,279 @@ def _resolve_budget_cents(cmd: dict[str, Any]) -> float | None:
     return None
 
 
+# ── agent loop v2 (2026-08-23) ───────────────────────────────────────────────
+# Single-hunk integration of harness v2 (full tested version: private repo
+# harness-v2, 11/11 pytest green). Adds a compact loop with: PARALLEL tool
+# execution (asyncio.gather), PROVIDER FAILOVER chain, ROLLING-context trim,
+# and pre-call COST/WALL-CLOCK budget guards. Wired by wrapping module-level
+# _execute once it exists (daemon thread waits for it), so no other line of
+# this file changes. Gated by AGENT_LOOP_V2 (default on); shares _agent_slot
+# and the AGENT_LOOP_ENABLED kill switch with v1. Command shape:
+#   {"action": "agent_run_v2", "task": "...", "tool_set": "build",
+#    "max_turns": 25, "failover_chain": ["moonshot","anthropic"]}
+# NOTE: callers that bound _execute directly (from-import before wiring) bypass
+# this patch; the health-tick dispatcher looks it up on the module each tick,
+# which is the path that matters.
+
+AGENT_LOOP_V2_ENABLED = os.getenv("AGENT_LOOP_V2", "1").lower() not in ("0", "false", "no")
+
+
+class _V2Harness:
+    """Compact v2 agent loop (see harness-v2 repo for the fully tested one)."""
+
+    def __init__(self, task, *, llm, handlers, schemas, task_id,
+                 failover_chain=None, max_turns=25, reasoning_effort="low",
+                 max_tokens=8192, cost_budget_cents=400.0, wall_clock_sec=1500.0,
+                 context_budget=140000, on_turn=None):
+        self.task = task
+        self.llm = llm
+        self.handlers = handlers
+        self.schemas = schemas
+        self.task_id = task_id
+        self.failover_chain = list(failover_chain or ["moonshot", "anthropic"])
+        self.max_turns = max(1, int(max_turns))
+        self.reasoning_effort = reasoning_effort
+        self.max_tokens = int(max_tokens)
+        self.cost_budget_cents = float(cost_budget_cents)
+        self.wall_clock_sec = float(wall_clock_sec)
+        self.context_budget = int(context_budget)
+        self.on_turn = on_turn
+        self.history: list[dict[str, Any]] = []
+        self.spend = 0.0
+
+    @staticmethod
+    def _est(msgs) -> int:
+        return sum(len(m.get("content") or "") // 4 for m in msgs)
+
+    async def run(self) -> dict[str, Any]:
+        deadline = time.monotonic() + self.wall_clock_sec
+        self.history = [{"role": "user", "content": f"Task: {self.task}"}]
+        transcript: list[dict[str, Any]] = []
+        status, final = "incomplete", ""
+        for turn in range(1, self.max_turns + 1):
+            rec: dict[str, Any] = {"turn": turn}
+            # Budget guards BEFORE calling the model — v1 only checked after.
+            if self.spend >= self.cost_budget_cents:
+                status = "cost_budget_reached"
+                break
+            if time.monotonic() > deadline:
+                status = "wall_clock_budget_reached"
+                break
+            trimmed = 0
+            while self._est(self.history) > self.context_budget and len(self.history) > 2:
+                self.history.pop(0)
+                trimmed += 1
+            if trimmed:
+                rec["trimmed_entries"] = trimmed
+            try:
+                resp = await self._call_llm()
+            except Exception as exc:
+                status = "llm_error"
+                final = f"Run stopped at turn {turn}: {type(exc).__name__}: {exc}"
+                rec.update(type="llm_error", error=f"{type(exc).__name__}: {exc}")
+                transcript.append(rec)
+                break
+            usage = resp.get("usage") or {}
+            self.spend += float(resp.get("cost_cents", 0))
+            tool_calls = resp.get("tool_calls")
+            rec["llm"] = {"cost_cents": resp.get("cost_cents"),
+                          "provider": resp.get("provider"),
+                          "prompt_tokens": usage.get("prompt_tokens", 0)}
+            if not tool_calls:
+                final = str(resp.get("content", ""))
+                truncated = resp.get("finish_reason") == "length"
+                status = "truncated" if truncated else "complete"
+                rec.update(type=("truncated" if truncated else "final"),
+                           final_answer=final[:500])
+                transcript.append(rec)
+                break
+            t0 = time.monotonic()
+            results = await self._run_tools(tool_calls)   # PARALLEL
+            rec.update(type="tool_loop",
+                       tool_wall_ms=round((time.monotonic() - t0) * 1000, 1),
+                       tool_calls=[tc.get("function", {}).get("name") for tc in tool_calls])
+            # Feed assistant tool_calls + results back so the next turn sees them.
+            self.history.append({"role": "assistant", "content": "", "tool_calls": [
+                {"id": tc.get("id"), "type": "function",
+                 "function": {"name": tc.get("function", {}).get("name"),
+                              "arguments": tc.get("function", {}).get("arguments", "{}")}}
+                for tc in tool_calls]})
+            for tc, r in zip(tool_calls, results):
+                self.history.append({"role": "tool", "tool_call_id": tc.get("id"),
+                                     "content": json.dumps(r, default=str)[:20000]})
+            transcript.append(rec)
+            if self.on_turn:
+                try:
+                    self.on_turn({**rec, "task_id": self.task_id})
+                except Exception:
+                    pass
+        else:
+            status = "max_turns_reached"
+        return {"status": status, "final_answer": final,
+                "turns_used": len(transcript),
+                "total_cost_cents": round(self.spend, 3),
+                "transcript": transcript}
+
+    async def _call_llm(self) -> dict[str, Any]:
+        last: Exception | None = None
+        for provider in self.failover_chain:          # FAILOVER
+            try:
+                return await self.llm(messages=list(self.history), tools=self.schemas,
+                                      provider=provider, max_tokens=self.max_tokens,
+                                      temperature=1.0,
+                                      reasoning_effort=self.reasoning_effort)
+            except Exception as exc:
+                last = exc
+        raise RuntimeError(f"all providers failed; last: {last}")
+
+    async def _run_tools(self, tool_calls) -> list[Any]:
+        async def one(tc):
+            name = tc.get("function", {}).get("name")
+            handler = self.handlers.get(name)
+            if handler is None:
+                return {"error": f"unknown tool {name}"}
+            raw = tc.get("function", {}).get("arguments")
+            try:
+                args = json.loads(raw) if isinstance(raw, str) else (raw or {})
+                result = handler(args)
+                if asyncio.iscoroutine(result):
+                    result = await result
+                return result
+            except Exception as exc:
+                return {"error": f"{type(exc).__name__}: {exc}"}
+        return list(await asyncio.gather(*(one(tc) for tc in tool_calls)))
+
+
+def _v2_make_harness(cmd: dict[str, Any], cmd_id: str) -> "_V2Harness":
+    """Build a ready-to-run v2 harness on the bridge gateway + tool registry."""
+    from llm_gateway import ChatRequest, ChatMessage, get_router
+    from agent_loop.tools import resolve_tools, run_tool
+
+    schemas = resolve_tools(cmd.get("tools"), cmd.get("tool_set"))
+
+    def _mk(name):
+        async def handler(args):
+            return await run_tool(name, args)
+        return handler
+
+    handlers = {s["function"]["name"]: _mk(s["function"]["name"]) for s in schemas}
+
+    async def llm(**kw):
+        router = get_router()
+        msgs = [ChatMessage(role=m["role"], content=m.get("content"),
+                            tool_calls=m.get("tool_calls"),
+                            tool_call_id=m.get("tool_call_id"))
+                for m in kw["messages"]]
+        req = ChatRequest(provider=kw["provider"], model=cmd.get("model"),
+                          messages=msgs, max_tokens=kw["max_tokens"],
+                          temperature=kw.get("temperature", 1.0),
+                          tools=kw["tools"], tool_choice="auto",
+                          reasoning_effort=kw.get("reasoning_effort", "low"))
+        resp = await router.chat(req)
+        return {"provider": resp.provider, "content": resp.content,
+                "tool_calls": resp.tool_calls, "finish_reason": resp.finish_reason,
+                "usage": resp.usage, "cost_cents": resp.cost_cents}
+
+    return _V2Harness(
+        cmd["task"], llm=llm, handlers=handlers, schemas=schemas, task_id=cmd_id,
+        failover_chain=cmd.get("failover_chain"),
+        max_turns=int(cmd.get("max_turns", 25)),
+        reasoning_effort=cmd.get("reasoning_effort", "low"),
+        max_tokens=int(cmd.get("max_tokens") or 8192),
+        cost_budget_cents=float(cmd.get("cost_budget_cents",
+                                        os.getenv("AGENT_COST_BUDGET_CENTS", "400"))),
+        on_turn=_journal_writer(cmd_id) if JOURNAL_ENABLED else None,
+    )
+
+
+def _start_agent_run_v2(cmd: dict[str, Any], cmd_id: str) -> None:
+    """Background-thread twin of _start_agent_run for the v2 harness."""
+    def _worker() -> None:
+        payload: dict[str, Any] = {"id": cmd_id, "action": "agent_run_v2",
+                                   "status": "ok", "result": None, "error": None}
+        try:
+            payload["result"] = asyncio.run(_v2_make_harness(cmd, cmd_id).run())
+        except Exception as exc:
+            payload["status"] = "error"
+            payload["error"] = str(exc)
+            payload["traceback"] = traceback.format_exc()[-1500:]
+        finally:
+            _agent_slot.release()
+        payload["processed_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            _write_file(f"{RESULTS_PATH}/{cmd_id}.json",
+                        json.dumps(payload, indent=2, default=str),
+                        f"agent v2 result: {cmd_id}")
+        except Exception as write_err:
+            print(f"[agent-v2] could not write result for {cmd_id}: {write_err}", flush=True)
+        for attempt in range(3):
+            try:
+                _, sha = _read_file(f"{RUNNING_PATH}/{cmd_id}.json")
+                _delete_file(f"{RUNNING_PATH}/{cmd_id}.json", sha,
+                             f"agent v2 finished: {cmd_id}")
+                break
+            except Exception:
+                time.sleep(0.5 * (attempt + 1))
+
+    threading.Thread(target=_worker, name=f"agent-v2-{cmd_id or 'run'}", daemon=True).start()
+
+
+def _dispatch_agent_run_v2(cmd: dict[str, Any], cmd_id: str) -> dict[str, Any]:
+    if not (AGENT_LOOP_ENABLED and AGENT_LOOP_V2_ENABLED):
+        raise RuntimeError("agent v2 runs are disabled (AGENT_LOOP_ENABLED/AGENT_LOOP_V2)")
+    if not cmd.get("task"):
+        raise ValueError("agent_run_v2 requires 'task'")
+    if not _agent_slot.acquire(blocking=False):
+        raise RuntimeError("an agent run is already in progress; try again when it finishes")
+    try:
+        _write_file(f"{RUNNING_PATH}/{cmd_id}.json",
+                    json.dumps({"id": cmd_id, "action": "agent_run_v2",
+                                "status": "running", "result": None, "error": None,
+                                "started_at": datetime.now(timezone.utc).isoformat()},
+                               indent=2, default=str),
+                    f"agent v2 start: {cmd_id}")
+    except Exception as e:
+        print(f"[agent-v2] could not write running marker for {cmd_id}: {e}", flush=True)
+    try:
+        _start_agent_run_v2(cmd, cmd_id)
+    except Exception:
+        _agent_slot.release()
+        raise
+    return {"id": cmd_id, "action": "agent_run_v2", "status": "started",
+            "task_id": cmd_id,
+            "note": f"poll {RESULTS_PATH}/{cmd_id}.json; journal {JOURNAL_PATH}/{cmd_id}/"}
+
+
+def _v2_late_wire() -> None:
+    """Wrap module-level _execute once it exists so action=agent_run_v2 routes
+    to the v2 path. Deferred to a daemon thread because _execute is defined
+    later in this module than this block."""
+    import sys as _sys
+    for _ in range(300):  # up to ~60s; import completes long before
+        mod = _sys.modules.get(__name__)
+        fn = getattr(mod, "_execute", None)
+        if callable(fn):
+            orig = fn
+
+            def patched(*args, **kwargs):
+                cmd = args[0] if args else (kwargs.get("cmd") or {})
+                if isinstance(cmd, dict) and cmd.get("action") == "agent_run_v2":
+                    cid = (args[1] if len(args) > 1
+                           else kwargs.get("cmd_id") or str(cmd.get("id") or "v2-run"))
+                    return _dispatch_agent_run_v2(cmd, cid)
+                return orig(*args, **kwargs)
+
+            setattr(mod, "_execute", patched)
+            print("[agent-v2] wired agent_run_v2 into _execute", flush=True)
+            return
+        time.sleep(0.2)
+    print("[agent-v2] gave up waiting for _execute; v2 NOT wired", flush=True)
+
+
+if AGENT_LOOP_V2_ENABLED:
+    threading.Thread(target=_v2_late_wire, name="agent-v2-wire", daemon=True).start()
+
+
 def _start_agent_run(cmd: dict[str, Any], cmd_id: str) -> None:
     """Run an agent on a background thread and write its result when done.
 
