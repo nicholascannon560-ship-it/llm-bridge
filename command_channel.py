@@ -692,6 +692,9 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
                 if spent >= cost_budget_cents:
                     status = "cost_budget_reached"
                     break
+                if time.monotonic() > deadline:
+                    status = "wall_clock_budget_reached"
+                    break
 
                 try:
                     resp = await _v2_call_llm(msgs, list(provider_chain), model,
