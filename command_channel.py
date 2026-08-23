@@ -669,7 +669,7 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
 
         async def _run_agent_v2(task, *, max_turns=15, provider_chain, model,
                                 effort, max_tokens, task_id, on_turn,
-                                cost_budget_cents):
+                                cost_budget_cents, wall_clock_sec=1500.0):
             from agent_loop.tools import run_tool
             system = (
                 f"You are an autonomous agent (task_id={task_id}).\nTask: {task}\n\n"
