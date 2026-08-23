@@ -1,0 +1,7 @@
+{
+  "id": "smoke-v2-20260823",
+  "status": "error",
+  "error": "read commands/pending/smoke-v2-20260823.json failed: 404",
+  "attempts": 1,
+  "processed_at": "2026-08-23T03:05:55.550564+00:00"
+}
