@@ -687,6 +687,7 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
             spent = 0.0
             final_answer = ""
             status = "incomplete"
+            deadline = time.monotonic() + float(wall_clock_sec)
 
             for turn in range(1, max(1, int(max_turns)) + 1):
                 rec = {"turn": turn}
