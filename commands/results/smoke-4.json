@@ -1,0 +1,22 @@
+{
+  "id": "smoke-4",
+  "action": "agent_run_v2",
+  "status": "ok",
+  "result": {
+    "status": "llm_error",
+    "task_id": "smoke-4",
+    "final_answer": "Run stopped at turn 1: RuntimeError: all providers failed; last error: Client error '429 Too Many Requests' for url 'https://api.moonshot.ai/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429",
+    "turns_used": 1,
+    "total_cost_cents": 0.0,
+    "failover_provider_last": null,
+    "transcript": [
+      {
+        "turn": 1,
+        "type": "llm_error",
+        "error": "all providers failed; last error: Client error '429 Too Many Requests' for url 'https://api.moonshot.ai/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+      }
+    ]
+  },
+  "error": null,
+  "processed_at": "2026-08-23T14:48:43.780407+00:00"
+}
