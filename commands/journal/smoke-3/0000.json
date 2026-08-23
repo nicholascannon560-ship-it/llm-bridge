@@ -1,0 +1,14 @@
+{
+  "turn": 0,
+  "type": "run_start",
+  "task_id": "smoke-3",
+  "timestamp": "2026-08-23T14:44:17.283091+00:00",
+  "task": "Reply with exactly one word: alive",
+  "tool_names": null,
+  "tool_set": null,
+  "max_turns": 3,
+  "cost_budget_cents": 25.0,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
