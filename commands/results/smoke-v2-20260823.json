@@ -1,7 +1,9 @@
 {
   "id": "smoke-v2-20260823",
+  "action": "agent_run_v2",
   "status": "error",
-  "error": "read commands/pending/smoke-v2-20260823.json failed: 404",
-  "attempts": 1,
-  "processed_at": "2026-08-23T03:05:55.550564+00:00"
+  "result": null,
+  "error": "name 'asyncio' is not defined",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 784, in _worker\n    payload[\"result\"] = asyncio.run(_run_agent_v2(\n                        ^^^^^^^\nNameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'\n",
+  "processed_at": "2026-08-23T03:06:08.395030+00:00"
 }
