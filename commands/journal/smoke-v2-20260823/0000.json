@@ -1,0 +1,14 @@
+{
+  "turn": 0,
+  "type": "run_start",
+  "task_id": "smoke-v2-20260823",
+  "timestamp": "2026-08-23T03:06:06.810333+00:00",
+  "task": "Smoke test: reply with the single word: alive",
+  "tool_names": null,
+  "tool_set": null,
+  "max_turns": 3,
+  "cost_budget_cents": 25.0,
+  "provider": "moonshot",
+  "model": "kimi-k3",
+  "reasoning_effort": "low"
+}
