@@ -634,6 +634,258 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
             raise ValueError("list_services requires 'project_id'")
         return list_services(pid)
 
+    # ═══ harness v2 (2026-08-23) ═══════════════════════════════════════════
+    # Defined here as locals so the whole feature lands in one commit. Provenance:
+    # nicholascannon560-ship-it/harness-v2 (11/11 pytest green in CI sandbox).
+    # Differences vs the v1 loop in agent_loop/harness.py:
+    #   * tool calls in one turn run in PARALLEL (asyncio.gather)
+    #   * provider FAILOVER chain — a 429 on moonshot no longer kills the run
+    #   * hard COST guard checked BEFORE each LLM call (v1 checked after)
+    # Disable with env AGENT_LOOP_V2=0.
+
+    if os.getenv("AGENT_LOOP_V2", "1").lower() not in ("0", "false", "no"):
+        if not AGENT_LOOP_AVAILABLE:
+            raise RuntimeError("agent_loop module not available — check import")
+
+        async def _v2_call_llm(messages, providers, model, effort, max_tokens):
+            """One LLM call walked across a failover chain."""
+            from llm_gateway import ChatRequest, ChatMessage, get_router
+            router = get_router()
+            last_exc = None
+            for prov in providers:
+                req = ChatRequest(
+                    provider=prov,
+                    model=model,
+                    messages=[
+                        ChatMessage(
+                            role=m["role"],
+                            content=m.get("content"),
+                            tool_calls=m.get("tool_calls"),
+                            tool_call_id=m.get("tool_call_id"),
+                        )
+                        for m in messages
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=1.0,
+                    tools=TOOL_SCHEMAS,
+                    tool_choice="auto",
+                    reasoning_effort=effort,
+                )
+                try:
+                    resp = await router.chat(req)
+                except Exception as exc:
+                    last_exc = exc
+                    continue
+                return {
+                    "content": resp.content,
+                    "tool_calls": resp.tool_calls,
+                    "finish_reason": resp.finish_reason,
+                    "usage": resp.usage,
+                    "cost_cents": resp.cost_cents,
+                    "provider_used": prov,
+                }
+            raise RuntimeError(f"all providers failed; last error: {last_exc}")
+
+        async def _run_agent_v2(task, *, max_turns=15, provider_chain, model,
+                                effort, max_tokens, task_id, on_turn,
+                                cost_budget_cents, wall_clock_sec=1500.0):
+            from agent_loop.tools import run_tool
+            system = (
+                f"You are an autonomous agent (task_id={task_id}).\nTask: {task}\n\n"
+                "Rules:\n"
+                "1. Think step by step.\n"
+                "2. Batch independent tool calls together — they run in parallel.\n"
+                "3. When done, reply with the final answer and no tool calls."
+            )
+            msgs = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": f"Task: {task}"},
+            ]
+            transcript = []
+            spent = 0.0
+            final_answer = ""
+            status = "incomplete"
+
+            deadline = time.monotonic() + wall_clock_sec  # fixed: was undefined on Agent-loop
+
+            for turn in range(1, max(1, int(max_turns)) + 1):
+                rec = {"turn": turn}
+                if spent >= cost_budget_cents:
+                    status = "cost_budget_reached"
+                    break
+                if time.monotonic() > deadline:
+                    status = "wall_clock_budget_reached"
+                    break
+
+                try:
+                    resp = await _v2_call_llm(msgs, list(provider_chain), model,
+                                              effort, max_tokens)
+                except Exception as exc:
+                    status = "llm_error"
+                    final_answer = f"Run stopped at turn {turn}: {type(exc).__name__}: {exc}"
+                    rec.update({"type": "llm_error", "error": str(exc)})
+                    transcript.append(rec)
+                    break
+
+                usage = resp.get("usage") or {}
+                spent += float(resp.get("cost_cents") or 0)
+                tcs = resp.get("tool_calls") or []
+
+                if not tcs:
+                    final_answer = str(resp.get("content") or "")
+                    status = ("truncated" if resp.get("finish_reason") == "length"
+                              else "complete")
+                    rec.update({
+                        "type": status,
+                        "final_answer": final_answer[:500],
+                        "cost_cents": spent,
+                    })
+                    transcript.append(rec)
+                    if on_turn:
+                        try:
+                            on_turn({**rec, "task_id": task_id})
+                        except Exception:
+                            pass
+                    break
+
+                msgs.append({"role": "assistant",
+                             "content": resp.get("content") or "",
+                             "tool_calls": tcs})
+
+                async def _one(tc):
+                    try:
+                        args = json.loads(tc["function"]["arguments"])
+                    except Exception:
+                        args = {}
+                    try:
+                        return await run_tool(tc["function"]["name"], args)
+                    except Exception as exc:
+                        return {"error": f"{type(exc).__name__}: {exc}"}
+
+                results = list(await asyncio.gather(*(_one(tc) for tc in tcs)))
+                for tc, res in zip(tcs, results):
+                    msgs.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id"),
+                        "content": json.dumps(res, default=str)[:20000],
+                    })
+
+                rec.update({
+                    "type": "tool_loop",
+                    "tools": [tc["function"]["name"] for tc in tcs],
+                    "errors": sum(1 for r in results
+                                  if isinstance(r, dict) and "error" in r),
+                    "cost_cents": round(spent, 4),
+                })
+                transcript.append(rec)
+                if on_turn:
+                    try:
+                        on_turn({**rec, "task_id": task_id,
+                                 "cost_cents_total": round(spent, 4)})
+                    except Exception:
+                        pass
+            else:
+                status = "max_turns_reached"
+
+            return {
+                "status": status,
+                "task_id": task_id,
+                "final_answer": final_answer,
+                "turns_used": len(transcript),
+                "total_cost_cents": round(spent, 4),
+                "failover_provider_last": None,
+                "transcript": transcript,
+            }
+
+        def _start_agent_run_v2(command, run_id):
+            def _worker():
+                payload = {"id": run_id, "action": "agent_run_v2",
+                           "status": "ok", "result": None, "error": None}
+                try:
+                    payload["result"] = asyncio.run(_run_agent_v2(
+                        task=command["task"],
+                        max_turns=int(command.get("max_turns", 15)),
+                        provider_chain=tuple(command.get("provider_chain")
+                                             or ["moonshot", "anthropic", "openai"]),
+                        model=command.get("model", "kimi-k3"),
+                        effort=command.get("reasoning_effort", "low"),
+                        max_tokens=(int(command["max_tokens"])
+                                    if command.get("max_tokens") else None),
+                        task_id=run_id,
+                        on_turn=(_journal_writer(run_id) if JOURNAL_ENABLED else None),
+                        cost_budget_cents=float(_resolve_budget_cents(command)
+                                                if _resolve_budget_cents(command) is not None
+                                                else os.getenv("AGENT_COST_BUDGET_CENTS", "400")),
+                        wall_clock_sec=float(command.get(
+                            "wall_clock_sec", os.getenv("AGENT_WALL_CLOCK_SEC", "1500"))),
+                    ))
+                except Exception as exc:
+                    payload["status"] = "error"
+                    payload["error"] = str(exc)
+                    payload["traceback"] = traceback.format_exc()[-1500:]
+                finally:
+                    _agent_slot.release()
+
+                payload["processed_at"] = datetime.now(timezone.utc).isoformat()
+                try:
+                    _write_file(
+                        f"{RESULTS_PATH}/{run_id}.json",
+                        json.dumps(payload, indent=2, default=str),
+                        f"agent result: {run_id}",
+                    )
+                except Exception as write_err:
+                    print(f"[agent_loop] could not write result for {run_id}: {write_err}",
+                          flush=True)
+                for attempt in range(3):
+                    try:
+                        _, running_sha = _read_file(f"{RUNNING_PATH}/{run_id}.json")
+                        _delete_file(f"{RUNNING_PATH}/{run_id}.json", running_sha,
+                                     f"agent run finished: {run_id}")
+                        break
+                    except Exception:
+                        time.sleep(0.5 * (attempt + 1))
+
+            threading.Thread(target=_worker, name=f"agent-v2-{run_id}",
+                             daemon=True).start()
+
+        if action == "agent_run_v2":
+            if not AGENT_LOOP_ENABLED:
+                raise RuntimeError("agent runs are disabled (AGENT_LOOP_ENABLED=0)")
+            task = cmd.get("task")
+            if not task:
+                raise ValueError("agent_run_v2 requires 'task'")
+            if not _agent_slot.acquire(blocking=False):
+                raise RuntimeError("an agent run is already in progress; try again when it finishes")
+            started_v2 = {
+                "id": cmd_id,
+                "action": "agent_run_v2",
+                "status": "running",
+                "result": {"status": "started", "task_id": cmd_id, "harness": "v2"},
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if JOURNAL_ENABLED:
+                _journal_run_start(cmd_id, cmd)
+            try:
+                _write_file(
+                    f"{RUNNING_PATH}/{cmd_id}.json",
+                    json.dumps(started_v2, indent=2, default=str),
+                    f"agent v2 started: {cmd_id}",
+                )
+            except Exception as e:
+                print(f"[agent_loop] could not write running marker for {cmd_id}: {e}",
+                      flush=True)
+            try:
+                _start_agent_run_v2(cmd, cmd_id)
+            except Exception:
+                _agent_slot.release()
+                raise
+            return {
+                "status": "started",
+                "task_id": cmd_id,
+                "note": "running in the background; this result file is overwritten on completion",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            }
+
     if action == "agent_run":
         if not AGENT_LOOP_AVAILABLE:
             raise RuntimeError("agent_loop module not available — check import")
