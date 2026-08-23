@@ -792,6 +792,8 @@ def _execute(cmd: dict[str, Any], cmd_id: str = "") -> Any:
                         cost_budget_cents=float(
                             command.get("cost_budget_cents",
                                         os.getenv("AGENT_COST_BUDGET_CENTS", "400"))),
+                        wall_clock_sec=float(command.get(
+                            "wall_clock_sec", os.getenv("AGENT_WALL_CLOCK_SEC", "1500"))),
                     ))
                 except Exception as exc:
                     payload["status"] = "error"
