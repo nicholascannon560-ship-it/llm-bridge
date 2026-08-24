@@ -462,6 +462,53 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "run_backtest",
+            "description": (
+                "Run a backtest or any analysis job against the S3 data, in a "
+                "throwaway AWS CodeBuild container that has an IAM role able to "
+                "READ the data prefix and WRITE only the agent output prefix. "
+                "This is the only way anything you do can write to S3 — you have "
+                "no s3_put, by design. The job gets $S3_BUCKET, $DATA_PREFIX, "
+                "$OUT_PREFIX and $RUN_ID in its environment; write results to "
+                "$OUT_PREFIX and read them back afterwards with s3_get. Use the "
+                "AWS CLI (preinstalled) or boto3. Polls until the build finishes "
+                "or wait_seconds runs out; if it times out you get a build_id to "
+                "pass to backtest_status. Costs money per minute — do not launch "
+                "a sweep to check a one-line question."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command to run, e.g. 'python backtest.py'"},
+                    "setup": {"type": "string", "description": "Optional command run first, e.g. 'pip install pandas'"},
+                    "run_id": {"type": "string", "description": "Output folder name, [A-Za-z0-9._-] only. Default: a timestamp."},
+                    "timeout_minutes": {"type": "integer", "description": "Wall-clock ceiling for the build (default 30)"},
+                    "wait_seconds": {"type": "integer", "description": "How long to poll before handing back a build_id (default 420, max 900)"},
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "backtest_status",
+            "description": (
+                "Status and log tail for a build started by run_backtest. Use "
+                "when run_backtest handed back a build_id instead of a result."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "build_id": {"type": "string", "description": "id returned by run_backtest"},
+                },
+                "required": ["build_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "s3_status",
             "description": (
                 "Summary of the S3 archive bucket: object count, total bytes, "
@@ -533,6 +580,9 @@ WRITE_TOOL_NAMES = {
     "railway_set_env",
     "railway_redeploy",
     "write_memory",
+    # Spends money and produces S3 objects via the build role. Read-only from
+    # this process's point of view, but not from the account's.
+    "run_backtest",
 }
 
 UNTRUSTED_INPUT_TOOL_NAMES = {"browser_research", "browser_read"}
@@ -553,6 +603,7 @@ READ_ONLY_TOOL_NAMES = [
     "s3_status",
     "s3_list",
     "s3_get",
+    "backtest_status",
 ]
 
 
@@ -583,9 +634,25 @@ CAPABILITY_NOTES = [
         "    pulling a whole day of data into context.\n"
         "  - Scope: storage and backtests only. The live trading engine and its\n"
         "    volume stay on Railway; nothing in S3 is the running system.\n"
-        "  - The read-only boundary is enforced by THIS BRIDGE'S CODE, not by\n"
-        "    IAM. The credential in the environment can write. Treat that as a\n"
-        "    line you hold, not one the platform holds for you.",
+        "  - To WRITE anything, use run_backtest. The job runs under an IAM\n"
+        "    role that can read the data prefix and write only the agent output\n"
+        "    prefix, so that role — not this bridge — is the boundary. Write to\n"
+        "    $OUT_PREFIX from inside the job, then read it back with s3_get.",
+    ),
+    (
+        {"run_backtest", "backtest_status"},
+        "Backtests (AWS CodeBuild):\n"
+        "  - The job is your only route to writing S3, and its role can write\n"
+        "    ONLY under $OUT_PREFIX. It cannot touch the live engine state under\n"
+        "    the data prefix — autopilot_state, cell_states, emos_coeffs and the\n"
+        "    rest are read-only to you and to it. Do not try.\n"
+        "  - Every run bills per minute. Read a small slice with s3_list/s3_get\n"
+        "    to settle a question before launching a job to settle it.\n"
+        "  - The container starts empty. Install what you need in `setup` and\n"
+        "    pull data from $S3_BUCKET/$DATA_PREFIX inside the job — do not try\n"
+        "    to pass a dataset through the command line.\n"
+        "  - A build that never finishes still costs. Set timeout_minutes to\n"
+        "    something you can defend.",
     ),
     (
         {"railway_redeploy", "railway_set_env", "railway_get_status"},
@@ -1459,6 +1526,60 @@ async def _aws_call(coro):
         return {"error": f"{e.status_code}: {e.detail}"}
 
 
+async def _tool_run_backtest(args: Dict) -> Dict:
+    """Start a CodeBuild job and poll it to completion.
+
+    Same shape as run_tests on purpose: dispatch, poll, return status + logs.
+    The difference that matters is invisible from here — this container holds
+    an IAM role with access to the data, where the GitHub sandbox deliberately
+    holds nothing. That is why the write boundary is the role and not this
+    function, and why nothing in this file should ever accept a role, a bucket
+    or a project name from the caller.
+    """
+    from aws_routes import BuildStartRequest, build_start, _get_build, _build_view
+
+    wait = min(int(args.get("wait_seconds") or 420), 900)
+    started = await _aws_call(build_start(BuildStartRequest(
+        command=args["command"],
+        setup=(args.get("setup") or None),
+        run_id=(args.get("run_id") or None),
+        timeout_minutes=(int(args["timeout_minutes"]) if args.get("timeout_minutes") else None),
+    )))
+    if isinstance(started, dict) and started.get("error"):
+        return started
+
+    build_id = started.get("build_id")
+    began = time.time()
+    view = started
+    while time.time() - began < wait:
+        await asyncio.sleep(10)
+        try:
+            view = _build_view(_get_build(build_id))
+        except Exception as e:
+            return {"error": f"poll failed: {e}", "build_id": build_id}
+        if view.get("done"):
+            view["run_id"] = started.get("run_id")
+            view["out_prefix"] = started.get("out_prefix")
+            return view
+
+    return {
+        "build_id": build_id,
+        "status": "IN_PROGRESS",
+        "done": False,
+        "run_id": started.get("run_id"),
+        "out_prefix": started.get("out_prefix"),
+        "note": (
+            f"still running after {wait}s — the build is NOT cancelled. "
+            "Call backtest_status with this build_id rather than starting another."
+        ),
+    }
+
+
+async def _tool_backtest_status(args: Dict) -> Dict:
+    from aws_routes import build_status
+    return await _aws_call(build_status(args["build_id"]))
+
+
 async def _tool_s3_status(args: Dict) -> Dict:
     from aws_routes import s3_status
     return await _aws_call(s3_status())
@@ -1507,6 +1628,8 @@ _TOOL_HANDLERS = {
     "s3_status": _tool_s3_status,
     "s3_list": _tool_s3_list,
     "s3_get": _tool_s3_get,
+    "run_backtest": _tool_run_backtest,
+    "backtest_status": _tool_backtest_status,
 }
 
 if BROWSER_TOOL_AVAILABLE:
