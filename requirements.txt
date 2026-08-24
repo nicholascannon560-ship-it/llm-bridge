@@ -8,3 +8,7 @@ pydantic==2.10.4
 # serving, the bridge looks healthy while all new builds silently fail.
 requests>=2.31.0
 pyyaml>=6.0
+
+# aws_routes.py imports boto3 lazily, so the bridge still boots without it —
+# but the S3 routes return 503 until this is installed.
+boto3>=1.34.0
