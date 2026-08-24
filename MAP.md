@@ -83,8 +83,20 @@ sat undeployed for nearly two hours while both branches looked merged and green.
 | root-level files don't match `/**` | `MAP.md` SKIPPED, `DEPLOY_TRIGGER.md` SUCCESS — both root |
 | the watch-path negations are catching it | no skipped commit touched `commands/` or `revenue_agents/` |
 
+Re-confirmed 2026-08-24: `bd86e06` — single parent, fast-forward (no merge
+commit), touching `agent_loop/harness.py` and `chat_ui.py`, both matched by the
+`/**` watch pattern — SKIPPED in 5 seconds. A manual redeploy of the same commit
+went SUCCESS 40 seconds later. Every hypothesis in the table above stays refuted;
+nothing about the commit's shape or paths predicts the skip.
+
 One known-benign case: several commits pushed seconds apart, where earlier ones
 are superseded. That does not explain the lone pushes that skipped.
+
+**Do not spend another session re-deriving this from the commit.** Five commits
+across three sessions have now been examined and none of the obvious causes
+survives. If it is ever worth chasing again, the next step is Railway's side
+(support, or the deployment's `snapshotId` and trigger payload), not another
+round of staring at diffs.
 
 **So, operationally — after every merge or push to `Agent-loop`:**
 
@@ -129,6 +141,7 @@ service variable if you want it to persist.
 
 ## Pending Map Updates
 - 2026-08-24 | console feed gaps: deltas coalesced into chunks, buffer 400->2000, prose evicted before tool/approval events, run_events reports `dropped` | files: agent_loop/harness.py, chat_ui.py
+- 2026-08-24 | SUPERSEDES the 08-22 line below: SKIPPED deploys are NOT diagnosed and merge commits are NOT the cause (the body's own table refutes it). Squash-merging buys nothing; always redeploy + verify commitHash | files: MAP.md
 - 2026-08-22 | SKIPPED deploys diagnosed: watch paths reject merge commits (5/5); squash-merge or redeploy | files: MAP.md
 - 2026-08-22 | AGENT_AUTO_MODE is not set on the service, so auto mode boots OFF and resets on every restart | files: -
 
