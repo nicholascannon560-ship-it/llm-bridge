@@ -450,3 +450,243 @@ async def build_start(req: BuildStartRequest):
 @aws_router.get("/aws/build/status/{build_id:path}", summary="Status and log tail")
 async def build_status(build_id: str):
     return _build_view(_get_build(build_id))
+
+
+# --------------------------------------------------------------------------- #
+# Bootstrap: create the backtest role and project, once
+#
+# WHY THIS IS NOT AN AWS PASSTHROUGH
+#   The obvious version of this is "let the caller send an AWS API call". That
+#   would end the argument the rest of this file makes: the whole design rests
+#   on the build role being something an agent cannot change, and a passthrough
+#   with IAM reach lets an agent rewrite the role, mint a user, or attach
+#   AdministratorAccess. So this endpoint takes no service name, no action, no
+#   policy document, and no role name. Everything below is hardcoded. It can
+#   create these resources and nothing else, with these permissions and no
+#   others, and re-running it converges rather than escalating.
+#
+#   Two further limits:
+#     - Gated on AWS_BOOTSTRAP_ENABLED=1. Default off. It is meant to be turned
+#       on for one call and turned off again.
+#     - It is deliberately NOT exposed as an agent tool. Operators call it.
+#       Nothing in agent_loop/tools.py references it, and nothing should.
+#
+#   If the bridge's credential lacks IAM rights this returns AWS's own 403,
+#   which is the correct outcome and a useful fact: it means the credential is
+#   narrower than the account, and the console is the right place to do this.
+
+BOOTSTRAP_ROLE = "agent-backtest-role"
+BOOTSTRAP_PROJECT = "agent-backtest"
+BOOTSTRAP_DATA_PREFIX = "kalshiml/"
+BOOTSTRAP_OUT_PREFIX = "agent/"
+BOOTSTRAP_IMAGE = "aws/codebuild/standard:7.0"
+BOOTSTRAP_COMPUTE = "BUILD_GENERAL1_SMALL"
+
+
+def _bootstrap_enabled() -> None:
+    if (os.getenv("AWS_BOOTSTRAP_ENABLED") or "").strip() != "1":
+        raise HTTPException(
+            403,
+            "bootstrap is disabled — set AWS_BOOTSTRAP_ENABLED=1 for the one call, "
+            "then unset it.",
+        )
+
+
+def _role_policy(account: str, region: str, bucket: str) -> str:
+    import json as _json
+
+    return _json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "ListOnlyTheseTwoPrefixes",
+                "Effect": "Allow",
+                "Action": "s3:ListBucket",
+                "Resource": f"arn:aws:s3:::{bucket}",
+                "Condition": {"StringLike": {"s3:prefix": [
+                    f"{BOOTSTRAP_DATA_PREFIX}*", f"{BOOTSTRAP_OUT_PREFIX}*"]}},
+            },
+            {
+                "Sid": "ReadTheData",
+                "Effect": "Allow",
+                "Action": ["s3:GetObject"],
+                "Resource": f"arn:aws:s3:::{bucket}/{BOOTSTRAP_DATA_PREFIX}*",
+            },
+            {
+                "Sid": "WriteOnlyTheOutputPrefix",
+                "Effect": "Allow",
+                "Action": ["s3:PutObject", "s3:GetObject", "s3:AbortMultipartUpload"],
+                "Resource": f"arn:aws:s3:::{bucket}/{BOOTSTRAP_OUT_PREFIX}*",
+            },
+            {
+                # The point of the whole exercise. Explicit Deny beats any Allow,
+                # so even a later policy mistake cannot let a job overwrite the
+                # live engine state under the data prefix.
+                "Sid": "NeverTouchTheEngineState",
+                "Effect": "Deny",
+                "Action": ["s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"],
+                "Resource": f"arn:aws:s3:::{bucket}/{BOOTSTRAP_DATA_PREFIX}*",
+            },
+            {
+                "Sid": "OwnLogs",
+                "Effect": "Allow",
+                "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                "Resource": f"arn:aws:logs:{region}:{account}:log-group:/aws/codebuild/{BOOTSTRAP_PROJECT}*",
+            },
+        ],
+    })
+
+
+def _bridge_policy(account: str, region: str) -> str:
+    import json as _json
+
+    return _json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "StartAndReadThisProjectOnly",
+                "Effect": "Allow",
+                "Action": ["codebuild:StartBuild", "codebuild:BatchGetBuilds",
+                           "codebuild:ListBuildsForProject"],
+                "Resource": f"arn:aws:codebuild:{region}:{account}:project/{BOOTSTRAP_PROJECT}",
+            },
+            {
+                "Sid": "ReadBuildLogs",
+                "Effect": "Allow",
+                "Action": ["logs:GetLogEvents", "logs:DescribeLogStreams"],
+                "Resource": f"arn:aws:logs:{region}:{account}:log-group:/aws/codebuild/{BOOTSTRAP_PROJECT}*",
+            },
+            {
+                # Without this, a caller able to reach StartBuild could pass a
+                # different, more privileged service role and every scope above
+                # becomes decoration. The project's role is baked in, so nothing
+                # legitimate needs PassRole.
+                "Sid": "NeverPassAnotherRole",
+                "Effect": "Deny",
+                "Action": "iam:PassRole",
+                "Resource": "*",
+            },
+        ],
+    })
+
+
+@aws_router.post("/aws/bootstrap/backtest", summary="Create the backtest role + project (operator only)")
+async def bootstrap_backtest():
+    _bootstrap_enabled()
+    import json as _json
+
+    region = (os.getenv("AWS_DEFAULT_REGION") or "").strip()
+    bucket = _bucket()
+    steps = []
+
+    sts = _aws_client("sts")
+    try:
+        ident = sts.get_caller_identity()
+    except Exception as e:
+        raise _boto_error(e)
+    account = ident["Account"]
+    arn = ident["Arn"]
+    # "arn:aws:iam::123:user/name" -> name. A role or root identity has no user
+    # policy to attach, so that step is skipped rather than guessed at.
+    bridge_user = arn.rsplit("/", 1)[-1] if ":user/" in arn else None
+    steps.append({"step": "identity", "account": account, "is_user": bool(bridge_user)})
+
+    iam = _aws_client("iam")
+    trust = _json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "codebuild.amazonaws.com"},
+            "Action": "sts:AssumeRole",
+        }],
+    })
+    try:
+        iam.create_role(
+            RoleName=BOOTSTRAP_ROLE,
+            AssumeRolePolicyDocument=trust,
+            Description=f"Agent backtests: read {BOOTSTRAP_DATA_PREFIX}, write {BOOTSTRAP_OUT_PREFIX}",
+        )
+        steps.append({"step": "create_role", "result": "created", "role": BOOTSTRAP_ROLE})
+    except Exception as e:
+        code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+        if code == "EntityAlreadyExists":
+            steps.append({"step": "create_role", "result": "already existed", "role": BOOTSTRAP_ROLE})
+        else:
+            raise _boto_error(e)
+
+    try:
+        iam.put_role_policy(
+            RoleName=BOOTSTRAP_ROLE,
+            PolicyName="agent-backtest-s3",
+            PolicyDocument=_role_policy(account, region, bucket),
+        )
+        steps.append({"step": "put_role_policy", "result": "ok"})
+    except Exception as e:
+        raise _boto_error(e)
+
+    role_arn = f"arn:aws:iam::{account}:role/{BOOTSTRAP_ROLE}"
+
+    cb = _aws_client("codebuild")
+    project_def = {
+        "name": BOOTSTRAP_PROJECT,
+        "description": "Agent-run backtests against the S3 data corpus",
+        "source": {
+            "type": "NO_SOURCE",
+            # Placeholder: every run overrides this via buildspecOverride.
+            "buildspec": "version: 0.2\nphases:\n  build:\n    commands:\n      - echo override me\n",
+        },
+        "artifacts": {"type": "NO_ARTIFACTS"},
+        "environment": {
+            "type": "LINUX_CONTAINER",
+            "image": BOOTSTRAP_IMAGE,
+            "computeType": BOOTSTRAP_COMPUTE,
+            "environmentVariables": [
+                {"name": "S3_BUCKET", "value": bucket, "type": "PLAINTEXT"},
+                {"name": "DATA_PREFIX", "value": BOOTSTRAP_DATA_PREFIX, "type": "PLAINTEXT"},
+                {"name": "OUT_PREFIX", "value": BOOTSTRAP_OUT_PREFIX, "type": "PLAINTEXT"},
+            ],
+        },
+        "serviceRole": role_arn,
+        "timeoutInMinutes": 60,
+        "logsConfig": {"cloudWatchLogs": {"status": "ENABLED"}},
+    }
+    try:
+        existing = cb.batch_get_projects(names=[BOOTSTRAP_PROJECT]).get("projects") or []
+        if existing:
+            cb.update_project(**project_def)
+            steps.append({"step": "project", "result": "updated", "project": BOOTSTRAP_PROJECT})
+        else:
+            cb.create_project(**project_def)
+            steps.append({"step": "project", "result": "created", "project": BOOTSTRAP_PROJECT})
+    except Exception as e:
+        raise _boto_error(e)
+
+    if bridge_user:
+        try:
+            iam.put_user_policy(
+                UserName=bridge_user,
+                PolicyName="bridge-backtest-control",
+                PolicyDocument=_bridge_policy(account, region),
+            )
+            steps.append({"step": "bridge_user_policy", "result": "ok"})
+        except Exception as e:
+            steps.append({
+                "step": "bridge_user_policy",
+                "result": f"FAILED: {type(e).__name__}",
+                "note": "the bridge may not be able to start builds until this is fixed",
+            })
+    else:
+        steps.append({"step": "bridge_user_policy", "result": "skipped (identity is not an IAM user)"})
+
+    return {
+        "ok": True,
+        "role": BOOTSTRAP_ROLE,
+        "project": BOOTSTRAP_PROJECT,
+        "data_prefix_readonly": BOOTSTRAP_DATA_PREFIX,
+        "writable_prefix": BOOTSTRAP_OUT_PREFIX,
+        "steps": steps,
+        "next": (
+            "Set AWS_CODEBUILD_PROJECT, run the negative smoke test (a write into "
+            "the data prefix MUST fail), then unset AWS_BOOTSTRAP_ENABLED."
+        ),
+    }
