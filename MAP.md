@@ -92,6 +92,14 @@ nothing about the commit's shape or paths predicts the skip.
 One known-benign case: several commits pushed seconds apart, where earlier ones
 are superseded. That does not explain the lone pushes that skipped.
 
+New evidence 2026-08-24 (`b3929111`, Agent-loop, three files all matched by
+`/**`): the skipped deployment's `meta.skippedReason` reads **"No changes to
+watched files"**. So Railway is not failing to build a change it saw — it
+believes there was no change at all. That is a diff-base question (what commit
+is it comparing against), not a pattern-matching one, and it is the first
+concrete lead past the refuted table above. Bumping `FORCE_BUILD_TIMESTAMP`
+produced SUCCESS at the same SHA 2.5 minutes later.
+
 **Do not spend another session re-deriving this from the commit.** Five commits
 across three sessions have now been examined and none of the obvious causes
 survives. If it is ever worth chasing again, the next step is Railway's side
@@ -203,3 +211,7 @@ service variable if you want it to persist.
 - 2026-08-06 | llm-bridge-v2 service DELETED (was consuming queue commands) | files: none
 - 2026-08-06 | run_tests tool: agent executes code in zero-secret agent-sandbox repo via Actions | files: agent_loop/tools.py, agent-sandbox/.github/workflows/sandbox.yml
 - 2026-08-06 | agent_run `tools` takes full schema DICTS, not name strings | files: none (usage)
+- 2026-08-24 | CAPABILITY_NOTES + render_capabilities: per-group scope/limits into both system prompts | files: agent_loop/tools.py, harness.py, chat_ui.py
+- 2026-08-24 | Session prompts carry tool_signature and rebuild when the tool set changes | files: chat_ui.py
+- 2026-08-24 | build_system_prompt is tool_set aware (was UI_TOOL_SET while runs used body.tool_set) | files: chat_ui.py
+- 2026-08-24 | SKIPPED deploys report skippedReason 'No changes to watched files' | files: none (evidence)
