@@ -215,3 +215,5 @@ service variable if you want it to persist.
 - 2026-08-24 | Session prompts carry tool_signature and rebuild when the tool set changes | files: chat_ui.py
 - 2026-08-24 | build_system_prompt is tool_set aware (was UI_TOOL_SET while runs used body.tool_set) | files: chat_ui.py
 - 2026-08-24 | SKIPPED deploys report skippedReason 'No changes to watched files' | files: none (evidence)
+- 2026-08-24 | /aws/build/start|status: pinned CodeBuild project, JSON buildspec, project-scoped build ids | files: aws_routes.py
+- 2026-08-24 | run_backtest (WRITE) + backtest_status (RO): agents write S3 via the build role, never s3_put | files: agent_loop/tools.py
