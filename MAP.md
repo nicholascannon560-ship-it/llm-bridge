@@ -217,3 +217,5 @@ service variable if you want it to persist.
 - 2026-08-24 | SKIPPED deploys report skippedReason 'No changes to watched files' | files: none (evidence)
 - 2026-08-24 | /aws/build/start|status: pinned CodeBuild project, JSON buildspec, project-scoped build ids | files: aws_routes.py
 - 2026-08-24 | run_backtest (WRITE) + backtest_status (RO): agents write S3 via the build role, never s3_put | files: agent_loop/tools.py
+- 2026-08-24 | /aws/bootstrap/backtest: hardcoded role+project creator, gated on AWS_BOOTSTRAP_ENABLED | files: aws_routes.py
+- 2026-08-24 | Bridge AWS user is `llmbridge`: S3 only, DENIED iam:* and codebuild:* | files: none (measured)
