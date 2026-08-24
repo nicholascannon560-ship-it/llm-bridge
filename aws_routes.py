@@ -408,8 +408,8 @@ def _get_build(build_id: str) -> dict:
             raise RuntimeError("no user identity")
         iam.delete_user_policy(UserName=bridge_user, PolicyName="bridge-backtest-control")
         steps.append({"step": "detach_bridge_policy", "result": "detached for this call"})
-    except Exception:
-        pass
+    except Exception as e:
+        steps.append({"step": "detach_bridge_policy", "result": f"{type(e).__name__}: {e}"[:300]})
 
     # ORDER IS LOAD-BEARING. The bridge policy below carries an explicit Deny
     # on iam:PassRole, and codebuild:CreateProject needs PassRole to attach the
@@ -684,7 +684,8 @@ async def bootstrap_backtest():
             steps.append({"step": "project", "result": "created", "project": BOOTSTRAP_PROJECT})
     except Exception as e:
         code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
-        steps.append({"step": "project", "result": f"DENIED: {code or type(e).__name__}"})
+        steps.append({"step": "project", "result": f"DENIED: {code or type(e).__name__}",
+                      "detail": str(e)[:400]})
 
     if bridge_user:
         try:
