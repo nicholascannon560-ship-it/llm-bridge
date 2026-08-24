@@ -174,6 +174,82 @@ def test_event_buffer_is_bounded(harness):
     assert harness.RUN_EVENTS[-1]["name"] == f"t{harness.EVENT_BUFFER_MAX + 59}"
 
 
+# ── feed gaps ───────────────────────────────────────────────────────────────
+# The console reads the feed by polling a bounded buffer. One event per streamed
+# token piece overran it whenever a poll landed late — a throttled hidden tab, a
+# sleeping phone — and the survivors were then spliced together as if nothing had
+# been lost. That is what "the loop gaps out" looked like from the outside.
+
+
+def test_stream_deltas_are_coalesced_into_chunks(harness):
+    harness.reset_events()
+    pieces = [f"tok{i} " for i in range(400)]
+    for p in pieces:
+        harness._emit_delta(p)
+    harness.flush_deltas()
+
+    feed = harness.run_events(0)["events"]
+    assert all(e["kind"] == "assistant_delta" for e in feed)
+    # Same text, far fewer events: ~2.8k chars at a 240-char chunk is well under
+    # twenty events, not four hundred.
+    assert "".join(e["text"] for e in feed) == "".join(pieces)
+    assert len(feed) < len(pieces) / 10
+
+
+def test_prose_is_flushed_before_the_event_that_follows_it(harness):
+    """Text written before a tool call must not surface after its card."""
+    harness.reset_events()
+    harness._emit_delta("I'll search the repo. ")
+    harness._emit("tool_call", name="repo_search", args="{}")
+
+    assert [e["kind"] for e in harness.run_events(0)["events"]] == [
+        "assistant_delta", "tool_call"]
+
+
+def test_run_events_reports_how_many_it_dropped(harness):
+    """A poller that missed events is told so, instead of being handed a
+    seamless-looking splice of whatever survived."""
+    harness.reset_events()
+    for _ in range(harness.EVENT_BUFFER_MAX + 50):
+        harness._emit_delta("x" * harness.DELTA_COALESCE_CHARS)
+    harness.flush_deltas()
+
+    feed = harness.run_events(0)
+    assert len(feed["events"]) == harness.EVENT_BUFFER_MAX
+    assert feed["dropped"] == 50
+    # A caller that is up to date is never told it missed anything.
+    assert harness.run_events(feed["cursor"])["dropped"] == 0
+
+
+def test_tool_and_approval_events_outlive_the_prose_around_them(harness):
+    """A dropped tool_call orphans its own result card, and a dropped
+    approval_request loses the prompt the run is blocked on. Prose goes first."""
+    harness.reset_events()
+    harness._emit("tool_call", name="repo_search", args="{}")
+    harness._emit("approval_request", id="ap-1", name="github_commit", args="{}")
+    for _ in range(harness.EVENT_BUFFER_MAX + 50):
+        harness._emit_delta("y" * harness.DELTA_COALESCE_CHARS)
+    harness.flush_deltas()
+
+    kinds = [e["kind"] for e in harness.RUN_EVENTS]
+    assert kinds[:2] == ["tool_call", "approval_request"]
+    assert kinds.count("assistant_delta") == harness.EVENT_BUFFER_MAX - 2
+
+
+def test_a_stale_cursor_from_a_previous_run_is_not_reported_as_a_gap(harness):
+    """reset_events() starts a new run's feed; the events below it were never
+    this run's to miss."""
+    harness.reset_events()
+    for _ in range(20):
+        harness._emit("tool_call", name="noise")
+    harness.reset_events()
+    harness._emit("run_start", task="demo")
+
+    feed = harness.run_events(0)
+    assert [e["kind"] for e in feed["events"]] == ["run_start"]
+    assert feed["dropped"] == 0
+
+
 def test_stop_is_scoped_to_one_task(harness):
     """A stop must not leak onto the next run that happens to start after it."""
     clear_stop, request_stop = harness.clear_stop, harness.request_stop

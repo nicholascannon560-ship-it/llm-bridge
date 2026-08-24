@@ -128,6 +128,7 @@ service variable if you want it to persist.
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-24 | console feed gaps: deltas coalesced into chunks, buffer 400->2000, prose evicted before tool/approval events, run_events reports `dropped` | files: agent_loop/harness.py, chat_ui.py
 - 2026-08-22 | SKIPPED deploys diagnosed: watch paths reject merge commits (5/5); squash-merge or redeploy | files: MAP.md
 - 2026-08-22 | AGENT_AUTO_MODE is not set on the service, so auto mode boots OFF and resets on every restart | files: -
 

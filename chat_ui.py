@@ -770,7 +770,7 @@ async def ui_events(since: int = 0):
 
         feed = run_events(since)
     except Exception:
-        feed = {"events": [], "cursor": since}
+        feed = {"events": [], "cursor": since, "dropped": 0}
     return {**feed, "run": DO_STATE}
 
 
@@ -1531,6 +1531,18 @@ function makeStream(host){
   };
 }
 
+/* The feed is a bounded ring buffer. If a poll lands late enough that events
+   were evicted before it read them — a hidden tab throttled to one timer a
+   minute, a phone that slept — say so, rather than splicing the survivors into
+   what looks like continuous prose. */
+function addFeedGap(host, n){
+  const d = document.createElement("div");
+  d.className = "runbar";
+  d.textContent = "— feed gap: " + n + " event" + (n === 1 ? "" : "s") +
+    " were dropped before this tab read them —";
+  host.appendChild(d); keepDown();
+}
+
 /* ── tool cards ─────────────────────────────────────── */
 const TOOL_VERB = {
   repo_search:"searching the repo", github_read:"reading files",
@@ -1722,6 +1734,7 @@ async function followRun(host, bar){
     try { d = await api("/ui/events?since=" + RUN.cursor); }
     catch (e) { break; }
     RUN.cursor = d.cursor;
+    if (d.dropped) { closeStream(); addFeedGap(host, d.dropped); }
 
     for (const e of d.events || []) {
       if (e.kind === "turn_start") {

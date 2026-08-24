@@ -19,6 +19,7 @@ import asyncio
 import json
 import os
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -112,10 +113,32 @@ RUN_STATE: Dict[str, Any] = {"active": False, "task_id": None}
 # tool-by-tool trace was locked inside self.transcript until the run ended. These
 # are the same records, published as they happen, with a monotonic seq so a
 # browser can poll incrementally instead of re-reading the world.
-EVENT_BUFFER_MAX = int(os.environ.get("AGENT_EVENT_BUFFER_MAX", "400"))
+EVENT_BUFFER_MAX = int(os.environ.get("AGENT_EVENT_BUFFER_MAX", "2000"))
 RUN_EVENTS: List[Dict[str, Any]] = []
 _EVENTS_LOCK = threading.Lock()
 _EVENT_SEQ = 0
+# _EVENT_SEQ as it stood when the current run cleared the feed. Events below it
+# belong to a previous run and are not this poller's to miss.
+_EVENT_EPOCH = 0
+
+# Streamed prose arrives one token-piece at a time, and the console reads this
+# buffer by POLLING it. Publishing an event per piece is what made the feed gap
+# out: at ~40 pieces/sec a poll that lands late — a slow round trip, a phone on
+# a bad link, or a browser throttling a hidden tab to one timer per second (and
+# to one per MINUTE once it has been hidden five minutes) — lets thousands of
+# events pile up, and every one past the newest EVENT_BUFFER_MAX was deleted
+# before anyone read it. Silently: the survivors were spliced together as if
+# nothing had been lost, so text jumped mid-sentence and tool cards vanished.
+#
+# Coalescing pieces into chunks cuts the event rate by one to two orders of
+# magnitude, so the same buffer spans a whole run's prose rather than seconds of
+# it. run_events() also flushes on read, so a poller still gets every character
+# written since its last poll — the thresholds below only bound growth while
+# nobody is reading.
+DELTA_COALESCE_CHARS = int(os.environ.get("AGENT_DELTA_COALESCE_CHARS", "240"))
+DELTA_COALESCE_SEC = float(os.environ.get("AGENT_DELTA_COALESCE_SEC", "0.25"))
+_DELTA_PENDING: List[str] = []
+_DELTA_LAST_FLUSH = 0.0
 
 # Cooperative cancellation. The loop checks this between turns, so a stop lands
 # at the next turn boundary rather than mid-tool-call — an in-flight github_commit
@@ -123,35 +146,107 @@ _EVENT_SEQ = 0
 _STOP_REQUESTED: Dict[str, Any] = {"task_id": None}
 
 
+def _append_locked(kind: str, **data: Any) -> None:
+    """Append one event and re-bound the buffer. Caller holds _EVENTS_LOCK."""
+    global _EVENT_SEQ
+    _EVENT_SEQ += 1
+    RUN_EVENTS.append({
+        "seq": _EVENT_SEQ,
+        "kind": kind,
+        "at": datetime.now(timezone.utc).isoformat(),
+        **data,
+    })
+    while len(RUN_EVENTS) > EVENT_BUFFER_MAX:
+        # Prose is the cheap thing to lose: a dropped chunk is one visible gap
+        # inside a paragraph. A dropped tool_call orphans its own result (the
+        # console keys result cards by turn:index and silently discards a result
+        # whose card never arrived), and a dropped approval_request loses the
+        # prompt the run is BLOCKED on — the operator then watches a run that
+        # will sit there until the 30-minute timeout denies it. So evict prose
+        # first, and structural events only when no prose is left to give up.
+        i = next((j for j, e in enumerate(RUN_EVENTS)
+                  if e["kind"] == "assistant_delta"), 0)
+        del RUN_EVENTS[i]
+
+
+def _flush_delta_locked() -> None:
+    """Publish the buffered prose as one delta. Caller holds _EVENTS_LOCK."""
+    global _DELTA_LAST_FLUSH
+    if not _DELTA_PENDING:
+        return
+    text = "".join(_DELTA_PENDING)
+    _DELTA_PENDING.clear()
+    _DELTA_LAST_FLUSH = time.monotonic()
+    _append_locked("assistant_delta", text=text)
+
+
 def _emit(kind: str, **data: Any) -> None:
     """Publish one run event. Never raises — observability must not break a run."""
-    global _EVENT_SEQ
     try:
         with _EVENTS_LOCK:
-            _EVENT_SEQ += 1
-            RUN_EVENTS.append({
-                "seq": _EVENT_SEQ,
-                "kind": kind,
-                "at": datetime.now(timezone.utc).isoformat(),
-                **data,
-            })
-            if len(RUN_EVENTS) > EVENT_BUFFER_MAX:
-                del RUN_EVENTS[:-EVENT_BUFFER_MAX]
+            # Anything that is not more prose closes the open chunk first, so
+            # the text a model wrote before calling a tool still lands ahead of
+            # that tool's card rather than after it.
+            if kind != "assistant_delta":
+                _flush_delta_locked()
+            _append_locked(kind, **data)
+    except Exception:
+        pass
+
+
+def _emit_delta(text: str) -> None:
+    """Buffer one streamed token piece; publish it inside a coalesced chunk."""
+    if not text:
+        return
+    try:
+        with _EVENTS_LOCK:
+            _DELTA_PENDING.append(text)
+            if (sum(len(p) for p in _DELTA_PENDING) >= DELTA_COALESCE_CHARS
+                    or time.monotonic() - _DELTA_LAST_FLUSH >= DELTA_COALESCE_SEC):
+                _flush_delta_locked()
+    except Exception:
+        pass
+
+
+def flush_deltas() -> None:
+    """Publish any buffered prose now — called when a turn's stream ends."""
+    try:
+        with _EVENTS_LOCK:
+            _flush_delta_locked()
     except Exception:
         pass
 
 
 def run_events(since: int = 0) -> Dict[str, Any]:
-    """Events with seq > `since`, plus the current cursor."""
+    """Events with seq > `since`, the current cursor, and how many were missed.
+
+    `dropped` is the count of events that existed above the caller's cursor but
+    were evicted before it read them. It is derived, not bookkept: the feed knows
+    how many events it has ever published, so anything above the cursor that is
+    no longer in the buffer was dropped. A console that sees a non-zero value
+    draws a gap marker instead of presenting the survivors as continuous text —
+    the old feed lost events with no way for a reader to tell.
+    """
     with _EVENTS_LOCK:
-        events = [e for e in RUN_EVENTS if e["seq"] > since]
-        return {"events": events, "cursor": _EVENT_SEQ}
+        # Flush on read as well as on threshold, so coalescing costs a poller no
+        # latency: it still receives every character written since its last poll.
+        _flush_delta_locked()
+        floor = max(int(since or 0), _EVENT_EPOCH)
+        events = [e for e in RUN_EVENTS if e["seq"] > floor]
+        dropped = max(0, (_EVENT_SEQ - floor) - len(events))
+        return {"events": events, "cursor": _EVENT_SEQ, "dropped": dropped}
 
 
 def reset_events() -> None:
     """Drop buffered events at the start of a run so one run's feed is its own."""
+    global _EVENT_EPOCH
     with _EVENTS_LOCK:
         RUN_EVENTS.clear()
+        _DELTA_PENDING.clear()
+        # Seq stays monotonic across runs, so a poller still holding a cursor
+        # from the last run is not handed this run's events as if they were the
+        # tail of its own — but neither is it told it "missed" everything below.
+        _EVENT_EPOCH = _EVENT_SEQ
 
 
 def request_stop(task_id: Optional[str] = None) -> Dict[str, Any]:
@@ -947,9 +1042,14 @@ Rules:
             if kind == "delta":
                 piece = ev.get("text") or ""
                 content += piece
-                _emit("assistant_delta", text=piece)
+                _emit_delta(piece)
             elif kind == "done":
                 done = ev
+
+        # The stream is over; nothing else will arrive to push the last partial
+        # chunk out. Publish it now rather than leaving the tail of the turn
+        # sitting in the buffer until the next structural event.
+        flush_deltas()
 
         tool_calls = done.get("tool_calls")
         content = done.get("content") or content
