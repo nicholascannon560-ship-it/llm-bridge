@@ -130,6 +130,7 @@ def _session_payload(s: "Session") -> str:
         {
             "id": s.id,
             "system_prompt": s.system_prompt,
+            "tool_sig": s.tool_sig,
             "messages": s.messages,
             "created_at": s.created_at,
             "cost_cents": s.cost_cents,
@@ -289,11 +290,17 @@ def request_is_authed(request: Request) -> bool:
 # ── session store ───────────────────────────────────────────────────────────
 
 class Session:
-    def __init__(self, session_id: str, system_prompt: str):
+    def __init__(self, session_id: str, system_prompt: str,
+                 tool_sig: Optional[str] = None):
         self.id = session_id
         # Built once, reused verbatim for the life of the session. This single
         # field is what makes prefix caching work across turns.
         self.system_prompt = system_prompt
+        # Fingerprint of the tool set that prompt was written from. The prompt
+        # is persisted, so without this a session started before a new tool
+        # shipped would describe the old capability set forever — the agent
+        # gets tools its own instructions never mention.
+        self.tool_sig = tool_sig or current_tool_signature()
         self.messages: List[Dict[str, Any]] = []
         self.created_at = datetime.now(timezone.utc).isoformat()
         self.cost_cents = 0.0
@@ -358,7 +365,15 @@ def _load_from_disk(session_id: str) -> Optional[Session]:
         raw = _mirror_read(session_id)
     if raw is None:
         return None
-    s = Session(session_id, raw.get("system_prompt") or build_system_prompt())
+    # A persisted prompt is reused only while it still matches the live tool
+    # set. When tools are added or removed the stored text becomes a false
+    # inventory, so rebuild it. That invalidates this session's cached prefix
+    # exactly once, which is the right trade for instructions that are true.
+    current_sig = current_tool_signature()
+    stored_prompt = raw.get("system_prompt")
+    if not stored_prompt or raw.get("tool_sig") != current_sig:
+        stored_prompt = build_system_prompt()
+    s = Session(session_id, stored_prompt, tool_sig=current_sig)
     s.messages = raw.get("messages") or []
     s.created_at = raw.get("created_at") or s.created_at
     s.cost_cents = raw.get("cost_cents") or 0.0
@@ -387,32 +402,65 @@ def get_session(session_id: Optional[str], create: bool = True) -> Session:
 
 # ── the stable system prompt ────────────────────────────────────────────────
 
-def _tool_schemas() -> List[Dict[str, Any]]:
-    """Tool schemas, in a stable order, for whichever set is configured.
+def default_tool_set() -> str:
+    return os.getenv("UI_TOOL_SET", "build")
+
+
+def _tool_schemas(tool_set: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Tool schemas, in a stable order, for the requested set.
 
     Order matters: the schemas are serialized into the prompt, so reordering
     them between calls would change the prefix and miss the cache.
     """
     from agent_loop.tools import resolve_tools
 
-    return resolve_tools(None, os.getenv("UI_TOOL_SET", "build"))
+    return resolve_tools(None, tool_set or default_tool_set())
 
 
-def build_system_prompt() -> str:
-    """Built once per session. Must contain nothing that varies per call.
+def current_tool_signature(tool_set: Optional[str] = None) -> str:
+    """Fingerprint of the live tool set, for detecting a stale saved prompt."""
+    from agent_loop.tools import tool_signature
+
+    try:
+        return tool_signature(_tool_schemas(tool_set))
+    except Exception:  # a bad UI_TOOL_SET must not break session loading
+        return ""
+
+
+# One prompt per tool set, built on first use. Byte-identical on every later
+# call, which is what the provider's implicit prefix cache keys on.
+_PROMPT_CACHE: Dict[str, str] = {}
+
+
+def prompt_for_tool_set(tool_set: Optional[str]) -> str:
+    key = (tool_set or default_tool_set()).lower()
+    cached = _PROMPT_CACHE.get(key)
+    if cached is None:
+        cached = build_system_prompt(key)
+        _PROMPT_CACHE[key] = cached
+    return cached
+
+
+def build_system_prompt(tool_set: Optional[str] = None) -> str:
+    """Built once per tool set. Must contain nothing that varies per call.
 
     Deliberately excludes the task_id and the memory block that
     AgentHarness._build_system_prompt injects — a prompt that changes every
     run cannot be prefix-cached.
     """
+    from agent_loop.tools import render_capabilities
+
+    schemas = _tool_schemas(tool_set)
     lines = []
-    for t in _tool_schemas():
+    for t in schemas:
         fn = t.get("function", {})
         lines.append(f"  - {fn.get('name')}: {fn.get('description', '')}")
+    capability_block = render_capabilities(schemas)
     return f"""You are Nicholas's operator agent, running inside the llm-bridge.
 
 You work across his repos and his Railway project. You have these tools:
 {chr(10).join(lines)}
+{capability_block}
 
 How you are being used:
 - In CHAT mode you cannot call tools at all — the request forbids it. Answer,
@@ -641,7 +689,19 @@ async def ui_do(body: DoRequestBody = Body(...)):
                     cost_budget_cents=body.budget_usd * 100.0,
                     task_id=task_id,
                     history=chat_history,
-                    system_prompt=s.system_prompt,
+                    # The session prompt is built from UI_TOOL_SET. A run that
+                    # asks for a different set gets a different tools array, so
+                    # reusing it would hand the model a written inventory that
+                    # contradicts the tools it was actually given — listing
+                    # writes a research run cannot perform, omitting the browser
+                    # tools it can. Cached per set, so the prefix still stays
+                    # byte-identical across runs of the same kind.
+                    system_prompt=(
+                        s.system_prompt
+                        if (body.tool_set or default_tool_set()).lower()
+                        == default_tool_set().lower()
+                        else prompt_for_tool_set(body.tool_set)
+                    ),
                     advisor_provider=body.advisor_provider,
                     advisor_model=body.advisor_model,
                     advise_every=body.advise_every,

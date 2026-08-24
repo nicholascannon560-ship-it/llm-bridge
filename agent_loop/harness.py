@@ -31,7 +31,7 @@ try:
 except ImportError:
     BRIDGE_MODE = False
 
-from .tools import run_tool, TOOL_SCHEMAS, resolve_tools
+from .tools import run_tool, TOOL_SCHEMAS, resolve_tools, render_capabilities
 from .memory import MemoryStore
 
 try:
@@ -488,6 +488,11 @@ class AgentHarness:
             desc = t["function"].get("description", "")
             tool_summaries.append(f"  - {name}: {desc}")
 
+        # Limits and scope that no single tool description can carry. Derived
+        # from the tools THIS run resolved, so a research run is never told
+        # about writing and a capability added later needs no edit here.
+        capability_block = render_capabilities(self.tools)
+
         recent_memories = self.memory.read(limit=5)
         memory_block = ""
         if recent_memories:
@@ -500,7 +505,7 @@ Your task_id is: {self.task_id}
 
 You have access to the following tools:
 {chr(10).join(tool_summaries)}
-
+{capability_block}
 Rules:
 1. Think step by step. Break complex tasks into smaller steps.
 2. Call tools using the OpenAI function-calling format.
