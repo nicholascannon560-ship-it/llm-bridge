@@ -16,9 +16,15 @@ WHY THIS IS NARROW
     2. The bucket is PINNED from env and never read from the request body. A
        caller cannot retarget these routes at another bucket, the way the
        sandbox repo is hardcoded in the run_tests tool rather than passed in.
-    3. No write verbs exist here at all. There is no put, no delete, no copy.
-       Adding one is a separate, deliberate decision — and if it happens, the
-       tool that calls it belongs in WRITE_TOOL_NAMES so it can never share an
+    3. No S3 write verbs exist here at all. There is no put, no delete, no
+       copy — and none is planned, because of point 4.
+    4. Writing happens in COMPUTE, not here. /aws/build/* starts a pinned
+       CodeBuild project that runs under its OWN IAM role: read the data
+       prefix, write the agent prefix, nothing else. The agent never holds a
+       write verb; it starts a job and reads the result back with s3_get. The
+       boundary is the role, which AWS enforces, rather than a check in this
+       file, which it does not. run_backtest is in WRITE_TOOL_NAMES all the
+       same: it spends money and produces objects, so it must never share an
        agent loop with the browser tools.
 
   Auth is inherited: BridgeAuthMiddleware in main.py gates every path that is
@@ -37,6 +43,12 @@ CONFIG
   AWS_ACCESS_KEY_ID     standard credential chain
   AWS_SECRET_ACCESS_KEY standard credential chain
   AWS_S3_MAX_GET_BYTES  default 1048576, hard cap 5242880
+  AWS_CODEBUILD_PROJECT   required for /aws/build/* — the ONE project that may
+                          be started. Pinned like the bucket; never taken from
+                          a request. Inert (503) when unset.
+  AWS_BACKTEST_OUT_PREFIX default "agent/backtests/" — where a run's outputs go.
+                          Advisory here; the build role is what enforces it.
+  AWS_BUILD_MAX_TIMEOUT_MIN default 60 — ceiling on a caller-supplied timeout.
 """
 from __future__ import annotations
 
@@ -75,6 +87,21 @@ def _prefix_pin() -> str:
 def _client():
     # Imported lazily so a missing boto3 degrades these routes instead of
     # taking the whole bridge down at boot.
+    return _aws_client("s3")
+
+
+def _codebuild_project() -> str:
+    """The pinned CodeBuild project. Never taken from a request body."""
+    proj = (os.getenv("AWS_CODEBUILD_PROJECT") or "").strip()
+    if not proj:
+        raise HTTPException(
+            503,
+            "AWS_CODEBUILD_PROJECT is not set on this service — build routes are inert.",
+        )
+    return proj
+
+
+def _aws_client(service: str):
     try:
         import boto3  # noqa: WPS433
     except Exception as e:  # pragma: no cover
@@ -83,7 +110,7 @@ def _client():
     region = (os.getenv("AWS_DEFAULT_REGION") or "").strip()
     if not region:
         raise HTTPException(503, "AWS_DEFAULT_REGION is not set")
-    return boto3.client("s3", region_name=region)
+    return boto3.client(service, region_name=region)
 
 
 def _safe_key(key: str) -> str:
@@ -253,3 +280,173 @@ async def s3_get(req: GetRequest):
         "content_range": total or None,
         "text": body.decode("utf-8", errors="replace"),
     }
+
+# --------------------------------------------------------------------------- #
+# Compute: the only thing on this bridge that can write to S3
+#
+# It writes indirectly: the build runs under a CodeBuild service role scoped to
+# read the data prefix and write the agent prefix. The bridge's own credential
+# needs codebuild:StartBuild on THIS project and nothing else — notably no
+# iam:PassRole beyond the one role, or a caller could hand the project a more
+# privileged identity and every restriction below becomes decoration.
+
+BUILD_DEFAULT_TIMEOUT_MIN = 30
+
+
+class BuildStartRequest(BaseModel):
+    command: str = Field(..., description="Shell command to run in the build container")
+    setup: Optional[str] = Field(None, description="Optional command run first, e.g. pip install")
+    run_id: Optional[str] = Field(None, description="Output folder name under the agent prefix")
+    timeout_minutes: Optional[int] = Field(None, description="Wall-clock ceiling for the build")
+
+
+def _build_max_timeout() -> int:
+    try:
+        return max(5, int(os.getenv("AWS_BUILD_MAX_TIMEOUT_MIN") or "60"))
+    except ValueError:
+        return 60
+
+
+def _out_prefix() -> str:
+    p = (os.getenv("AWS_BACKTEST_OUT_PREFIX") or "agent/backtests/").strip().lstrip("/")
+    return p if p.endswith("/") else p + "/"
+
+
+def _safe_run_id(run_id: Optional[str]) -> str:
+    """A run id becomes part of an S3 key, so it may not escape the prefix."""
+    import re as _re
+    from datetime import datetime, timezone
+
+    if not run_id:
+        return datetime.now(timezone.utc).strftime("run-%Y%m%d-%H%M%S")
+    rid = run_id.strip().strip("/")
+    if not _re.fullmatch(r"[A-Za-z0-9._-]{1,64}", rid):
+        raise HTTPException(
+            400, "run_id must be 1-64 chars of [A-Za-z0-9._-] — no slashes, no '..'"
+        )
+    return rid
+
+
+def _buildspec(command: str, setup: Optional[str]) -> str:
+    """Buildspec as JSON, not YAML.
+
+    CodeBuild accepts either. JSON is used deliberately: the command comes from
+    an agent, and json.dumps escapes it as one scalar. Interpolating the same
+    string into YAML would let a newline plus two spaces of indentation invent
+    new phases, or a new install block — buildspec injection with the build
+    role's credentials behind it.
+    """
+    import json as _json
+
+    install = ["echo setup"]
+    if setup and setup.strip():
+        install = [setup.strip()]
+    spec = {
+        "version": "0.2",
+        "phases": {
+            "install": {"commands": install},
+            "build": {"commands": [command]},
+        },
+    }
+    return _json.dumps(spec)
+
+
+def _tail_build_logs(build: dict, limit: int = 120) -> list:
+    """Last N log lines for a build. Never fatal: logs are diagnostics, and a
+    missing log group must not turn a finished build into an error."""
+    info = (build.get("logs") or {})
+    group, stream = info.get("groupName"), info.get("streamName")
+    if not group or not stream:
+        return []
+    try:
+        logs = _aws_client("logs")
+        resp = logs.get_log_events(
+            logGroupName=group,
+            logStreamName=stream,
+            limit=max(1, min(int(limit), 500)),
+            startFromHead=False,
+        )
+        return [e.get("message", "").rstrip("\n") for e in resp.get("events", [])]
+    except Exception as e:  # pragma: no cover
+        return [f"[log fetch failed: {type(e).__name__}: {e}]"]
+
+
+def _build_view(build: dict, include_logs: bool = True) -> dict:
+    status = build.get("buildStatus")
+    return {
+        "build_id": build.get("id"),
+        "project": build.get("projectName"),
+        "status": status,
+        "done": status not in (None, "IN_PROGRESS"),
+        "succeeded": status == "SUCCEEDED",
+        "current_phase": build.get("currentPhase"),
+        "started_at": build["startTime"].isoformat() if build.get("startTime") else None,
+        "ended_at": build["endTime"].isoformat() if build.get("endTime") else None,
+        "log_tail": _tail_build_logs(build) if include_logs else [],
+    }
+
+
+def _get_build(build_id: str) -> dict:
+    """Fetch one build, refusing ids that belong to another project.
+
+    A CodeBuild id is "<project>:<uuid>". Checking the prefix keeps this route
+    from becoming a general reader of every build in the account, which is the
+    same reason the bucket is pinned.
+    """
+    project = _codebuild_project()
+    bid = (build_id or "").strip()
+    if not bid:
+        raise HTTPException(400, "build_id is required")
+    if not bid.startswith(project + ":"):
+        raise HTTPException(403, f"build_id does not belong to project {project!r}")
+    cb = _aws_client("codebuild")
+    try:
+        resp = cb.batch_get_builds(ids=[bid])
+    except Exception as e:
+        raise _boto_error(e)
+    builds = resp.get("builds") or []
+    if not builds:
+        raise HTTPException(404, f"no such build {bid}")
+    return builds[0]
+
+
+@aws_router.post("/aws/build/start", summary="Start a backtest job in CodeBuild")
+async def build_start(req: BuildStartRequest):
+    project = _codebuild_project()
+    bucket = _bucket()
+    run_id = _safe_run_id(req.run_id)
+    out_prefix = _out_prefix() + run_id + "/"
+
+    timeout = req.timeout_minutes or BUILD_DEFAULT_TIMEOUT_MIN
+    ceiling = _build_max_timeout()
+    if timeout < 5 or timeout > ceiling:
+        raise HTTPException(400, f"timeout_minutes must be 5..{ceiling}")
+
+    if not (req.command or "").strip():
+        raise HTTPException(400, "command is required")
+
+    cb = _aws_client("codebuild")
+    try:
+        resp = cb.start_build(
+            projectName=project,
+            buildspecOverride=_buildspec(req.command, req.setup),
+            timeoutInMinutesOverride=int(timeout),
+            environmentVariablesOverride=[
+                {"name": "S3_BUCKET", "value": bucket, "type": "PLAINTEXT"},
+                {"name": "DATA_PREFIX", "value": _prefix_pin() or "kalshiml/", "type": "PLAINTEXT"},
+                {"name": "OUT_PREFIX", "value": out_prefix, "type": "PLAINTEXT"},
+                {"name": "RUN_ID", "value": run_id, "type": "PLAINTEXT"},
+            ],
+        )
+    except Exception as e:
+        raise _boto_error(e)
+
+    view = _build_view(resp["build"], include_logs=False)
+    view["run_id"] = run_id
+    view["out_prefix"] = out_prefix
+    return view
+
+
+@aws_router.get("/aws/build/status/{build_id:path}", summary="Status and log tail")
+async def build_status(build_id: str):
+    return _build_view(_get_build(build_id))
