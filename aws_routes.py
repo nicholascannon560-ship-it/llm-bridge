@@ -612,7 +612,11 @@ async def bootstrap_backtest():
         if code == "EntityAlreadyExists":
             steps.append({"step": "create_role", "result": "already existed", "role": BOOTSTRAP_ROLE})
         else:
-            raise _boto_error(e)
+            # Keep going rather than raising. One call should report exactly
+            # which of IAM / CodeBuild this credential can and cannot do —
+            # a bare 403 on the first step tells you nothing about the rest,
+            # and each retry costs a deploy cycle to learn one bit.
+            steps.append({"step": "create_role", "result": f"DENIED: {code or type(e).__name__}"})
 
     try:
         iam.put_role_policy(
@@ -622,7 +626,8 @@ async def bootstrap_backtest():
         )
         steps.append({"step": "put_role_policy", "result": "ok"})
     except Exception as e:
-        raise _boto_error(e)
+        code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+        steps.append({"step": "put_role_policy", "result": f"DENIED: {code or type(e).__name__}"})
 
     role_arn = f"arn:aws:iam::{account}:role/{BOOTSTRAP_ROLE}"
 
@@ -659,7 +664,8 @@ async def bootstrap_backtest():
             cb.create_project(**project_def)
             steps.append({"step": "project", "result": "created", "project": BOOTSTRAP_PROJECT})
     except Exception as e:
-        raise _boto_error(e)
+        code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+        steps.append({"step": "project", "result": f"DENIED: {code or type(e).__name__}"})
 
     if bridge_user:
         try:
@@ -678,8 +684,10 @@ async def bootstrap_backtest():
     else:
         steps.append({"step": "bridge_user_policy", "result": "skipped (identity is not an IAM user)"})
 
+    failed = [x for x in steps if str(x.get("result", "")).startswith(("DENIED", "FAILED"))]
     return {
-        "ok": True,
+        "ok": not failed,
+        "failed_steps": [x["step"] for x in failed],
         "role": BOOTSTRAP_ROLE,
         "project": BOOTSTRAP_PROJECT,
         "data_prefix_readonly": BOOTSTRAP_DATA_PREFIX,
