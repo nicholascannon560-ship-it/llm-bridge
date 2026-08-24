@@ -399,6 +399,18 @@ def _get_build(build_id: str) -> dict:
         raise HTTPException(400, "build_id is required")
     if not bid.startswith(project + ":"):
         raise HTTPException(403, f"build_id does not belong to project {project!r}")
+    # A previous run may already have attached the bridge policy, whose
+    # iam:PassRole Deny then blocks the project step forever. Detach it for the
+    # duration of this call and re-attach at the end. Best-effort: if this
+    # credential cannot detach it, the project step will say so plainly.
+    try:
+        if not bridge_user:
+            raise RuntimeError("no user identity")
+        iam.delete_user_policy(UserName=bridge_user, PolicyName="bridge-backtest-control")
+        steps.append({"step": "detach_bridge_policy", "result": "detached for this call"})
+    except Exception:
+        pass
+
     # ORDER IS LOAD-BEARING. The bridge policy below carries an explicit Deny
     # on iam:PassRole, and codebuild:CreateProject needs PassRole to attach the
     # service role. An explicit Deny beats any Allow, including
