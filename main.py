@@ -113,6 +113,14 @@ app.include_router(skills_router)
 from fetch_routes import fetch_router
 app.include_router(fetch_router)
 
+# Read-only S3. Optional, like the agent routes: a missing boto3 or an unset
+# bucket must degrade these endpoints, never take the bridge down.
+try:
+    from aws_routes import aws_router
+    app.include_router(aws_router)
+except Exception as _aws_routes_err:  # pragma: no cover
+    print(f"[aws] routes not mounted: {_aws_routes_err}", flush=True)
+
 # Watchdog status / manual-trigger routes (auth-gated like everything else).
 app.include_router(watchdog_router)
 

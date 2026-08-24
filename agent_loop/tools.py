@@ -458,6 +458,51 @@ TOOL_SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "s3_status",
+            "description": (
+                "Summary of the S3 archive bucket: object count, total bytes, "
+                "newest key and its timestamp. Use to check whether the nightly "
+                "offload is still writing. Read-only."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "s3_list",
+            "description": "List object keys in the archive bucket under a prefix. Read-only.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prefix": {"type": "string", "description": "key prefix"},
+                    "max_keys": {"type": "integer", "description": "1..1000, default 200"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "s3_get",
+            "description": (
+                "Read one object from the archive bucket as text, capped at 1 MB "
+                "by default. Read-only."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string", "description": "object key"},
+                    "max_bytes": {"type": "integer", "description": "cap, hard max 5242880"},
+                },
+                "required": ["key"],
+            },
+        },
+    },
 ]
 
 # ── Tool sets and the separation rule ────────────────────────────────────────
@@ -504,6 +549,9 @@ READ_ONLY_TOOL_NAMES = [
     "http_get",
     "kml_data_read",
     "kml_app_logs",
+    "s3_status",
+    "s3_list",
+    "s3_get",
 ]
 
 
@@ -1024,7 +1072,7 @@ async def _tool_railway_redeploy(args: Dict) -> Dict:
 # Variables the agent must never be able to write. Self-granting browser
 # permissions, rotating the bridge key out from under the operator, or
 # swapping a token are all one set_env away otherwise.
-PROTECTED_ENV_PREFIXES = ("BROWSER_", "BRIDGE_")
+PROTECTED_ENV_PREFIXES = ("BROWSER_", "BRIDGE_", "AWS_")
 PROTECTED_ENV_SUBSTRINGS = ("TOKEN", "API_KEY", "SECRET", "PASSWORD", "CREDENTIAL")
 
 
@@ -1300,6 +1348,45 @@ async def _tool_run_tests(args: Dict) -> Dict:
         }
 
 
+# ── Read-only S3 ─────────────────────────────────────────────────────────────
+#
+# These delegate to aws_routes, which pins the bucket from env so a caller can
+# never retarget them, and whose IAM identity is denied every write verb. No
+# s3_put exists on purpose; if one is ever added it belongs in WRITE_TOOL_NAMES
+# on the same commit.
+
+async def _aws_call(coro):
+    from fastapi import HTTPException
+    try:
+        return await coro
+    except HTTPException as e:
+        return {"error": f"{e.status_code}: {e.detail}"}
+
+
+async def _tool_s3_status(args: Dict) -> Dict:
+    from aws_routes import s3_status
+    return await _aws_call(s3_status())
+
+
+async def _tool_s3_list(args: Dict) -> Dict:
+    from aws_routes import ListRequest, s3_list
+    return await _aws_call(s3_list(ListRequest(
+        prefix=(args.get("prefix") or None),
+        max_keys=(int(args["max_keys"]) if args.get("max_keys") else None),
+    )))
+
+
+async def _tool_s3_get(args: Dict) -> Dict:
+    from aws_routes import GetRequest, s3_get
+    key = (args.get("key") or "").strip()
+    if not key:
+        return {"error": "key is required"}
+    return await _aws_call(s3_get(GetRequest(
+        key=key,
+        max_bytes=(int(args["max_bytes"]) if args.get("max_bytes") else None),
+    )))
+
+
 _TOOL_HANDLERS = {
     "github_read": _tool_github_read,
     "repo_search": _tool_repo_search,
@@ -1321,6 +1408,9 @@ _TOOL_HANDLERS = {
     "github_list_repos": _tool_github_list_repos,
     "run_tests": _tool_run_tests,
     "railway_list": _tool_railway_list,
+    "s3_status": _tool_s3_status,
+    "s3_list": _tool_s3_list,
+    "s3_get": _tool_s3_get,
 }
 
 if BROWSER_TOOL_AVAILABLE:
