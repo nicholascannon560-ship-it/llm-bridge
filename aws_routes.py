@@ -399,6 +399,13 @@ def _get_build(build_id: str) -> dict:
         raise HTTPException(400, "build_id is required")
     if not bid.startswith(project + ":"):
         raise HTTPException(403, f"build_id does not belong to project {project!r}")
+    # ORDER IS LOAD-BEARING. The bridge policy below carries an explicit Deny
+    # on iam:PassRole, and codebuild:CreateProject needs PassRole to attach the
+    # service role. An explicit Deny beats any Allow, including
+    # AdministratorAccess — so once that policy is attached, this credential can
+    # never create or update the project again. Create it first. On a re-run
+    # after the policy exists, the project step failing with AccessDenied is the
+    # guardrail working, not a regression.
     cb = _aws_client("codebuild")
     try:
         resp = cb.batch_get_builds(ids=[bid])
@@ -678,7 +685,7 @@ async def bootstrap_backtest():
         except Exception as e:
             steps.append({
                 "step": "bridge_user_policy",
-                "result": f"FAILED: {type(e).__name__}",
+                "result": f"FAILED: {type(e).__name__}: {e}"[:300],
                 "note": "the bridge may not be able to start builds until this is fixed",
             })
     else:
