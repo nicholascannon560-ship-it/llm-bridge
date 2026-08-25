@@ -219,3 +219,6 @@ service variable if you want it to persist.
 - 2026-08-24 | run_backtest (WRITE) + backtest_status (RO): agents write S3 via the build role, never s3_put | files: agent_loop/tools.py
 - 2026-08-24 | /aws/bootstrap/backtest: hardcoded role+project creator, gated on AWS_BOOTSTRAP_ENABLED | files: aws_routes.py
 - 2026-08-24 | Bridge AWS user is `llmbridge`: S3 only, DENIED iam:* and codebuild:* | files: none (measured)
+- 2026-08-24 | AWS backtest layer LIVE: agent-backtest-role + agent-backtest CodeBuild project created via bootstrap | files: aws_routes.py
+- 2026-08-24 | Verified: job reads kalshiml/, writes agent/, and is AccessDenied writing kalshiml/cell_states.json | files: none (evidence)
+- 2026-08-24 | Bootstrap ordering: bridge policy's iam:PassRole Deny blocks CreateProject; detach, wait ~35s for IAM, re-attach | files: aws_routes.py
