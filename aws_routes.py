@@ -650,10 +650,10 @@ async def bootstrap_backtest():
                 "step": "detach_bridge_policy",
                 "result": "not present" if code == "NoSuchEntity" else f"{code or type(e).__name__}",
             })
-        # IAM is eventually consistent; a CreateProject fired immediately after
-        # can still see the Deny that was just removed.
+        # IAM is eventually consistent, and slower than you would like: a
+        # detach measured as successful was still being enforced 8s later.
         import time as _time
-        _time.sleep(8)
+        _time.sleep(int(os.getenv("AWS_BOOTSTRAP_IAM_WAIT_SEC") or "35"))
 
     cb = _aws_client("codebuild")
     project_def = {
@@ -692,7 +692,24 @@ async def bootstrap_backtest():
         steps.append({"step": "project", "result": f"DENIED: {code or type(e).__name__}",
                       "detail": str(e)[:400]})
 
-    if bridge_user:
+    project_ok = any(
+        x.get("step") == "project" and not str(x.get("result", "")).startswith("DENIED")
+        for x in steps
+    )
+    if bridge_user and not project_ok:
+        # Re-attaching now would restore the PassRole Deny and lock the next
+        # attempt out again. Leave it off so a retry has a clean window — and
+        # say so, because an unprotected credential must never be a silent state.
+        steps.append({
+            "step": "bridge_user_policy",
+            "result": "NOT re-attached — project step failed",
+            "warning": (
+                "user llmbridge currently has no bridge-backtest-control policy. "
+                "Re-run this endpoint once the project succeeds, or remove the "
+                "credential's admin rights."
+            ),
+        })
+    elif bridge_user:
         try:
             iam.put_user_policy(
                 UserName=bridge_user,
