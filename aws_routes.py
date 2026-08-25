@@ -399,25 +399,6 @@ def _get_build(build_id: str) -> dict:
         raise HTTPException(400, "build_id is required")
     if not bid.startswith(project + ":"):
         raise HTTPException(403, f"build_id does not belong to project {project!r}")
-    # A previous run may already have attached the bridge policy, whose
-    # iam:PassRole Deny then blocks the project step forever. Detach it for the
-    # duration of this call and re-attach at the end. Best-effort: if this
-    # credential cannot detach it, the project step will say so plainly.
-    try:
-        if not bridge_user:
-            raise RuntimeError("no user identity")
-        iam.delete_user_policy(UserName=bridge_user, PolicyName="bridge-backtest-control")
-        steps.append({"step": "detach_bridge_policy", "result": "detached for this call"})
-    except Exception as e:
-        steps.append({"step": "detach_bridge_policy", "result": f"{type(e).__name__}: {e}"[:300]})
-
-    # ORDER IS LOAD-BEARING. The bridge policy below carries an explicit Deny
-    # on iam:PassRole, and codebuild:CreateProject needs PassRole to attach the
-    # service role. An explicit Deny beats any Allow, including
-    # AdministratorAccess — so once that policy is attached, this credential can
-    # never create or update the project again. Create it first. On a re-run
-    # after the policy exists, the project step failing with AccessDenied is the
-    # guardrail working, not a regression.
     cb = _aws_client("codebuild")
     try:
         resp = cb.batch_get_builds(ids=[bid])
@@ -649,6 +630,30 @@ async def bootstrap_backtest():
         steps.append({"step": "put_role_policy", "result": f"DENIED: {code or type(e).__name__}"})
 
     role_arn = f"arn:aws:iam::{account}:role/{BOOTSTRAP_ROLE}"
+
+    # ORDER IS LOAD-BEARING. The bridge policy written at the end of this
+    # function carries an explicit Deny on iam:PassRole, and
+    # codebuild:CreateProject needs PassRole to attach the service role. An
+    # explicit Deny beats any Allow, including AdministratorAccess — so once
+    # that policy exists, this credential can never create the project. A
+    # previous run may already have attached it, so detach it for the duration
+    # of this call; it is re-attached below.
+    if bridge_user:
+        try:
+            iam.delete_user_policy(
+                UserName=bridge_user, PolicyName="bridge-backtest-control"
+            )
+            steps.append({"step": "detach_bridge_policy", "result": "detached for this call"})
+        except Exception as e:
+            code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+            steps.append({
+                "step": "detach_bridge_policy",
+                "result": "not present" if code == "NoSuchEntity" else f"{code or type(e).__name__}",
+            })
+        # IAM is eventually consistent; a CreateProject fired immediately after
+        # can still see the Deny that was just removed.
+        import time as _time
+        _time.sleep(8)
 
     cb = _aws_client("codebuild")
     project_def = {
