@@ -32,7 +32,7 @@ DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-5",
     "moonshot": "kimi-k3",
     "openai": "gpt-4o-mini",
-    "openrouter": "stealth/ox-alpha",
+    "openrouter": "z-ai/glm-5.3-flash",
     "local": "llama3.1",
 }
 
@@ -74,11 +74,18 @@ COST_TABLE = {
         "gpt-4o-mini": {"input": 0.015, "output": 0.060},
     },
     "openrouter": {
-        # stealth/ox-alpha is $0/$0 during the Aug 2026 preview week. This is
-        # a PROMOTIONAL rate on an anonymous provider, not a durable price.
-        # When the preview ends these become real numbers and every
-        # budget_cents check that trusted the zero will be wrong.
-        "stealth/ox-alpha": {"input": 0.0, "output": 0.0},
+        # 2026-08-26: the stealth/ox-alpha preview ended and the slug now 404s.
+        # It was revealed as Z.ai's GLM-5.3-Flash, which is billed at real
+        # rates -- the promotional $0/$0 row it replaced is gone deliberately,
+        # because any budget_cents check that trusted that zero was wrong.
+        # Published $/Mtok -> cents/1K is divide-by-10 (see UNIT WARNING above).
+        # glm-5.3-flash: $0.075 in / $0.25 out per Mtok (multimodal, 1M ctx).
+        "z-ai/glm-5.3-flash": {"input": 0.0075, "output": 0.025},
+        # glm-5.3: $1.40 in / $4.40 out per Mtok. Larger text-only reasoning
+        # model, reasoning always on and NOT separable -- it returns its
+        # scratchpad inside `content`, so do not use it where a clean short
+        # answer is expected. Prefer -flash for agent/tool work.
+        "z-ai/glm-5.3": {"input": 0.14, "output": 0.44},
     },
     "local": {
         "llama3.1": {"input": 0.0, "output": 0.0},
