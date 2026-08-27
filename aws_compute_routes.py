@@ -332,8 +332,10 @@ async def status():
 # CONFIG
 #   AWS_COMPUTE_BOOTSTRAP_ENABLED  "1" for the one call, then unset.
 
-BOOTSTRAP_ROLE = "kalshiml-prod"
-BOOTSTRAP_PROFILE = "kalshiml-prod"
+# Overridable because the console's Create-role wizard is the only path that
+# links a role to an instance profile by clicking, and it names them itself.
+BOOTSTRAP_ROLE = (os.getenv("AWS_COMPUTE_ROLE_NAME") or "kalshiml-prod").strip()
+BOOTSTRAP_PROFILE = (os.getenv("AWS_COMPUTE_IAM_PROFILE") or "kalshiml-prod").strip()
 BOOTSTRAP_SSM_PATH = "kalshiml/prod"
 BOOTSTRAP_S3_PREFIX = "kalshiml"
 
@@ -545,15 +547,34 @@ async def bootstrap_compute():
             raise _fail(e)
         steps.append({"step": "create_instance_profile", "result": "already exists"})
 
+    # Check the link before trying to make it. AddRoleToInstanceProfile is the
+    # one action this credential is denied, so when the console wizard has
+    # already linked them, calling it anyway turns a finished job into a 502.
+    already = False
     try:
-        iam.add_role_to_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE,
-                                         RoleName=BOOTSTRAP_ROLE)
-        steps.append({"step": "add_role_to_profile", "result": "attached"})
-    except Exception as e:
-        code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
-        if code not in ("LimitExceeded", "EntityAlreadyExists"):
-            raise _fail(e)
-        steps.append({"step": "add_role_to_profile", "result": "already attached"})
+        p = iam.get_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE)
+        linked = [r.get("RoleName") for r in
+                  (p.get("InstanceProfile") or {}).get("Roles") or []]
+        already = BOOTSTRAP_ROLE in linked
+        if linked and not already:
+            raise HTTPException(409, "profile %s already holds role %s, not %s"
+                                % (BOOTSTRAP_PROFILE, linked[0], BOOTSTRAP_ROLE))
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+    if already:
+        steps.append({"step": "add_role_to_profile", "result": "already linked"})
+    else:
+        try:
+            iam.add_role_to_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE,
+                                             RoleName=BOOTSTRAP_ROLE)
+            steps.append({"step": "add_role_to_profile", "result": "attached"})
+        except Exception as e:
+            code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+            if code not in ("LimitExceeded", "EntityAlreadyExists"):
+                raise _fail(e)
+            steps.append({"step": "add_role_to_profile", "result": "already attached"})
 
     return {
         "role": BOOTSTRAP_ROLE,
