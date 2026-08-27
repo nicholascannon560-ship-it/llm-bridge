@@ -270,6 +270,48 @@ def _github_headers() -> dict[str, str]:
     }
 
 
+class DeployKeyRequest(BaseModel):
+    """Add a READ-ONLY deploy key to a repo.
+
+    Why read_only is not a parameter: a writable deploy key is a persistent
+    push credential that never expires and does not show up in the token list
+    anyone thinks to audit. The one legitimate use here is letting a server
+    clone, which needs read only. So the field is forced below rather than
+    offered, the way TagSpecifications are forced in aws_compute_routes.
+
+    The key is a PUBLIC key. Nothing secret passes through this route.
+    """
+
+    owner: str
+    repo: str
+    key: str = Field(..., description="Public key line, e.g. 'ssh-ed25519 AAAA... comment'")
+    title: str = Field("bridge-managed", description="Label shown in the repo settings")
+
+
+@app.post("/repos/{owner}/{repo}/keys", summary="Add a read-only deploy key")
+async def add_deploy_key(owner: str, repo: str, req: DeployKeyRequest):
+    key = (req.key or "").strip()
+    if not key.startswith(("ssh-ed25519 ", "ssh-rsa ", "ecdsa-sha2-")):
+        raise HTTPException(400, "key must be an OpenSSH PUBLIC key line")
+    if "PRIVATE KEY" in key.upper():
+        raise HTTPException(400, "that is a private key — refusing to send it to GitHub")
+    resp = await github_request(
+        "POST", f"/repos/{owner}/{repo}/keys",
+        json={"title": req.title, "key": key, "read_only": True},
+    )
+    d = resp.json()
+    return {"id": d.get("id"), "title": d.get("title"),
+            "read_only": d.get("read_only"), "verified": d.get("verified"),
+            "created_at": d.get("created_at")}
+
+
+@app.get("/repos/{owner}/{repo}/keys", summary="List deploy keys (public keys only)")
+async def list_deploy_keys(owner: str, repo: str):
+    resp = await github_request("GET", f"/repos/{owner}/{repo}/keys")
+    return {"keys": [{"id": k.get("id"), "title": k.get("title"),
+                      "read_only": k.get("read_only")} for k in resp.json()]}
+
+
 async def github_request(
     method: str, path: str, *, json: Any = None, params: Any = None
 ) -> httpx.Response:
