@@ -307,3 +307,166 @@ async def status():
     if inst is None:
         return {"exists": False, "name_tag": name}
     return {"exists": True, "name_tag": name, "instance": _view(inst)}
+
+
+# --------------------------------------------------------------------------- #
+# Bootstrap: create the instance role + profile, once
+#
+# WHY THIS IS NOT AN IAM PASSTHROUGH
+#   Same argument as /aws/bootstrap/backtest in aws_routes.py, and for the same
+#   reason: an endpoint that accepts a policy document, a role name, or an
+#   action list is an endpoint that can attach AdministratorAccess to anything.
+#   So this takes NO parameters. Role name, profile name, trust policy and
+#   permission policy are all below in code. Re-running it converges instead of
+#   escalating.
+#
+#   Deliberately absent: user creation and access-key issuance. Those emit a
+#   long-lived secret, and a secret that arrives in an HTTP response body has
+#   been written to a log, a transcript, and whatever read it. Narrowing the
+#   bridge's own credential stays a console action on purpose.
+#
+#   The policy mirrors infra/policies/instance_role_permissions.json in the
+#   KalshiML repo. Bucket and region come from the bridge's own env rather than
+#   being hardcoded, so this cannot be pointed at someone else's bucket.
+#
+# CONFIG
+#   AWS_COMPUTE_BOOTSTRAP_ENABLED  "1" for the one call, then unset.
+
+BOOTSTRAP_ROLE = "kalshiml-prod"
+BOOTSTRAP_PROFILE = "kalshiml-prod"
+BOOTSTRAP_SSM_PATH = "kalshiml/prod"
+BOOTSTRAP_S3_PREFIX = "kalshiml"
+
+
+def _compute_bootstrap_enabled() -> None:
+    if (os.getenv("AWS_COMPUTE_BOOTSTRAP_ENABLED") or "").strip() != "1":
+        raise HTTPException(
+            403,
+            "compute bootstrap is disabled — set AWS_COMPUTE_BOOTSTRAP_ENABLED=1 "
+            "for the one call, then unset it.",
+        )
+
+
+def _trust_policy() -> str:
+    import json as _json
+    return _json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "ec2.amazonaws.com"},
+            "Action": "sts:AssumeRole",
+        }],
+    })
+
+
+def _instance_policy(region: str, bucket: str) -> str:
+    import json as _json
+    return _json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "ReadOwnSecrets",
+                "Effect": "Allow",
+                "Action": ["ssm:GetParameter", "ssm:GetParameters",
+                           "ssm:GetParametersByPath"],
+                "Resource": f"arn:aws:ssm:{region}:*:parameter/{BOOTSTRAP_SSM_PATH}/*",
+            },
+            {
+                "Sid": "DecryptOwnSecrets",
+                "Effect": "Allow",
+                "Action": ["kms:Decrypt"],
+                "Resource": "*",
+                "Condition": {"StringEquals": {
+                    "kms:ViaService": f"ssm.{region}.amazonaws.com"}},
+            },
+            {
+                "Sid": "BackupAndHeartbeat",
+                "Effect": "Allow",
+                "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+                "Resource": f"arn:aws:s3:::{bucket}",
+            },
+            {
+                "Sid": "BackupReadWrite",
+                "Effect": "Allow",
+                "Action": ["s3:GetObject", "s3:PutObject"],
+                "Resource": f"arn:aws:s3:::{bucket}/{BOOTSTRAP_S3_PREFIX}/*",
+            },
+            {
+                # The box backs up. It never removes a backup — losing the only
+                # off-box copy is the failure this exists to prevent.
+                "Sid": "NeverDelete",
+                "Effect": "Deny",
+                "Action": ["s3:DeleteObject", "s3:DeleteObjectVersion",
+                           "s3:PutBucketPolicy"],
+                "Resource": "*",
+            },
+        ],
+    })
+
+
+@aws_compute_router.post(
+    "/aws/bootstrap/compute",
+    summary="Create the instance role + profile (operator only, idempotent)",
+)
+async def bootstrap_compute():
+    _compute_bootstrap_enabled()
+    region = (os.getenv("AWS_DEFAULT_REGION") or "").strip()
+    if not region:
+        raise HTTPException(503, "AWS_DEFAULT_REGION is not set")
+    bucket = (os.getenv("AWS_S3_BUCKET") or "").strip()
+    if not bucket:
+        raise HTTPException(503, "AWS_S3_BUCKET is not set")
+
+    iam = _client("iam")
+    steps = []
+
+    def _exists(e) -> bool:
+        return getattr(e, "response", {}).get("Error", {}).get(
+            "Code", "") == "EntityAlreadyExists"
+
+    try:
+        iam.create_role(RoleName=BOOTSTRAP_ROLE,
+                        AssumeRolePolicyDocument=_trust_policy(),
+                        Description="KalshiML production instance role")
+        steps.append({"step": "create_role", "result": "created"})
+    except Exception as e:
+        if not _exists(e):
+            raise _fail(e)
+        steps.append({"step": "create_role", "result": "already exists"})
+
+    try:
+        iam.put_role_policy(RoleName=BOOTSTRAP_ROLE,
+                            PolicyName="kalshiml-prod-instance",
+                            PolicyDocument=_instance_policy(region, bucket))
+        steps.append({"step": "put_role_policy", "result": "written"})
+    except Exception as e:
+        raise _fail(e)
+
+    try:
+        iam.create_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE)
+        steps.append({"step": "create_instance_profile", "result": "created"})
+    except Exception as e:
+        if not _exists(e):
+            raise _fail(e)
+        steps.append({"step": "create_instance_profile", "result": "already exists"})
+
+    try:
+        iam.add_role_to_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE,
+                                         RoleName=BOOTSTRAP_ROLE)
+        steps.append({"step": "add_role_to_profile", "result": "attached"})
+    except Exception as e:
+        code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
+        if code not in ("LimitExceeded", "EntityAlreadyExists"):
+            raise _fail(e)
+        steps.append({"step": "add_role_to_profile", "result": "already attached"})
+
+    return {
+        "role": BOOTSTRAP_ROLE,
+        "instance_profile": BOOTSTRAP_PROFILE,
+        "region": region,
+        "bucket": bucket,
+        "steps": steps,
+        "next": ("set AWS_COMPUTE_IAM_PROFILE=%s, unset "
+                 "AWS_COMPUTE_BOOTSTRAP_ENABLED, then POST /aws/compute/provision "
+                 "with dry_run=true" % BOOTSTRAP_PROFILE),
+    }

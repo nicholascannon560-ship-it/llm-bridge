@@ -3,6 +3,7 @@
 These cover the properties that matter: the gate, the allowlist, idempotency
 (the failure mode is fifty boxes, not one), MaxCount, and the dry-run path.
 """
+import json
 import os
 import sys
 import unittest
@@ -164,3 +165,76 @@ class LaunchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class FakeIAM:
+    def __init__(self, existing=()):
+        self.existing = set(existing)
+        self.calls = []
+        self.policy_doc = None
+
+    def _maybe_exists(self, tag):
+        if tag in self.existing:
+            raise FakeError("EntityAlreadyExists")
+
+    def create_role(self, **kw):
+        self.calls.append(("create_role", kw.get("RoleName")))
+        self._maybe_exists("role")
+
+    def put_role_policy(self, **kw):
+        self.calls.append(("put_role_policy", kw.get("PolicyName")))
+        self.policy_doc = kw.get("PolicyDocument")
+
+    def create_instance_profile(self, **kw):
+        self.calls.append(("create_instance_profile", kw.get("InstanceProfileName")))
+        self._maybe_exists("profile")
+
+    def add_role_to_instance_profile(self, **kw):
+        self.calls.append(("add_role_to_instance_profile", kw.get("RoleName")))
+        self._maybe_exists("attach")
+
+
+BOOT_ENV = {
+    "AWS_COMPUTE_BOOTSTRAP_ENABLED": "1",
+    "AWS_DEFAULT_REGION": "us-east-2",
+    "AWS_S3_BUCKET": "test-bucket",
+}
+
+
+class BootstrapTests(unittest.TestCase):
+    def test_disabled_by_default(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(HTTPException) as cm:
+                run(acr.bootstrap_compute())
+            self.assertEqual(cm.exception.status_code, 403)
+
+    def test_creates_role_and_profile(self):
+        iam = FakeIAM()
+        with mock.patch.dict(os.environ, BOOT_ENV, clear=True):
+            with mock.patch.object(acr, "_client", lambda svc: iam):
+                out = run(acr.bootstrap_compute())
+        self.assertEqual(out["instance_profile"], "kalshiml-prod")
+        names = [c[0] for c in iam.calls]
+        self.assertEqual(names, ["create_role", "put_role_policy",
+                                 "create_instance_profile",
+                                 "add_role_to_instance_profile"])
+
+    def test_rerun_converges(self):
+        iam = FakeIAM(existing=("role", "profile", "attach"))
+        with mock.patch.dict(os.environ, BOOT_ENV, clear=True):
+            with mock.patch.object(acr, "_client", lambda svc: iam):
+                out = run(acr.bootstrap_compute())
+        results = {s["step"]: s["result"] for s in out["steps"]}
+        self.assertEqual(results["create_role"], "already exists")
+        self.assertEqual(results["add_role_to_profile"], "already attached")
+
+    def test_policy_is_scoped_to_env_bucket_and_denies_delete(self):
+        iam = FakeIAM()
+        with mock.patch.dict(os.environ, BOOT_ENV, clear=True):
+            with mock.patch.object(acr, "_client", lambda svc: iam):
+                run(acr.bootstrap_compute())
+        doc = json.loads(iam.policy_doc)
+        sids = {s["Sid"]: s for s in doc["Statement"]}
+        self.assertEqual(sids["NeverDelete"]["Effect"], "Deny")
+        self.assertIn("test-bucket", sids["BackupReadWrite"]["Resource"])
+        self.assertNotIn("*:*", sids["ReadOwnSecrets"]["Resource"])
