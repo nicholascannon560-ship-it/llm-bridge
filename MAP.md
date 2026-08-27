@@ -148,6 +148,7 @@ service variable if you want it to persist.
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-08-27 | /aws/compute/{provision,status}: pinned+idempotent EC2 launch, gated AWS_COMPUTE_ENABLED | files: aws_compute_routes.py, main.py
 - 2026-08-27 | picker: dead stealth/ox-alpha -> z-ai/glm-5.3-flash; test pins every row to COST_TABLE | files: chat_ui.py, tests/test_stream_and_rates.py
 - 2026-08-24 | console feed gaps: deltas coalesced into chunks, buffer 400->2000, prose evicted before tool/approval events, run_events reports `dropped` | files: agent_loop/harness.py, chat_ui.py
 - 2026-08-24 | SUPERSEDES the 08-22 line below: SKIPPED deploys are NOT diagnosed and merge commits are NOT the cause (the body's own table refutes it). Squash-merging buys nothing; always redeploy + verify commitHash | files: MAP.md
