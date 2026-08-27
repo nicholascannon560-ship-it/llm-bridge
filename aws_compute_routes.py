@@ -472,6 +472,14 @@ async def iam_probe():
             RoleName=BOOTSTRAP_ROLE).get("PolicyNames")
     except Exception as e:
         detail["role_inline_policies"] = "ERR " + str(e)[:200]
+    for probe_name in ("kml", BOOTSTRAP_PROFILE):
+        try:
+            p = iam.get_instance_profile(InstanceProfileName=probe_name)
+            detail["profile_" + probe_name] = [
+                r.get("RoleName") for r in
+                (p.get("InstanceProfile") or {}).get("Roles") or []]
+        except Exception as e:
+            detail["profile_" + probe_name] = "ERR " + str(e)[:120]
     try:
         detail["role_attached_policies"] = [
             a.get("PolicyName") for a in iam.list_attached_role_policies(
