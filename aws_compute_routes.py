@@ -495,6 +495,15 @@ async def iam_probe():
     except Exception as e:
         detail["user_inline_policies"] = "ERR " + str(e)[:200]
 
+    try:
+        u = (iam.get_user().get("User") or {}).get("UserName", "")
+        docs = {}
+        for pn in iam.list_user_policies(UserName=u).get("PolicyNames") or []:
+            docs[pn] = iam.get_user_policy(UserName=u, PolicyName=pn).get(
+                "PolicyDocument")
+        detail["user_policy_docs"] = docs
+    except Exception as e:
+        detail["user_policy_docs"] = "ERR " + str(e)[:200]
     return {"probes": out, "detail": detail}
 
 
