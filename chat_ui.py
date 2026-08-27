@@ -792,11 +792,12 @@ MODEL_CATALOG = [
      "note": "balanced"},
     {"id": "claude-opus-5", "provider": "anthropic", "label": "Opus 5",
      "note": "hardest reasoning"},
-    # Free during the Aug 2026 OpenRouter preview week, from an anonymous
-    # operator that RETAINS prompts and completions. Listed last and labelled
-    # so it is never picked by accident for repo or client work.
-    {"id": "stealth/ox-alpha", "provider": "openrouter", "label": "Ox Alpha (preview)",
-     "note": "free, 1M ctx — anonymous provider, retains prompts"},
+    # Ox Alpha was Z.ai's GLM-5.3-Flash wearing a codename; the preview ended
+    # 2026-08-26 and the stealth slug now 404s, so the real one is listed here.
+    # Cheap and 1M ctx, but it still leaves the bridge for a third party via
+    # OpenRouter — listed last so it is never picked by accident for client work.
+    {"id": "z-ai/glm-5.3-flash", "provider": "openrouter", "label": "GLM 5.3 Flash",
+     "note": "cheap, 1M ctx — third-party via OpenRouter"},
 ]
 
 
@@ -1292,14 +1293,15 @@ const modelInfo = id => MODELS.find(m => m.id === id);
    with an "anthropic" default, which silently mis-routed any id that did not
    start with claude/kimi/gpt — "stealth/ox-alpha" went to Anthropic and came
    back as a 400. Prefix matching is kept only as a fallback for the brief
-   window before /ui/models resolves. */
+   window before /ui/models resolves, so it tracks the OpenRouter ids actually
+   in the catalog — z-ai/... since the stealth slug was retired 2026-08-26. */
 const providerFor = m => {
   const info = modelInfo(m);
   if (info && info.provider) return info.provider;
   return m.startsWith("claude") ? "anthropic"
     : m.startsWith("kimi") ? "moonshot"
     : m.startsWith("gpt") ? "openai"
-    : m.startsWith("stealth/") ? "openrouter" : "anthropic";
+    : m.startsWith("z-ai/") ? "openrouter" : "anthropic";
 };
 const modelLabel = id => (modelInfo(id) || {}).label || id;
 

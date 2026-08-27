@@ -93,6 +93,26 @@ def test_public_rates_unknown_model_is_none():
     assert g.public_rates("anthropic", "no-such-model") is None
 
 
+def test_every_picker_model_is_priced_and_servable():
+    """Every row the console offers must resolve a rate.
+
+    The picker is built from chat_ui.MODEL_CATALOG and priced through
+    public_rates, so an id missing from COST_TABLE shows a blank rate — and an
+    id that drifted from what the provider serves is worse than blank: the
+    "stealth/ox-alpha" row outlived its preview slug and 404'd at OpenRouter
+    for anyone who picked it. Pinning the catalog to the biller catches both.
+    """
+    os.environ.setdefault("BRIDGE_API_KEY", "testkey")
+    os.environ.setdefault("UI_PASSWORD", "123456")
+    os.environ.setdefault("UI_SESSION_SECRET", "test-secret")
+    import chat_ui
+
+    for m in chat_ui.MODEL_CATALOG:
+        assert g.public_rates(m["provider"], m["id"]) is not None, (
+            f'{m["provider"]}/{m["id"]} is in the picker but not in COST_TABLE'
+        )
+
+
 # ── streaming ───────────────────────────────────────────────────────────────
 
 def test_streaming_payload_matches_blocking_payload():
