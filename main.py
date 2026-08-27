@@ -121,6 +121,14 @@ try:
 except Exception as _aws_routes_err:  # pragma: no cover
     print(f"[aws] routes not mounted: {_aws_routes_err}", flush=True)
 
+# Pinned EC2 provisioning. Separate try so a fault here cannot unmount the
+# read-only S3 routes above — they are the ones something else depends on.
+try:
+    from aws_compute_routes import aws_compute_router
+    app.include_router(aws_compute_router)
+except Exception as _aws_compute_err:  # pragma: no cover
+    print(f"[aws-compute] routes not mounted: {_aws_compute_err}", flush=True)
+
 # Watchdog status / manual-trigger routes (auth-gated like everything else).
 app.include_router(watchdog_router)
 
