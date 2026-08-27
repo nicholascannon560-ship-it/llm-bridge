@@ -456,7 +456,36 @@ async def iam_probe():
     probe("iam:ListAttachedUserPolicies",
           lambda: iam.list_attached_user_policies(
               UserName=(iam.get_user().get("User") or {}).get("UserName", "")))
-    return {"probes": out}
+
+    # The reads that actually explain a NoCredentials box: does the profile
+    # contain the role, and does the role carry any policy at all?
+    detail = {}
+    try:
+        p = iam.get_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE)
+        roles = [r.get("RoleName") for r in
+                 (p.get("InstanceProfile") or {}).get("Roles") or []]
+        detail["profile_roles"] = roles
+    except Exception as e:
+        detail["profile_roles"] = "ERR " + str(e)[:200]
+    try:
+        detail["role_inline_policies"] = iam.list_role_policies(
+            RoleName=BOOTSTRAP_ROLE).get("PolicyNames")
+    except Exception as e:
+        detail["role_inline_policies"] = "ERR " + str(e)[:200]
+    try:
+        detail["role_attached_policies"] = [
+            a.get("PolicyName") for a in iam.list_attached_role_policies(
+                RoleName=BOOTSTRAP_ROLE).get("AttachedPolicies") or []]
+    except Exception as e:
+        detail["role_attached_policies"] = "ERR " + str(e)[:200]
+    try:
+        u = (iam.get_user().get("User") or {}).get("UserName", "")
+        detail["user_inline_policies"] = iam.list_user_policies(
+            UserName=u).get("PolicyNames")
+    except Exception as e:
+        detail["user_inline_policies"] = "ERR " + str(e)[:200]
+
+    return {"probes": out, "detail": detail}
 
 
 @aws_compute_router.post(
