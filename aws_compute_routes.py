@@ -404,6 +404,61 @@ def _instance_policy(region: str, bucket: str) -> str:
     })
 
 
+@aws_compute_router.get(
+    "/aws/whoami",
+    summary="Which AWS principal the bridge is actually using",
+)
+async def whoami():
+    """Read-only. Exists because 'the key has admin' and 'AWS said
+    AccessDenied' cannot both be true, and guessing which one is wrong wastes
+    more time than one STS call."""
+    sts = _client("sts")
+    try:
+        ident = sts.get_caller_identity()
+    except Exception as e:
+        raise _fail(e)
+    return {
+        "account": ident.get("Account"),
+        "arn": ident.get("Arn"),
+        "user_id": ident.get("UserId"),
+        "region": os.getenv("AWS_DEFAULT_REGION"),
+    }
+
+
+@aws_compute_router.get(
+    "/aws/compute/iam_probe",
+    summary="Report the RAW AWS error for each IAM call bootstrap needs",
+)
+async def iam_probe():
+    """Calls each IAM action in a way that cannot mutate anything, and returns
+    AWS's full message rather than a collapsed error code. AWS names the exact
+    principal and action in its denial text, which is the fact needed to tell a
+    missing permission apart from a different identity than expected."""
+    iam = _client("iam")
+    out = []
+
+    def probe(label, fn):
+        try:
+            fn()
+            out.append({"action": label, "result": "allowed"})
+        except Exception as e:
+            err = getattr(e, "response", {}).get("Error", {})
+            out.append({
+                "action": label,
+                "code": err.get("Code"),
+                "message": (err.get("Message") or str(e))[:400],
+            })
+
+    probe("iam:GetUser", lambda: iam.get_user())
+    probe("iam:GetRole/kalshiml-prod", lambda: iam.get_role(RoleName=BOOTSTRAP_ROLE))
+    probe("iam:GetInstanceProfile/kalshiml-prod",
+          lambda: iam.get_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE))
+    probe("iam:ListAttachedUserPolicies",
+          lambda: iam.list_attached_user_policies(
+              UserName=(iam.get_user().get("User") or {}).get("UserName", "")))
+    return {"probes": out}
+
+
 @aws_compute_router.post(
     "/aws/bootstrap/compute",
     summary="Create the instance role + profile (operator only, idempotent)",
@@ -431,7 +486,10 @@ async def bootstrap_compute():
         steps.append({"step": "create_role", "result": "created"})
     except Exception as e:
         if not _exists(e):
-            raise _fail(e)
+            err = getattr(e, "response", {}).get("Error", {})
+            # AWS names the principal and the action in its denial text. Keep it.
+            raise HTTPException(502, "create_role failed: %s: %s" % (
+                err.get("Code"), (err.get("Message") or str(e))[:500]))
         steps.append({"step": "create_role", "result": "already exists"})
 
     try:
