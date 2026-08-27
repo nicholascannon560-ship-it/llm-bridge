@@ -471,4 +471,49 @@ async def bootstrap_compute():
                  "with dry_run=true" % BOOTSTRAP_PROFILE),
     }
 
+
+# --------------------------------------------------------------------------- #
+# Console output — the diagnostic path that should have shipped with provision.
+#
+# Launching a box with no way to read its boot log means a failed bootstrap is
+# invisible: no SSH key, no console, nothing but "running" and silence. This
+# reads the instance's serial console, which needs no key, no network path to
+# the box, and no agent installed on it. Pinned to the same tag as everything
+# else, so it cannot be aimed at an arbitrary instance id.
+
+
+@aws_compute_router.get(
+    "/aws/compute/console",
+    summary="Serial console output for the pinned instance (boot log)",
+)
+async def console(tail: int = 20000):
+    import base64
+
+    name = _name_tag()
+    ec2 = _client("ec2")
+    inst = _find_existing(ec2, name)
+    if inst is None:
+        raise HTTPException(404, f"no instance tagged {name!r}")
+    iid = inst.get("InstanceId")
+    try:
+        resp = ec2.get_console_output(InstanceId=iid, Latest=True)
+    except Exception as e:
+        raise _fail(e)
+    raw = resp.get("Output") or ""
+    try:
+        text = base64.b64decode(raw).decode("utf-8", "replace")
+    except Exception:
+        # Some responses come back already decoded; fall back rather than 500.
+        text = raw
+    tail = max(1000, min(int(tail), 200000))
+    truncated = len(text) > tail
+    return {
+        "instance_id": iid,
+        "state": (inst.get("State") or {}).get("Name"),
+        "timestamp": str(resp.get("Timestamp") or ""),
+        "truncated": truncated,
+        "bytes": len(text),
+        "output": text[-tail:],
+    }
+
 # deploy-trigger: watchPatterns fixed 2026-08-27
