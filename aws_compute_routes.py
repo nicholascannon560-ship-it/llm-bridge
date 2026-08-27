@@ -470,3 +470,5 @@ async def bootstrap_compute():
                  "AWS_COMPUTE_BOOTSTRAP_ENABLED, then POST /aws/compute/provision "
                  "with dry_run=true" % BOOTSTRAP_PROFILE),
     }
+
+# deploy-trigger: watchPatterns fixed 2026-08-27
