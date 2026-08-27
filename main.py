@@ -129,6 +129,14 @@ try:
 except Exception as _aws_compute_err:  # pragma: no cover
     print(f"[aws-compute] routes not mounted: {_aws_compute_err}", flush=True)
 
+# Write-only SSM under one pinned prefix. There is deliberately no read route;
+# see aws_ssm_routes.py for why write and read are not symmetric here.
+try:
+    from aws_ssm_routes import aws_ssm_router
+    app.include_router(aws_ssm_router)
+except Exception as _aws_ssm_err:  # pragma: no cover
+    print(f"[aws-ssm] routes not mounted: {_aws_ssm_err}", flush=True)
+
 # Watchdog status / manual-trigger routes (auth-gated like everything else).
 app.include_router(watchdog_router)
 
