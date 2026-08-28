@@ -170,7 +170,13 @@ def _registered(instance_id: str) -> bool:
             Filters=[{"Key": "InstanceIds", "Values": [instance_id]}])
     except Exception as e:
         raise _fail(e)
-    return bool(resp.get("InstanceInformationList"))
+    info = resp.get("InstanceInformationList") or []
+    if not info:
+        return False
+    # Presence is not liveness. A terminated or starved box keeps its record
+    # for a while with PingStatus ConnectionLost, and reporting that as
+    # "registered" sent me chasing a healthy-looking box that was OOM-looping.
+    return info[0].get("PingStatus") == "Online"
 
 
 # --------------------------------------------------------------------------- #
