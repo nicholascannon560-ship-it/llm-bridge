@@ -137,6 +137,15 @@ try:
 except Exception as _aws_ssm_err:  # pragma: no cover
     print(f"[aws-ssm] routes not mounted: {_aws_ssm_err}", flush=True)
 
+# Remote control of the pinned instance via SSM Run Command. Separate try for
+# the same reason as the others: this is the newest surface and the most
+# consequential, so a fault in it must not take the read-only routes with it.
+try:
+    from aws_exec_routes import aws_exec_router
+    app.include_router(aws_exec_router)
+except Exception as _aws_exec_err:  # pragma: no cover
+    print(f"[aws-exec] routes not mounted: {_aws_exec_err}", flush=True)
+
 # Watchdog status / manual-trigger routes (auth-gated like everything else).
 app.include_router(watchdog_router)
 
