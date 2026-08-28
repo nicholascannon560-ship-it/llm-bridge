@@ -394,6 +394,37 @@ def _instance_policy(region: str, bucket: str) -> str:
                 "Resource": f"arn:aws:s3:::{bucket}/{BOOTSTRAP_S3_PREFIX}/*",
             },
             {
+                # Lets the SSM agent register so Run Command can reach the box.
+                # This is what /aws/exec depends on. It grants the agent's own
+                # channel actions only — no parameter or document writes, and
+                # nothing that lets the box act on other instances.
+                "Sid": "SsmAgentRegistration",
+                "Effect": "Allow",
+                "Action": [
+                    "ssm:UpdateInstanceInformation",
+                    "ssm:ListAssociations",
+                    "ssm:ListInstanceAssociations",
+                    "ssm:DescribeAssociation",
+                    "ssm:GetDocument",
+                    "ssm:DescribeDocument",
+                    "ssm:GetManifest",
+                    "ssm:PutInventory",
+                    "ssm:UpdateAssociationStatus",
+                    "ssm:UpdateInstanceAssociationStatus",
+                    "ssmmessages:CreateControlChannel",
+                    "ssmmessages:CreateDataChannel",
+                    "ssmmessages:OpenControlChannel",
+                    "ssmmessages:OpenDataChannel",
+                    "ec2messages:AcknowledgeMessage",
+                    "ec2messages:DeleteMessage",
+                    "ec2messages:FailMessage",
+                    "ec2messages:GetEndpoint",
+                    "ec2messages:GetMessages",
+                    "ec2messages:SendReply",
+                ],
+                "Resource": "*",
+            },
+            {
                 # The box backs up. It never removes a backup — losing the only
                 # off-box copy is the failure this exists to prevent.
                 "Sid": "NeverDelete",
