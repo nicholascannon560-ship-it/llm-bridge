@@ -311,6 +311,33 @@ async def reboot():
 
 
 @aws_exec_router.post(
+    "/aws/exec/terminate",
+    summary="Terminate the pinned box (requires echoing its id back)",
+)
+async def terminate(req: TerminateRequest):
+    """aws_compute_routes deliberately has no teardown verb, on the reasoning
+    that destroying things should be a console action. That held until the
+    bridge could launch instances but not stop them, which just means paying
+    for broken boxes. So: allowed, but the caller must name the instance it
+    intends to destroy, and that name must match the pinned box. No blind call
+    can take anything down."""
+    _enabled()
+    instance_id = _target_instance_id()
+    if req.confirm_instance_id != instance_id:
+        raise HTTPException(
+            409,
+            f"confirm_instance_id does not match the pinned instance "
+            f"({instance_id}). Nothing was terminated.",
+        )
+    ec2 = _client("ec2")
+    try:
+        ec2.terminate_instances(InstanceIds=[instance_id])
+    except Exception as e:
+        raise _fail(e)
+    return {"instance_id": instance_id, "terminating": True}
+
+
+@aws_exec_router.post(
     "/aws/exec/raw",
     summary="Run an arbitrary shell command (second flag, operator only)",
 )
