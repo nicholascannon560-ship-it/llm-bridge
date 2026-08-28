@@ -280,6 +280,26 @@ async def run_verb(req: VerbRequest):
 
 
 @aws_exec_router.post(
+    "/aws/exec/reboot",
+    summary="Reboot the pinned box (EC2-level, no agent required)",
+)
+async def reboot():
+    """The escape hatch for the bootstrap paradox: if the SSM agent is wedged,
+    every verb above is unreachable, and restarting the agent is exactly what
+    is needed. This goes through the EC2 control plane instead, so it works
+    when the agent does not. Gated by AWS_EXEC_ENABLED like the verbs."""
+    _enabled()
+    instance_id = _target_instance_id()
+    ec2 = _client("ec2")
+    try:
+        ec2.reboot_instances(InstanceIds=[instance_id])
+    except Exception as e:
+        raise _fail(e)
+    return {"instance_id": instance_id, "rebooting": True,
+            "note": "give the agent 2-4 minutes, then re-check /aws/exec/probe"}
+
+
+@aws_exec_router.post(
     "/aws/exec/raw",
     summary="Run an arbitrary shell command (second flag, operator only)",
 )
