@@ -113,6 +113,11 @@ class VerbRequest(BaseModel):
     timeout_s: int = Field(DEFAULT_TIMEOUT_S, ge=5, le=MAX_TIMEOUT_S)
 
 
+class TerminateRequest(BaseModel):
+    confirm_instance_id: str = Field(
+        ..., description="Must equal the pinned instance id. Guard, not target.")
+
+
 class RawRequest(BaseModel):
     command: str = Field(..., min_length=1, max_length=8000)
     timeout_s: int = Field(DEFAULT_TIMEOUT_S, ge=5, le=MAX_TIMEOUT_S)
