@@ -707,9 +707,9 @@ async def bootstrap_compute(target: Optional[str] = None):
         steps.append({"step": "create_role", "result": "already exists"})
 
     try:
-        iam.put_role_policy(RoleName=BOOTSTRAP_ROLE,
-                            PolicyName="kalshiml-prod-instance",
-                            PolicyDocument=_instance_policy(region, bucket))
+        iam.put_role_policy(RoleName=role_name,
+                            PolicyName=f"{role_name}-instance",
+                            PolicyDocument=_instance_policy(region, bucket, tgt))
         steps.append({"step": "put_role_policy", "result": "written"})
     except Exception as e:
         raise _fail(e)
