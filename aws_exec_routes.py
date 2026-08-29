@@ -132,19 +132,28 @@ VERBS_TAKING_N = {"logs", "bootstrap_log"}
 
 
 class VerbRequest(BaseModel):
-    verb: str = Field(..., description=f"One of: {', '.join(sorted(VERBS))}")
+    verb: str = Field(..., description=f"One of: {', '.join(VERB_NAMES)}")
     n: int = Field(50, ge=1, le=2000, description="Line count for log verbs.")
     timeout_s: int = Field(DEFAULT_TIMEOUT_S, ge=5, le=MAX_TIMEOUT_S)
+    target: Optional[str] = Field(
+        None,
+        description="Which machine to run on. Omit for the default "
+                    "(kalshiml). A name from TARGETS, never an instance id.",
+    )
 
 
 class TerminateRequest(BaseModel):
     confirm_instance_id: str = Field(
         ..., description="Must equal the pinned instance id. Guard, not target.")
+    target: Optional[str] = Field(
+        None, description="Which machine. The confirm guard still applies.")
 
 
 class RawRequest(BaseModel):
     command: str = Field(..., min_length=1, max_length=8000)
     timeout_s: int = Field(DEFAULT_TIMEOUT_S, ge=5, le=MAX_TIMEOUT_S)
+    target: Optional[str] = Field(
+        None, description="Which machine. Omit for the default (kalshiml).")
 
 
 # --------------------------------------------------------------------------- #
