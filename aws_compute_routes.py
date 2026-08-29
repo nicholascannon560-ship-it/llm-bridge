@@ -288,8 +288,9 @@ def _view(inst: dict) -> dict:
 )
 async def provision(req: ProvisionRequest):
     _enabled()
-    name = _name_tag()
-    itype = _instance_type()
+    tgt = _target(req.target)
+    name = _name_tag(tgt)
+    itype = _instance_type(tgt)
     ec2 = _client("ec2")
 
     existing = _find_existing(ec2, name)
