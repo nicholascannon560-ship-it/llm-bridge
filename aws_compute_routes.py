@@ -152,8 +152,37 @@ def _fail(e: Exception) -> HTTPException:
     return _boto_error(e)
 
 
-def _instance_type() -> str:
-    t = (os.getenv("AWS_COMPUTE_INSTANCE_TYPE") or DEFAULT_INSTANCE_TYPE).strip()
+def _target(name: Optional[str]) -> str:
+    """Validate a target name against the table. None means the default."""
+    t = (name or DEFAULT_TARGET).strip().lower()
+    if t not in TARGETS:
+        raise HTTPException(
+            400,
+            f"unknown target {t!r} — this list is code, not config: "
+            f"{sorted(TARGETS)}",
+        )
+    return t
+
+
+def target_profile(name: Optional[str]) -> dict:
+    """Public accessor: aws_exec_routes builds its verb table from this."""
+    return TARGETS[_target(name)]
+
+
+def _env_for(target: str, base: str) -> str:
+    """Read a per-target env var.
+
+    The default target keeps the UNSUFFIXED name so nothing already deployed
+    has to be re-set; anything else reads BASE_<TARGET>. Returns "" when unset
+    so callers keep their existing `or DEFAULT` fallbacks.
+    """
+    key = base if target == DEFAULT_TARGET else f"{base}_{target.upper()}"
+    return (os.getenv(key) or "").strip()
+
+
+def _instance_type(target: Optional[str] = None) -> str:
+    tgt = _target(target)
+    t = _env_for(tgt, "AWS_COMPUTE_INSTANCE_TYPE") or DEFAULT_INSTANCE_TYPE
     if t not in ALLOWED_INSTANCE_TYPES:
         raise HTTPException(
             400,
@@ -163,12 +192,14 @@ def _instance_type() -> str:
     return t
 
 
-def _name_tag() -> str:
-    return (os.getenv("AWS_COMPUTE_NAME_TAG") or DEFAULT_NAME_TAG).strip()
+def _name_tag(target: Optional[str] = None) -> str:
+    tgt = _target(target)
+    return _env_for(tgt, "AWS_COMPUTE_NAME_TAG") or TARGETS[tgt]["name_tag"]
 
 
-def _volume_gb() -> int:
-    raw = (os.getenv("AWS_COMPUTE_VOLUME_GB") or "").strip()
+def _volume_gb(target: Optional[str] = None) -> int:
+    tgt = _target(target)
+    raw = _env_for(tgt, "AWS_COMPUTE_VOLUME_GB")
     try:
         gb = int(raw) if raw else DEFAULT_VOLUME_GB
     except ValueError:
