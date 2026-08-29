@@ -63,42 +63,66 @@ except Exception:  # pragma: no cover
     _boto_error = None
 
 try:
-    from aws_compute_routes import _find_existing, _name_tag
+    from aws_compute_routes import (
+        DEFAULT_TARGET, TARGETS, _find_existing, _name_tag, target_profile,
+    )
 except Exception:  # pragma: no cover
     _find_existing = None
     _name_tag = None
+    target_profile = None
+    TARGETS = {}
+    DEFAULT_TARGET = "kalshiml"
+
 
 aws_exec_router = APIRouter(tags=["aws"])
-
-SERVICE = "kalshiml"
-REPO_DIR = "/opt/kalshiml"
-ENV_FILE = "/etc/kalshiml.env"
 
 DEFAULT_TIMEOUT_S = 60
 MAX_TIMEOUT_S = 300
 MAX_OUTPUT_CHARS = 24000
 
-# The verb table is code on purpose. Adding a capability here is a commit and a
-# deploy, which is the point — it means the set cannot drift at runtime.
-VERBS: dict[str, str] = {
-    "logs": f"journalctl -u {SERVICE} -n {{n}} --no-pager",
-    "logs_follow_tail": f"journalctl -u {SERVICE} --since '10 min ago' --no-pager",
-    "status": f"systemctl status {SERVICE} --no-pager || true",
-    "is_active": f"systemctl is-active {SERVICE} || true",
-    "restart": f"systemctl restart {SERVICE} && sleep 3 && systemctl is-active {SERVICE}",
-    "start": f"systemctl start {SERVICE} && sleep 3 && systemctl is-active {SERVICE}",
-    "stop": f"systemctl stop {SERVICE} && systemctl is-active {SERVICE} || true",
-    "disk": "df -h / /var/lib 2>/dev/null; echo '--- largest ---'; "
-            "du -sh /var/lib/kalshiml/* 2>/dev/null | sort -h | tail -15",
-    "mem": "free -m; echo '--- top ---'; ps aux --sort=-%mem | head -8",
-    # Names only. Never values — see module docstring.
-    "env": f"cut -d= -f1 {ENV_FILE} 2>/dev/null | sort",
-    "git": f"cd {REPO_DIR} && git log --oneline -5 && git status --short | head -20",
-    "update": f"cd {REPO_DIR} && git pull --ff-only && systemctl restart {SERVICE} "
-              f"&& sleep 3 && systemctl is-active {SERVICE}",
-    "bootstrap_log": "tail -n {n} /var/log/kalshiml-bootstrap.log",
-    "uptime": "uptime; echo '--- boot ---'; who -b",
-}
+
+def _verbs(target: Optional[str] = None) -> dict:
+    """Build the verb table for one target.
+
+    WHY THIS IS A FUNCTION NOW
+      It used to be a module-level dict interpolating a hardcoded
+      SERVICE = "kalshiml". With a second box that is worse than useless: the
+      name tag would resolve to the nowcaster while every command still said
+      `systemctl restart kalshiml`, so each verb would run against a unit that
+      does not exist and report a confident, meaningless result. Paths and
+      unit names belong to the machine, so they come from its profile.
+
+      Still code, not config. The set of verbs is fixed at deploy time; only
+      which box's paths they name can vary, and only across TARGETS.
+    """
+    if target_profile is None:  # pragma: no cover
+        raise HTTPException(503, "aws_compute_routes failed to import")
+    p = target_profile(target)
+    svc, repo, envf = p["service"], p["repo_dir"], p["env_file"]
+    data, blog = p["data_dir"], p["bootstrap_log"]
+    return {
+        "logs": f"journalctl -u {svc} -n {{n}} --no-pager",
+        "logs_follow_tail": f"journalctl -u {svc} --since '10 min ago' --no-pager",
+        "status": f"systemctl status {svc} --no-pager || true",
+        "is_active": f"systemctl is-active {svc} || true",
+        "restart": f"systemctl restart {svc} && sleep 3 && systemctl is-active {svc}",
+        "start": f"systemctl start {svc} && sleep 3 && systemctl is-active {svc}",
+        "stop": f"systemctl stop {svc} && systemctl is-active {svc} || true",
+        "disk": "df -h / /var/lib 2>/dev/null; echo '--- largest ---'; "
+                f"du -sh {data}/* 2>/dev/null | sort -h | tail -15",
+        "mem": "free -m; echo '--- top ---'; ps aux --sort=-%mem | head -8",
+        # Names only. Never values - see module docstring.
+        "env": f"cut -d= -f1 {envf} 2>/dev/null | sort",
+        "git": f"cd {repo} && git log --oneline -5 && git status --short | head -20",
+        "update": f"cd {repo} && git pull --ff-only && systemctl restart {svc} "
+                  f"&& sleep 3 && systemctl is-active {svc}",
+        "bootstrap_log": f"tail -n {{n}} {blog}",
+        "uptime": "uptime; echo '--- boot ---'; who -b",
+    }
+
+
+# Verb NAMES are identical across targets, so the advertised set stays stable.
+VERB_NAMES = sorted(_verbs(None)) if target_profile is not None else []
 
 VERBS_TAKING_N = {"logs", "bootstrap_log"}
 
