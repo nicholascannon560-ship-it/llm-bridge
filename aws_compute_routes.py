@@ -742,8 +742,8 @@ async def bootstrap_compute(target: Optional[str] = None):
         steps.append({"step": "add_role_to_profile", "result": "already linked"})
     else:
         try:
-            iam.add_role_to_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE,
-                                             RoleName=BOOTSTRAP_ROLE)
+            iam.add_role_to_instance_profile(InstanceProfileName=profile_name,
+                                             RoleName=role_name)
             steps.append({"step": "add_role_to_profile", "result": "attached"})
         except Exception as e:
             code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
