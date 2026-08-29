@@ -226,8 +226,8 @@ def _registered(instance_id: str) -> bool:
 # Execution
 
 
-def _run(command: str, timeout_s: int) -> dict:
-    instance_id = _target_instance_id()
+def _run(command: str, timeout_s: int, target: Optional[str] = None) -> dict:
+    instance_id = _target_instance_id(target)
     if not _registered(instance_id):
         raise HTTPException(
             409,
