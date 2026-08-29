@@ -751,15 +751,21 @@ async def bootstrap_compute(target: Optional[str] = None):
                 raise _fail(e)
             steps.append({"step": "add_role_to_profile", "result": "already attached"})
 
+    env_var = ("AWS_COMPUTE_IAM_PROFILE" if tgt == DEFAULT_TARGET
+               else f"AWS_COMPUTE_IAM_PROFILE_{tgt.upper()}")
     return {
-        "role": BOOTSTRAP_ROLE,
-        "instance_profile": BOOTSTRAP_PROFILE,
+        "target": tgt,
+        "role": role_name,
+        "instance_profile": profile_name,
         "region": region,
         "bucket": bucket,
+        "s3_read_prefixes": TARGETS[tgt]["s3_prefix_read"],
+        "s3_write_prefix": TARGETS[tgt]["s3_prefix_write"],
+        "ssm_path": TARGETS[tgt]["ssm_path"],
         "steps": steps,
-        "next": ("set AWS_COMPUTE_IAM_PROFILE=%s, unset "
-                 "AWS_COMPUTE_BOOTSTRAP_ENABLED, then POST /aws/compute/provision "
-                 "with dry_run=true" % BOOTSTRAP_PROFILE),
+        "next": ("set %s=%s, unset AWS_COMPUTE_BOOTSTRAP_ENABLED, then POST "
+                 "/aws/compute/provision with dry_run=true and target=%s"
+                 % (env_var, profile_name, tgt)),
     }
 
 
