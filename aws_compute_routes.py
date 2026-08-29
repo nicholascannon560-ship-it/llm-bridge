@@ -615,9 +615,9 @@ async def iam_probe():
             })
 
     probe("iam:GetUser", lambda: iam.get_user())
-    probe("iam:GetRole/kalshiml-prod", lambda: iam.get_role(RoleName=BOOTSTRAP_ROLE))
-    probe("iam:GetInstanceProfile/kalshiml-prod",
-          lambda: iam.get_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE))
+    probe(f"iam:GetRole/{role_name}", lambda: iam.get_role(RoleName=role_name))
+    probe(f"iam:GetInstanceProfile/{profile_name}",
+          lambda: iam.get_instance_profile(InstanceProfileName=profile_name))
     probe("iam:ListAttachedUserPolicies",
           lambda: iam.list_attached_user_policies(
               UserName=(iam.get_user().get("User") or {}).get("UserName", "")))
