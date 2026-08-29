@@ -382,13 +382,30 @@ async def provision(req: ProvisionRequest):
     "/aws/compute/status",
     summary="State and address of the pinned instance",
 )
-async def status():
-    name = _name_tag()
+async def status(target: Optional[str] = None, all: bool = False):
+    """Report one target, or every target at once with ?all=true.
+
+    The `all` view exists because the single-box assumption is exactly what
+    made two boxes dangerous: an operator who can only ever see one machine
+    will eventually act on the wrong one.
+    """
     ec2 = _client("ec2")
+    if all:
+        out = {}
+        for tname in sorted(TARGETS):
+            nm = _name_tag(tname)
+            inst = _find_existing(ec2, nm)
+            out[tname] = ({"exists": False, "name_tag": nm} if inst is None
+                          else {"exists": True, "name_tag": nm,
+                                "instance": _view(inst)})
+        return {"targets": out, "default_target": DEFAULT_TARGET}
+    tgt = _target(target)
+    name = _name_tag(tgt)
     inst = _find_existing(ec2, name)
     if inst is None:
-        return {"exists": False, "name_tag": name}
-    return {"exists": True, "name_tag": name, "instance": _view(inst)}
+        return {"exists": False, "name_tag": name, "target": tgt}
+    return {"exists": True, "name_tag": name, "target": tgt,
+            "instance": _view(inst)}
 
 
 # --------------------------------------------------------------------------- #
