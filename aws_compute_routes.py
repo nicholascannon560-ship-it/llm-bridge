@@ -316,7 +316,7 @@ async def provision(req: ProvisionRequest):
         "BlockDeviceMappings": [{
             "DeviceName": "/dev/sda1",
             "Ebs": {
-                "VolumeSize": _volume_gb(),
+                "VolumeSize": _volume_gb(tgt),
                 "VolumeType": "gp3",
                 "DeleteOnTermination": True,
                 "Encrypted": True,
