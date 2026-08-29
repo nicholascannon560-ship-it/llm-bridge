@@ -694,9 +694,9 @@ async def bootstrap_compute(target: Optional[str] = None):
             "Code", "") == "EntityAlreadyExists"
 
     try:
-        iam.create_role(RoleName=BOOTSTRAP_ROLE,
+        iam.create_role(RoleName=role_name,
                         AssumeRolePolicyDocument=_trust_policy(),
-                        Description="KalshiML production instance role")
+                        Description=f"{tgt} production instance role")
         steps.append({"step": "create_role", "result": "created"})
     except Exception as e:
         if not _exists(e):
