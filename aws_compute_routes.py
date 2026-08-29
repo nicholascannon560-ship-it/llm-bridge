@@ -74,6 +74,46 @@ ALLOWED_INSTANCE_TYPES = frozenset({
 })
 DEFAULT_INSTANCE_TYPE = "t3.small"
 DEFAULT_NAME_TAG = "kalshiml-engine"
+
+# --------------------------------------------------------------------------- #
+# Targets
+#
+# WHY THIS TABLE EXISTS
+#   Everything here used to resolve through ONE global, AWS_COMPUTE_NAME_TAG,
+#   shared with aws_exec_routes. That was fine with one box and actively
+#   dangerous with two: pointing the bridge at a second instance silently
+#   retargeted every exec verb -- stop, restart, update -- away from the live
+#   trading engine. A name tag is not a safe place to keep "which machine am I
+#   operating".
+#
+#   So a target is now an explicit, named, code-defined profile. It is a
+#   table and not config for the same reason ALLOWED_INSTANCE_TYPES is: an
+#   operator who can set env still cannot invent a machine for the bridge to
+#   drive, and a caller cannot pass an instance id.
+#
+#   The kalshiml entry keeps the UNSUFFIXED env vars so existing deployment
+#   config keeps working untouched; every other target reads a _<TARGET>
+#   suffixed variant. Omitting `target` anywhere resolves to kalshiml, so the
+#   pre-existing behaviour of every route is byte-for-byte unchanged.
+TARGETS: dict[str, dict] = {
+    "kalshiml": {
+        "name_tag": "kalshiml-engine",
+        "service": "kalshiml",
+        "repo_dir": "/opt/kalshiml",
+        "env_file": "/etc/kalshiml.env",
+        "data_dir": "/var/lib/kalshiml",
+        "bootstrap_log": "/var/log/kalshiml-bootstrap.log",
+    },
+    "nowcaster": {
+        "name_tag": "nowcaster-engine",
+        "service": "nowcaster",
+        "repo_dir": "/opt/nowcaster",
+        "env_file": "/etc/nowcaster.env",
+        "data_dir": "/var/lib/nowcaster",
+        "bootstrap_log": "/var/log/nowcaster-bootstrap.log",
+    },
+}
+DEFAULT_TARGET = "kalshiml"
 DEFAULT_AMI_SSM_PARAM = (
     "/aws/service/canonical/ubuntu/server/24.04/stable/current/"
     "amd64/hvm/ebs-gp3/ami-id"
