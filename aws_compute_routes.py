@@ -494,7 +494,7 @@ def _instance_policy(region: str, bucket: str, target: Optional[str] = None) -> 
                 "Effect": "Allow",
                 "Action": ["ssm:GetParameter", "ssm:GetParameters",
                            "ssm:GetParametersByPath"],
-                "Resource": f"arn:aws:ssm:{region}:*:parameter/{BOOTSTRAP_SSM_PATH}/*",
+                "Resource": f"arn:aws:ssm:{region}:*:parameter/{ssm_path}/*",
             },
             {
                 "Sid": "DecryptOwnSecrets",
