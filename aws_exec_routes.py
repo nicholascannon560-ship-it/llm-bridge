@@ -346,13 +346,14 @@ async def reboot(target: Optional[str] = None):
     is needed. This goes through the EC2 control plane instead, so it works
     when the agent does not. Gated by AWS_EXEC_ENABLED like the verbs."""
     _enabled()
-    instance_id = _target_instance_id()
+    instance_id = _target_instance_id(target)
     ec2 = _client("ec2")
     try:
         ec2.reboot_instances(InstanceIds=[instance_id])
     except Exception as e:
         raise _fail(e)
-    return {"instance_id": instance_id, "rebooting": True,
+    return {"instance_id": instance_id,
+            "target": (target or DEFAULT_TARGET), "rebooting": True,
             "note": "give the agent 2-4 minutes, then re-check /aws/exec/probe"}
 
 
