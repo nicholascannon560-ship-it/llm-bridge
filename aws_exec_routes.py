@@ -190,11 +190,16 @@ def _fail(e: Exception) -> HTTPException:
     return _boto_error(e)
 
 
-def _target_instance_id() -> str:
-    """Resolve the pinned box. Never accepts an id from the caller."""
+def _target_instance_id(target: Optional[str] = None) -> str:
+    """Resolve a named target to an instance id.
+
+    Still never accepts an id from the caller: `target` is a key into the
+    TARGETS table, which is code. The caller chooses WHICH machine, not what
+    a machine is.
+    """
     if _find_existing is None or _name_tag is None:  # pragma: no cover
         raise HTTPException(503, "aws_compute_routes failed to import")
-    name = _name_tag()
+    name = _name_tag(target)
     inst = _find_existing(_client("ec2"), name)
     if not inst:
         raise HTTPException(404, f"no running instance tagged Name={name}")
