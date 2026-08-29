@@ -178,8 +178,8 @@ async def ssm_put(req: PutRequest):
     "/aws/ssm/list",
     summary="Names under the pinned prefix — never values",
 )
-async def ssm_list():
-    pin = _prefix()
+async def ssm_list(target: str = None):
+    pin = _prefix(target)
     ssm = _client()
     try:
         resp = ssm.describe_parameters(ParameterFilters=[
