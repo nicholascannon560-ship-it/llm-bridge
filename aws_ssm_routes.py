@@ -111,7 +111,7 @@ def _safe_name(name: str, target=None) -> str:
         raise HTTPException(400, "name must not contain '..'")
     if not NAME_RE.match(n):
         raise HTTPException(400, "name has characters outside [A-Za-z0-9_.-/]")
-    pin = _prefix()
+    pin = _prefix(target)
     if not n.startswith(pin):
         raise HTTPException(403, f"name must start with the pinned prefix {pin!r}")
     if n.endswith("/"):
