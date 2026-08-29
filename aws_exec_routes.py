@@ -284,25 +284,31 @@ def _run(command: str, timeout_s: int, target: Optional[str] = None) -> dict:
     "/aws/exec/probe",
     summary="Is the pinned box reachable by Run Command? (read-only)",
 )
-async def probe():
+async def probe(target: Optional[str] = None):
     """Deliberately ungated: answering 'can this work' reveals nothing and
     saves a round of guessing when it does not."""
+    tgt = (target or DEFAULT_TARGET)
+    common = {
+        "target": tgt,
+        "known_targets": sorted(TARGETS),
+        "exec_enabled": (os.getenv("AWS_EXEC_ENABLED") or "").strip() == "1",
+        "raw_enabled": (os.getenv("AWS_EXEC_RAW_ENABLED") or "").strip() == "1",
+        "verbs": VERB_NAMES,
+    }
     try:
-        instance_id = _target_instance_id()
+        instance_id = _target_instance_id(target)
     except HTTPException as e:
-        return {"ok": False, "stage": "instance", "detail": e.detail}
+        return {"ok": False, "stage": "instance", "detail": e.detail, **common}
     try:
         registered = _registered(instance_id)
     except HTTPException as e:
         return {"ok": False, "stage": "describe", "instance_id": instance_id,
-                "detail": e.detail}
+                "detail": e.detail, **common}
     return {
         "ok": registered,
         "instance_id": instance_id,
         "ssm_registered": registered,
-        "exec_enabled": (os.getenv("AWS_EXEC_ENABLED") or "").strip() == "1",
-        "raw_enabled": (os.getenv("AWS_EXEC_RAW_ENABLED") or "").strip() == "1",
-        "verbs": sorted(VERBS),
+        **common,
         "detail": None if registered else (
             "instance profile needs AmazonSSMManagedInstanceCore before the "
             "agent can register"),
