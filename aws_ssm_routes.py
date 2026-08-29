@@ -129,6 +129,9 @@ class PutRequest(BaseModel):
     overwrite: bool = Field(
         True, description="Replace an existing value. False fails if it exists."
     )
+    target: str = Field(
+        None, description="Machine profile whose SSM path to write under. "
+                          "Omit for the AWS_SSM_WRITE_PREFIX default.")
 
 
 @aws_ssm_router.post(
