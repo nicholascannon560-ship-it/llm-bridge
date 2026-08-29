@@ -140,7 +140,7 @@ class PutRequest(BaseModel):
 )
 async def ssm_put(req: PutRequest):
     _enabled()
-    name = _safe_name(req.name)
+    name = _safe_name(req.name, req.target)
     value = req.value or ""
     if not value:
         raise HTTPException(400, "value is empty — refusing to store a blank secret")
