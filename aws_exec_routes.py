@@ -321,16 +321,17 @@ async def probe(target: Optional[str] = None):
 )
 async def run_verb(req: VerbRequest):
     _enabled()
-    template = VERBS.get(req.verb)
+    verbs = _verbs(req.target)
+    template = verbs.get(req.verb)
     if template is None:
         raise HTTPException(
             400,
             f"unknown verb '{req.verb}' — this list is code, not config: "
-            f"{sorted(VERBS)}",
+            f"{sorted(verbs)}",
         )
     command = (template.format(n=req.n)
                if req.verb in VERBS_TAKING_N else template)
-    result = _run(command, req.timeout_s)
+    result = _run(command, req.timeout_s, req.target)
     result["verb"] = req.verb
     return result
 
