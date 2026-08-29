@@ -77,8 +77,23 @@ def _fail(e: Exception) -> HTTPException:
     return _boto_error(e)
 
 
-def _prefix() -> str:
-    p = (os.getenv("AWS_SSM_WRITE_PREFIX") or DEFAULT_WRITE_PREFIX).strip()
+def _prefix(target=None) -> str:
+    """The writable prefix for one target.
+
+    Target-aware for the same reason the compute and exec routes are: with a
+    second machine, a single global "which prefix may I write" is a setting
+    someone has to remember to flip, and the failure mode is writing one box's
+    secret into the other box's namespace. The path comes from the target's
+    own profile in TARGETS instead.
+    """
+    if target is None:
+        p = (os.getenv("AWS_SSM_WRITE_PREFIX") or DEFAULT_WRITE_PREFIX).strip()
+    else:
+        try:
+            from aws_compute_routes import target_profile
+        except Exception:
+            raise HTTPException(503, "aws_compute_routes failed to import")
+        p = target_profile(target)["ssm_path"]
     if not p.startswith("/"):
         p = "/" + p
     if not p.endswith("/"):
@@ -86,7 +101,7 @@ def _prefix() -> str:
     return p
 
 
-def _safe_name(name: str) -> str:
+def _safe_name(name: str, target=None) -> str:
     n = (name or "").strip()
     if not n:
         raise HTTPException(400, "name is required")
