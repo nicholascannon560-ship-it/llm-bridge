@@ -334,16 +334,18 @@ async def provision(req: ProvisionRequest):
     }
     if user_data:
         kwargs["UserData"] = user_data
-    subnet = (os.getenv("AWS_COMPUTE_SUBNET_ID") or "").strip()
+    subnet = _env_for(tgt, "AWS_COMPUTE_SUBNET_ID")
     if subnet:
         kwargs["SubnetId"] = subnet
-    sg = (os.getenv("AWS_COMPUTE_SECURITY_GROUP") or "").strip()
+    sg = _env_for(tgt, "AWS_COMPUTE_SECURITY_GROUP")
     if sg:
         kwargs["SecurityGroupIds"] = [sg]
-    profile = (os.getenv("AWS_COMPUTE_IAM_PROFILE") or "").strip()
+    # NOT shared across targets on purpose: the instance profile is the whole
+    # blast radius. The nowcaster must not inherit the trading engine's role.
+    profile = _env_for(tgt, "AWS_COMPUTE_IAM_PROFILE")
     if profile:
         kwargs["IamInstanceProfile"] = {"Name": profile}
-    key_name = (os.getenv("AWS_COMPUTE_KEY_NAME") or "").strip()
+    key_name = _env_for(tgt, "AWS_COMPUTE_KEY_NAME")
     if key_name:
         kwargs["KeyName"] = key_name
 
