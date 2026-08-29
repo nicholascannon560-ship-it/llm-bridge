@@ -715,7 +715,7 @@ async def bootstrap_compute(target: Optional[str] = None):
         raise _fail(e)
 
     try:
-        iam.create_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE)
+        iam.create_instance_profile(InstanceProfileName=profile_name)
         steps.append({"step": "create_instance_profile", "result": "created"})
     except Exception as e:
         if not _exists(e):
