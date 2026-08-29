@@ -361,6 +361,8 @@ async def provision(req: ProvisionRequest):
                     "image_id": kwargs["ImageId"],
                     "instance_type": itype,
                     "name_tag": name,
+                    "target": tgt,
+                    "iam_profile": kwargs.get("IamInstanceProfile", {}).get("Name"),
                     "volume_gb": kwargs["BlockDeviceMappings"][0]["Ebs"]["VolumeSize"],
                 }}
             raise _fail(e)
