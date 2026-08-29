@@ -369,7 +369,7 @@ async def terminate(req: TerminateRequest):
     intends to destroy, and that name must match the pinned box. No blind call
     can take anything down."""
     _enabled()
-    instance_id = _target_instance_id()
+    instance_id = _target_instance_id(req.target)
     if req.confirm_instance_id != instance_id:
         raise HTTPException(
             409,
