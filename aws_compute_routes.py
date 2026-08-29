@@ -626,7 +626,7 @@ async def iam_probe():
     # contain the role, and does the role carry any policy at all?
     detail = {}
     try:
-        p = iam.get_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE)
+        p = iam.get_instance_profile(InstanceProfileName=profile_name)
         roles = [r.get("RoleName") for r in
                  (p.get("InstanceProfile") or {}).get("Roles") or []]
         detail["profile_roles"] = roles
@@ -634,10 +634,10 @@ async def iam_probe():
         detail["profile_roles"] = "ERR " + str(e)[:200]
     try:
         detail["role_inline_policies"] = iam.list_role_policies(
-            RoleName=BOOTSTRAP_ROLE).get("PolicyNames")
+            RoleName=role_name).get("PolicyNames")
     except Exception as e:
         detail["role_inline_policies"] = "ERR " + str(e)[:200]
-    for probe_name in ("kml", BOOTSTRAP_PROFILE):
+    for probe_name in ("kml", profile_name):
         try:
             p = iam.get_instance_profile(InstanceProfileName=probe_name)
             detail["profile_" + probe_name] = [
