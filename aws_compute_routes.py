@@ -741,10 +741,10 @@ async def bootstrap_compute():
     "/aws/compute/console",
     summary="Serial console output for the pinned instance (boot log)",
 )
-async def console(tail: int = 20000):
+async def console(tail: int = 20000, target: Optional[str] = None):
     import base64
 
-    name = _name_tag()
+    name = _name_tag(_target(target))
     ec2 = _client("ec2")
     inst = _find_existing(ec2, name)
     if inst is None:
