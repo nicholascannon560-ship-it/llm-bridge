@@ -727,13 +727,13 @@ async def bootstrap_compute(target: Optional[str] = None):
     # already linked them, calling it anyway turns a finished job into a 502.
     already = False
     try:
-        p = iam.get_instance_profile(InstanceProfileName=BOOTSTRAP_PROFILE)
+        p = iam.get_instance_profile(InstanceProfileName=profile_name)
         linked = [r.get("RoleName") for r in
                   (p.get("InstanceProfile") or {}).get("Roles") or []]
-        already = BOOTSTRAP_ROLE in linked
+        already = role_name in linked
         if linked and not already:
             raise HTTPException(409, "profile %s already holds role %s, not %s"
-                                % (BOOTSTRAP_PROFILE, linked[0], BOOTSTRAP_ROLE))
+                                % (profile_name, linked[0], role_name))
     except HTTPException:
         raise
     except Exception:
