@@ -103,6 +103,12 @@ TARGETS: dict[str, dict] = {
         "env_file": "/etc/kalshiml.env",
         "data_dir": "/var/lib/kalshiml",
         "bootstrap_log": "/var/log/kalshiml-bootstrap.log",
+        "role": "kalshiml-prod",
+        "profile": "kalshiml-prod",
+        "ssm_path": "kalshiml/prod",
+        # Prefixes the instance role may READ. Write is s3_prefix_write only.
+        "s3_prefix_read": ["kalshiml"],
+        "s3_prefix_write": "kalshiml",
     },
     "nowcaster": {
         "name_tag": "nowcaster-engine",
@@ -111,6 +117,16 @@ TARGETS: dict[str, dict] = {
         "env_file": "/etc/nowcaster.env",
         "data_dir": "/var/lib/nowcaster",
         "bootstrap_log": "/var/log/nowcaster-bootstrap.log",
+        "role": "nowcaster-prod",
+        "profile": "nowcaster-prod",
+        "ssm_path": "nowcaster/prod",
+        # Asymmetric on purpose. During the parallel paper run the AWS box
+        # reads the live nowcast/ corpus but writes only to nowcast-staging/,
+        # so a misconfigured box on AWS physically cannot corrupt the data the
+        # Railway service is still serving from. Collapse these to one prefix
+        # at cutover, not before.
+        "s3_prefix_read": ["nowcast", "nowcast-staging"],
+        "s3_prefix_write": "nowcast-staging",
     },
 }
 DEFAULT_TARGET = "kalshiml"
