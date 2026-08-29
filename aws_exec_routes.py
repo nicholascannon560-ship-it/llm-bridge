@@ -391,6 +391,6 @@ async def terminate(req: TerminateRequest):
 async def run_raw(req: RawRequest):
     _enabled()
     _raw_enabled()
-    result = _run(req.command, req.timeout_s)
+    result = _run(req.command, req.timeout_s, req.target)
     result["raw"] = True
     return result
