@@ -674,8 +674,11 @@ async def iam_probe():
     "/aws/bootstrap/compute",
     summary="Create the instance role + profile (operator only, idempotent)",
 )
-async def bootstrap_compute():
+async def bootstrap_compute(target: Optional[str] = None):
     _compute_bootstrap_enabled()
+    tgt = _target(target)
+    role_name = _role_name(tgt)
+    profile_name = _profile_name(tgt)
     region = (os.getenv("AWS_DEFAULT_REGION") or "").strip()
     if not region:
         raise HTTPException(503, "AWS_DEFAULT_REGION is not set")
