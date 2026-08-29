@@ -594,11 +594,14 @@ async def whoami():
     "/aws/compute/iam_probe",
     summary="Report the RAW AWS error for each IAM call bootstrap needs",
 )
-async def iam_probe():
+async def iam_probe(target: Optional[str] = None):
     """Calls each IAM action in a way that cannot mutate anything, and returns
     AWS's full message rather than a collapsed error code. AWS names the exact
     principal and action in its denial text, which is the fact needed to tell a
     missing permission apart from a different identity than expected."""
+    tgt = _target(target)
+    role_name = _role_name(tgt)
+    profile_name = _profile_name(tgt)
     iam = _client("iam")
     out = []
 
