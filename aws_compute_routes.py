@@ -240,6 +240,11 @@ class ProvisionRequest(BaseModel):
         False,
         description="Ask EC2 to validate permissions without launching anything.",
     )
+    target: Optional[str] = Field(
+        None,
+        description="Which machine profile to launch. Omit for the default "
+                    "(kalshiml). A name from the TARGETS table, never an id.",
+    )
 
 
 # --------------------------------------------------------------------------- #
