@@ -648,7 +648,7 @@ async def iam_probe():
     try:
         detail["role_attached_policies"] = [
             a.get("PolicyName") for a in iam.list_attached_role_policies(
-                RoleName=BOOTSTRAP_ROLE).get("AttachedPolicies") or []]
+                RoleName=role_name).get("AttachedPolicies") or []]
     except Exception as e:
         detail["role_attached_policies"] = "ERR " + str(e)[:200]
     try:
