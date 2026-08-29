@@ -282,6 +282,122 @@ async def s3_get(req: GetRequest):
     }
 
 # --------------------------------------------------------------------------- #
+# Seed: server-side copy between two prefixes on ONE hardcoded route
+#
+# WHY THIS IS NOT A GENERAL COPY ENDPOINT
+#   A route that takes a source prefix and a destination prefix is a route that
+#   can overwrite production data with anything else in the bucket. The whole
+#   reason nowcast-staging/ exists is so the AWS box cannot write to nowcast/,
+#   and a general copy endpoint on the bridge would hand back exactly the
+#   capability the IAM split was built to remove.
+#
+#   So the allowed routes are a hardcoded table of (source -> destination)
+#   pairs. It is a table with one entry. Adding another is a commit and a
+#   deploy, which is the point.
+#
+# WHY IT IS NEEDED AT ALL
+#   A new prefix is empty, and an empty prefix means the box boots, restores
+#   nothing, finds no models, and falls into the full retrain plus multi-GB
+#   HRRR rebuild that the cold-boot work exists to avoid. Seeding is what makes
+#   the first boot on the new prefix cheap.
+#
+# SAFETY PROPERTIES
+#   - copy_object is server-side: no object body passes through the bridge.
+#   - Destinations are never overwritten. An existing key is skipped, so a
+#     re-run converges and cannot clobber work the staging box has done.
+#   - Bounded per call (max_keys), resumable via the returned continuation.
+#
+# CONFIG
+#   AWS_S3_SEED_ENABLED  "1" for the seeding window, then unset.
+
+SEED_ROUTES = {
+    "nowcast": "nowcast-staging",
+}
+MAX_SEED_KEYS = 500
+
+
+def _seed_enabled() -> None:
+    if (os.getenv("AWS_S3_SEED_ENABLED") or "").strip() != "1":
+        raise HTTPException(
+            403,
+            "seeding is disabled — set AWS_S3_SEED_ENABLED=1 for the seed "
+            "run, then unset it.",
+        )
+
+
+class SeedRequest(BaseModel):
+    source: str = Field(..., description=f"One of: {sorted(SEED_ROUTES)}")
+    max_keys: int = Field(500, ge=1, le=MAX_SEED_KEYS)
+    continuation_token: Optional[str] = Field(
+        None, description="Resume token from a previous partial call.")
+    dry_run: bool = Field(
+        False, description="Count what would be copied without copying.")
+
+
+@aws_router.post("/aws/s3/seed",
+                 summary="Server-side copy along one allowlisted prefix route")
+async def s3_seed(req: SeedRequest):
+    _seed_enabled()
+    src = (req.source or "").strip().strip("/")
+    dst = SEED_ROUTES.get(src)
+    if dst is None:
+        raise HTTPException(
+            400,
+            f"no seed route from {src!r} — this table is code, not config: "
+            f"{sorted(SEED_ROUTES)}",
+        )
+    bucket, s3 = _bucket(), _client()
+
+    kwargs = {"Bucket": bucket, "Prefix": src + "/", "MaxKeys": req.max_keys}
+    if req.continuation_token:
+        kwargs["ContinuationToken"] = req.continuation_token
+    try:
+        page = s3.list_objects_v2(**kwargs)
+    except Exception as e:
+        raise _boto_error(e)
+
+    copied = skipped = 0
+    copied_bytes = 0
+    errors = []
+    for obj in page.get("Contents") or []:
+        key = obj["Key"]
+        rel = key[len(src) + 1:]
+        if not rel:
+            continue
+        dest_key = f"{dst}/{rel}"
+        try:
+            s3.head_object(Bucket=bucket, Key=dest_key)
+            skipped += 1
+            continue
+        except Exception:
+            pass  # absent is the normal case; fall through to copy
+        if req.dry_run:
+            copied += 1
+            copied_bytes += obj.get("Size") or 0
+            continue
+        try:
+            s3.copy_object(Bucket=bucket, Key=dest_key,
+                           CopySource={"Bucket": bucket, "Key": key})
+            copied += 1
+            copied_bytes += obj.get("Size") or 0
+        except Exception as e:
+            errors.append({"key": key, "error": str(e)[:200]})
+
+    return {
+        "bucket": bucket,
+        "source_prefix": src,
+        "dest_prefix": dst,
+        "dry_run": req.dry_run,
+        "copied": copied,
+        "skipped_existing": skipped,
+        "bytes": copied_bytes,
+        "errors": errors[:10],
+        "truncated": bool(page.get("IsTruncated")),
+        "continuation_token": page.get("NextContinuationToken"),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Compute: the only thing on this bridge that can write to S3
 #
 # It writes indirectly: the build runs under a CodeBuild service role scoped to
