@@ -340,7 +340,7 @@ async def run_verb(req: VerbRequest):
     "/aws/exec/reboot",
     summary="Reboot the pinned box (EC2-level, no agent required)",
 )
-async def reboot():
+async def reboot(target: Optional[str] = None):
     """The escape hatch for the bootstrap paradox: if the SSM agent is wedged,
     every verb above is unreachable, and restarting the agent is exactly what
     is needed. This goes through the EC2 control plane instead, so it works
