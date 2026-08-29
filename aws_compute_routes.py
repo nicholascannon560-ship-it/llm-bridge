@@ -511,10 +511,19 @@ def _instance_policy(region: str, bucket: str, target: Optional[str] = None) -> 
                 "Resource": f"arn:aws:s3:::{bucket}",
             },
             {
-                "Sid": "BackupReadWrite",
+                # Read is deliberately wider than write. A target may need to
+                # restore from a corpus it must never write back to -- that is
+                # what makes a parallel run safe rather than merely parallel.
+                "Sid": "BackupRead",
                 "Effect": "Allow",
-                "Action": ["s3:GetObject", "s3:PutObject"],
-                "Resource": f"arn:aws:s3:::{bucket}/{BOOTSTRAP_S3_PREFIX}/*",
+                "Action": ["s3:GetObject"],
+                "Resource": [f"arn:aws:s3:::{bucket}/{p}/*" for p in reads],
+            },
+            {
+                "Sid": "BackupWrite",
+                "Effect": "Allow",
+                "Action": ["s3:PutObject"],
+                "Resource": f"arn:aws:s3:::{bucket}/{write}/*",
             },
             {
                 # Lets the SSM agent register so Run Command can reach the box.
