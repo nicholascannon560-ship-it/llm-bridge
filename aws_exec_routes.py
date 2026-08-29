@@ -266,6 +266,7 @@ def _run(command: str, timeout_s: int, target: Optional[str] = None) -> dict:
     err = (inv.get("StandardErrorContent") or "")[:MAX_OUTPUT_CHARS]
     return {
         "instance_id": instance_id,
+        "target": (target or DEFAULT_TARGET),
         "command_id": cmd_id,
         "status": inv.get("Status") or "Unknown",
         "exit_code": inv.get("ResponseCode"),
