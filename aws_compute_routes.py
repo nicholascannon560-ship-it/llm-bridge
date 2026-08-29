@@ -449,10 +449,14 @@ async def status(target: Optional[str] = None, all: bool = False):
 
 # Overridable because the console's Create-role wizard is the only path that
 # links a role to an instance profile by clicking, and it names them itself.
-BOOTSTRAP_ROLE = (os.getenv("AWS_COMPUTE_ROLE_NAME") or "kalshiml-prod").strip()
-BOOTSTRAP_PROFILE = (os.getenv("AWS_COMPUTE_IAM_PROFILE") or "kalshiml-prod").strip()
-BOOTSTRAP_SSM_PATH = "kalshiml/prod"
-BOOTSTRAP_S3_PREFIX = "kalshiml"
+def _role_name(target: Optional[str] = None) -> str:
+    tgt = _target(target)
+    return _env_for(tgt, "AWS_COMPUTE_ROLE_NAME") or TARGETS[tgt]["role"]
+
+
+def _profile_name(target: Optional[str] = None) -> str:
+    tgt = _target(target)
+    return _env_for(tgt, "AWS_COMPUTE_IAM_PROFILE") or TARGETS[tgt]["profile"]
 
 
 def _compute_bootstrap_enabled() -> None:
