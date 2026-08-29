@@ -480,8 +480,12 @@ def _trust_policy() -> str:
     })
 
 
-def _instance_policy(region: str, bucket: str) -> str:
+def _instance_policy(region: str, bucket: str, target: Optional[str] = None) -> str:
     import json as _json
+    tgt = _target(target)
+    ssm_path = TARGETS[tgt]["ssm_path"]
+    reads = TARGETS[tgt]["s3_prefix_read"]
+    write = TARGETS[tgt]["s3_prefix_write"]
     return _json.dumps({
         "Version": "2012-10-17",
         "Statement": [
