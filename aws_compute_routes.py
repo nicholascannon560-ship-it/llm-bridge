@@ -328,6 +328,7 @@ async def provision(req: ProvisionRequest):
             "Tags": [
                 {"Key": "Name", "Value": name},
                 {"Key": "ManagedBy", "Value": "llm-bridge"},
+                {"Key": "BridgeTarget", "Value": tgt},
             ],
         }],
     }
