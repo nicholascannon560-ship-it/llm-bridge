@@ -267,7 +267,16 @@ class LLMProvider:
         raise NotImplementedError
 
     async def chat_stream(self, req: ChatRequest) -> AsyncGenerator[str, None]:
-        raise NotImplementedError
+        """Fallback for providers without a native text stream.
+
+        Must be an async *generator* (it yields), not a bare coroutine: a plain
+        `raise NotImplementedError` here made `async for` fail with "requires an
+        object with __aiter__ method, got coroutine" for any provider that did
+        not override it (e.g. OpenRouter).
+        """
+        resp = await self.chat(req)
+        if resp.content:
+            yield resp.content
 
     async def chat_stream_events(
         self, req: ChatRequest
@@ -1226,6 +1235,61 @@ class OpenRouterProvider(LLMProvider):
             tool_calls=tool_calls,
             finish_reason=finish_reason,
         )
+
+    async def chat_stream(self, req: ChatRequest) -> AsyncGenerator[str, None]:
+        """Native SSE text stream from OpenRouter.
+
+        Yields answer text only. Reasoning deltas (and OpenRouter's
+        ": OPENROUTER PROCESSING" comment lines) yield "" so the route can send
+        keepalives during long thinking without leaking reasoning into content.
+        Long generations otherwise blow past the edge proxy's request limit on
+        the blocking /chat path.
+        """
+        payload = {
+            "model": req.model or DEFAULT_MODELS["openrouter"],
+            "messages": [m.to_wire() for m in req.messages],
+            "max_tokens": req.max_tokens,
+            "stream": True,
+        }
+        if req.temperature is not None:
+            payload["temperature"] = req.temperature
+        if req.reasoning_effort:
+            payload["reasoning"] = {"effort": req.reasoning_effort}
+
+        async with httpx.AsyncClient(timeout=OPENROUTER_TIMEOUT_SEC) as client:
+            async with client.stream(
+                "POST",
+                self.BASE_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://kalshiml-production-b2e9.up.railway.app",
+                    "X-Title": "llm-bridge",
+                },
+                json=payload,
+            ) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data: "):
+                        yield ""
+                        continue
+                    data = line[6:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    if event.get("error"):
+                        err = event["error"]
+                        raise RuntimeError(
+                            f"openrouter error {err.get('code')}: {err.get('message')}"
+                        )
+                    choices = event.get("choices") or []
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta") or {}
+                    yield delta.get("content") or ""
 
 
 

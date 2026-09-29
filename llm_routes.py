@@ -166,13 +166,23 @@ async def chat_stream(req: ChatRequestModel, x_bridge_key: str = Header(None, al
         stream=True,
         complexity=req.complexity,
         budget_cents=req.budget_cents,
+        reasoning_effort=req.reasoning_effort,
     )
 
     async def event_generator():
+        import time as _time
+        last_sent = _time.monotonic()
         try:
             async for chunk in router.chat_stream(chat_req):
+                now = _time.monotonic()
                 if chunk:
-                    yield f"data: {chunk}\n\n"
+                    # One SSE event per chunk; a multi-line chunk becomes
+                    # several data: lines (clients rejoin them with "\n").
+                    yield "".join(f"data: {ln}\n" for ln in chunk.split("\n")) + "\n"
+                    last_sent = now
+                elif now - last_sent > 15:
+                    yield ": keepalive\n\n"
+                    last_sent = now
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: [ERROR] {e}\n\n"
