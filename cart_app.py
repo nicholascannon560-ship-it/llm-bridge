@@ -33,6 +33,7 @@ COOKIE = "cart_session"
 SESSION_DAYS = 60
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 DEFAULT_MODEL = "z-ai/glm-5.3-flash"
+CART_APP_VERSION = "1.0.1"  # bump on HTML-only changes so *.py watch pattern triggers a deploy
 _HTML_PATH = Path(__file__).with_name("cart_app.html")
 
 # Login throttle: in-memory, per process. Good enough for a single replica.
