@@ -148,6 +148,7 @@ service variable if you want it to persist.
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-10-04 | /cart Cart Tally app: CART_PIN cookie auth, OpenRouter vision; .html not in watchPatterns, redeploy after html-only edits | files: cart_app.py, cart_app.html, main.py
 - 2026-08-27 | watchPatterns `/**` matched NOTHING: every push was SKIPPED, redeploy built one commit behind. Replaced with explicit allowlist | files: -
 - 2026-08-27 | /aws/bootstrap/compute: hardcoded idempotent instance role+profile | files: aws_compute_routes.py
 - 2026-08-27 | picker: dead stealth/ox-alpha -> z-ai/glm-5.3-flash; test pins every row to COST_TABLE | files: chat_ui.py, tests/test_stream_and_rates.py
