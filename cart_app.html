@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cart Tally</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2E6B4F">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛒</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1F2A24; --muted:#5E6B63; --paper:#F7F8F5; --card:#FFFFFF; --line:#DDE2DC;
+  --green:#2E6B4F; --green-soft:#E3EEE7; --amber:#B97812; --red:#B5372E;
+  --cam:#0F1612;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#E8EDE9; --muted:#9AA79F; --paper:#121815; --card:#1A221D; --line:#2C3631;
+    --green:#5FB58A; --green-soft:#1E3328; --amber:#E0A23C; --red:#E06A5F;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#E8EDE9; --muted:#9AA79F; --paper:#121815; --card:#1A221D; --line:#2C3631;
+  --green:#5FB58A; --green-soft:#1E3328; --amber:#E0A23C; --red:#E06A5F;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);
+  font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.4}
+.num{font-family:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+
+/* Camera */
+.cam{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--cam);height:38vh;min-height:220px;max-height:420px;overflow:hidden}
+.cam video{width:100%;height:100%;object-fit:cover;display:block}
+.cam .guide{position:absolute;inset:18% 14% 26%;border:2px dashed rgba(255,255,255,.55);border-radius:10px;pointer-events:none}
+.cam .hint{position:absolute;left:0;right:0;top:8px;text-align:center;color:#fff;font-size:14px;opacity:.85;text-shadow:0 1px 2px #000}
+.cam .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .25s}
+.cam .flash.on{opacity:.7;transition:none}
+.shutter{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:74px;height:74px;border-radius:50%;
+  border:5px solid #fff;background:rgba(255,255,255,.25);display:grid;place-items:center}
+.shutter::after{content:"";width:54px;height:54px;border-radius:50%;background:#fff}
+.shutter:active::after{transform:scale(.9)}
+.cam-off{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#fff;padding:20px}
+.cam-off p{margin:0 0 12px;max-width:30ch}
+.pill{border:0;border-radius:999px;padding:10px 18px;background:var(--green);color:#fff;font-weight:600}
+.side-btn{position:absolute;bottom:26px;width:48px;height:48px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:20px;display:grid;place-items:center}
+.side-btn.left{left:18px}.side-btn.right{right:18px}
+
+/* Totals strip */
+.totals{position:sticky;top:calc(env(safe-area-inset-top,0px) + min(max(38vh,220px),420px));z-index:4;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px 12px}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.big{font-size:44px;font-weight:700;line-height:1}
+.sub{color:var(--muted);font-size:14px}
+.sub b{color:var(--ink);font-weight:600}
+.bar{height:8px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--green);transition:width .3s,background .3s}
+.left-to-spend{font-size:14px;margin-top:4px}
+
+/* List */
+main{padding:8px 12px 120px;max-width:640px;margin:0 auto}
+.empty{color:var(--muted);text-align:center;padding:28px 12px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0;display:grid;grid-template-columns:1fr auto;gap:6px 10px}
+.item.pending{opacity:.7}
+.item .name{border:0;background:transparent;font-weight:600;width:100%;padding:2px 0;font-size:17px}
+.item .line-total{font-size:24px;font-weight:600;text-align:right}
+.controls{grid-column:1 / -1;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.qty button{border:0;background:var(--green-soft);width:38px;height:36px;font-size:20px;font-weight:600}
+.qty input{width:44px;border:0;text-align:center;background:transparent;height:36px;font-size:18px}
+.price{display:flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:8px;padding:0 8px;height:38px}
+.price input{width:68px;border:0;background:transparent;font-size:18px}
+.tax{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+.tax input{width:20px;height:20px;accent-color:var(--green)}
+.del{margin-left:auto;border:0;background:transparent;color:var(--red);font-size:14px;padding:6px}
+.note{grid-column:1 / -1;font-size:13px;color:var(--amber)}
+.thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;float:left;margin-right:10px}
+
+/* Settings sheet */
+dialog{border:0;border-radius:16px;padding:20px;width:min(92vw,420px);background:var(--card);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h2{margin:0 0 14px;font-size:20px}
+label.f{display:block;margin:0 0 14px;font-size:14px;color:var(--muted)}
+label.f input{display:block;width:100%;margin-top:4px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--paper);font-size:18px}
+.sheet-actions{display:flex;gap:10px;justify-content:space-between;margin-top:8px}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:999px;padding:10px 16px}
+.danger{color:var(--red)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1}
+.gate{position:fixed;inset:0;z-index:50;background:var(--paper);display:grid;place-items:center;padding:24px}
+.gate form{width:min(100%,320px)}
+.gate h1{font-size:28px;margin:0 0 6px}
+.gate p{color:var(--muted);margin:0 0 18px}
+.gate input{width:100%;font-size:28px;letter-spacing:.3em;text-align:center;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card);margin-bottom:12px}
+.gate .pill{width:100%;font-size:18px;padding:14px}
+.gate .err{color:var(--red);min-height:1.4em;margin-top:10px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<section class="cam" id="cam">
+  <video id="video" playsinline muted autoplay></video>
+  <div class="guide"></div>
+  <div class="hint" id="hint">Fit the shelf tag in the box, then tap</div>
+  <div class="flash" id="flash"></div>
+  <button class="side-btn left" id="settingsBtn" aria-label="Budget and tax settings">⚙</button>
+  <button class="shutter" id="shutter" aria-label="Snap and add item"></button>
+  <button class="side-btn right" id="manualBtn" aria-label="Add item by hand">＋</button>
+  <div class="cam-off" id="camOff" hidden>
+    <div>
+      <p id="camMsg">Camera is off.</p>
+      <button class="pill" id="startCam">Turn on camera</button>
+      <p style="margin-top:12px;font-size:14px;opacity:.8">or <label style="text-decoration:underline;cursor:pointer">take a photo<input id="fileIn" type="file" accept="image/*" capture="environment" hidden></label></p>
+    </div>
+  </div>
+</section>
+
+<section class="totals" aria-live="polite">
+  <div class="row">
+    <div class="big num" id="total">$0.00</div>
+    <div class="sub" style="text-align:right">
+      Subtotal <b class="num" id="subtotal">$0.00</b><br>
+      Tax <b class="num" id="taxAmt">$0.00</b> <span id="taxRateLbl"></span>
+    </div>
+  </div>
+  <div id="budgetWrap" hidden>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="left-to-spend" id="leftLbl"></div>
+  </div>
+</section>
+
+<main>
+  <div id="list"></div>
+  <p class="empty" id="empty">Point the camera at a price tag and tap the white button. Each snap adds a line. Keep snapping while earlier ones are read.</p>
+</main>
+
+<dialog id="sheet">
+  <h2>Trip settings</h2>
+  <label class="f">Budget for this trip ($)
+    <input id="budgetIn" type="number" inputmode="decimal" min="0" step="1" placeholder="No budget">
+  </label>
+  <label class="f">Sales tax rate (%)
+    <input id="rateIn" type="number" inputmode="decimal" min="0" step="0.001">
+  </label>
+  <p class="sub" style="margin:-6px 0 14px">Ulster County is 8%, Dutchess 8.125%. Most groceries are tax-free in NY; tick tax on items that aren't.</p>
+  <div class="sheet-actions">
+    <button class="ghost danger" id="clearBtn">Clear cart</button>
+    <button class="pill" id="saveSettings">Done</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<div class="gate" id="gate" hidden>
+  <form id="gateForm">
+    <h1>Cart Tally</h1>
+    <p>Enter your PIN. This phone stays signed in for 60 days.</p>
+    <input id="pinIn" type="password" inputmode="numeric" autocomplete="current-password" aria-label="PIN">
+    <button class="pill" type="submit">Sign in</button>
+    <div class="err" id="gateErr" role="alert"></div>
+  </form>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const KEY = "cart-tally-v1";
+  let state = { items: [], rate: 8, budget: null };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && Array.isArray(s.items)) state = Object.assign(state, s); } catch (e) {}
+  state.items.forEach(it => { if (it.status === "reading") { it.status = "error"; it.note = "Interrupted. Enter the price."; } });
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ ...state, items: state.items.map(({thumb, ...r}) => r) })); } catch (e) {} };
+
+  const money = n => "$" + (Math.round(n * 100) / 100).toFixed(2);
+  const uid = () => Math.random().toString(36).slice(2, 9);
+
+  let toastT;
+  function toast(msg){ const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2600); }
+
+  // ---------- totals ----------
+  function calc(){
+    let sub = 0, tax = 0;
+    for (const it of state.items) {
+      const line = (Number(it.price) || 0) * (Number(it.qty) || 0);
+      sub += line;
+      if (it.taxable) tax += line * (state.rate / 100);
+    }
+    tax = Math.round(tax * 100) / 100;
+    return { sub, tax, total: sub + tax };
+  }
+  function renderTotals(){
+    const { sub, tax, total } = calc();
+    $("subtotal").textContent = money(sub);
+    $("taxAmt").textContent = money(tax);
+    $("taxRateLbl").textContent = "(" + state.rate + "%)";
+    $("total").textContent = money(total);
+    const b = Number(state.budget);
+    if (b > 0) {
+      $("budgetWrap").hidden = false;
+      const pct = total / b;
+      const fill = $("barFill");
+      fill.style.width = Math.min(100, pct * 100) + "%";
+      fill.style.background = pct > 1 ? "var(--red)" : pct > 0.85 ? "var(--amber)" : "var(--green)";
+      const left = b - total;
+      $("leftLbl").innerHTML = left >= 0
+        ? `<b class="num">${money(left)}</b> left of ${money(b)}`
+        : `<b class="num" style="color:var(--red)">${money(-left)} over</b> your ${money(b)} budget`;
+    } else $("budgetWrap").hidden = true;
+  }
+
+  // ---------- list ----------
+  function renderList(){
+    const list = $("list");
+    list.textContent = "";
+    $("empty").hidden = state.items.length > 0;
+    for (const it of state.items) list.appendChild(itemEl(it));
+    renderTotals();
+  }
+  function itemEl(it){
+    const el = document.createElement("div");
+    el.className = "item" + (it.status === "reading" ? " pending" : "");
+    const head = document.createElement("div");
+    if (it.thumb) { const im = document.createElement("img"); im.className = "thumb"; im.src = it.thumb; im.alt = ""; head.appendChild(im); }
+    const name = document.createElement("input");
+    name.className = "name"; name.value = it.status === "reading" ? "Reading tag…" : (it.name || "");
+    name.placeholder = "Item name"; name.disabled = it.status === "reading"; name.setAttribute("aria-label", "Item name");
+    name.onchange = () => { it.name = name.value; save(); };
+    head.appendChild(name);
+    const lt = document.createElement("div");
+    lt.className = "line-total num";
+    lt.textContent = it.status === "reading" ? "…" : money((Number(it.price)||0) * (Number(it.qty)||0));
+    el.append(head, lt);
+
+    const c = document.createElement("div"); c.className = "controls";
+    const q = document.createElement("div"); q.className = "qty";
+    const minus = document.createElement("button"); minus.textContent = "−"; minus.setAttribute("aria-label","Decrease quantity");
+    const qIn = document.createElement("input"); qIn.className = "num"; qIn.type = "number"; qIn.inputMode = "decimal"; qIn.min = "0"; qIn.step = "any"; qIn.value = it.qty; qIn.setAttribute("aria-label","Quantity");
+    const plus = document.createElement("button"); plus.textContent = "+"; plus.setAttribute("aria-label","Increase quantity");
+    const setQ = v => { it.qty = Math.max(0, Math.round(v * 1000) / 1000); qIn.value = it.qty; lt.textContent = money((Number(it.price)||0) * it.qty); save(); renderTotals(); };
+    minus.onclick = () => setQ((Number(it.qty)||0) - 1);
+    plus.onclick = () => setQ((Number(it.qty)||0) + 1);
+    qIn.oninput = () => setQ(Number(qIn.value) || 0);
+    q.append(minus, qIn, plus);
+
+    const p = document.createElement("label"); p.className = "price";
+    const pIn = document.createElement("input"); pIn.className = "num"; pIn.type = "number"; pIn.inputMode = "decimal"; pIn.step = "0.01"; pIn.min = "0";
+    pIn.value = it.price ?? ""; pIn.placeholder = "0.00"; pIn.setAttribute("aria-label","Price each");
+    pIn.oninput = () => { it.price = pIn.value === "" ? null : Number(pIn.value); lt.textContent = money((Number(it.price)||0) * (Number(it.qty)||0)); save(); renderTotals(); };
+    p.append(document.createTextNode("$"), pIn);
+    if (it.unit) { const u = document.createElement("span"); u.className = "sub"; u.textContent = "/" + it.unit; p.appendChild(u); }
+
+    const t = document.createElement("label"); t.className = "tax";
+    const tIn = document.createElement("input"); tIn.type = "checkbox"; tIn.checked = !!it.taxable;
+    tIn.onchange = () => { it.taxable = tIn.checked; save(); renderTotals(); };
+    t.append(tIn, document.createTextNode("Tax"));
+
+    const d = document.createElement("button"); d.className = "del"; d.textContent = "Remove";
+    d.onclick = () => { state.items = state.items.filter(x => x !== it); save(); renderList(); };
+
+    c.append(q, p, t, d);
+    el.appendChild(c);
+    if (it.note) { const n = document.createElement("div"); n.className = "note"; n.textContent = it.note; el.appendChild(n); }
+    return el;
+  }
+
+  // ---------- camera ----------
+  const video = $("video");
+  let stream = null;
+  async function startCam(){
+    if (!navigator.mediaDevices?.getUserMedia) return camFail("This browser can't show a live camera here.");
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      video.srcObject = stream; await video.play();
+      $("camOff").hidden = true;
+    } catch (e) {
+      camFail(e && e.name === "NotAllowedError" ? "Camera permission was blocked. Allow it in your browser, or take a photo instead." : "The live camera isn't available here. You can still take a photo.");
+    }
+  }
+  function camFail(msg){ $("camMsg").textContent = msg; $("camOff").hidden = false; }
+  $("startCam").onclick = startCam;
+
+  function grabFrame(){
+    return new Promise((resolve, reject) => {
+      const w = video.videoWidth, h = video.videoHeight;
+      if (!w || !h) return reject(new Error("no frame"));
+      const scale = Math.min(1, 1600 / Math.max(w, h));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(w * scale); cv.height = Math.round(h * scale);
+      cv.getContext("2d").drawImage(video, 0, 0, cv.width, cv.height);
+      const thumbCv = document.createElement("canvas"); thumbCv.width = 88; thumbCv.height = 88;
+      const s = Math.min(cv.width, cv.height);
+      thumbCv.getContext("2d").drawImage(cv, (cv.width - s)/2, (cv.height - s)/2, s, s, 0, 0, 88, 88);
+      const thumb = thumbCv.toDataURL("image/jpeg", 0.6);
+      cv.toBlob(b => b ? resolve({ blob: b, thumb }) : reject(new Error("encode")), "image/jpeg", 0.85);
+    });
+  }
+  function fileToThumb(file){
+    return new Promise(res => {
+      const url = URL.createObjectURL(file); const im = new Image();
+      im.onload = () => { const c = document.createElement("canvas"); c.width = c.height = 88; const s = Math.min(im.width, im.height);
+        c.getContext("2d").drawImage(im, (im.width-s)/2, (im.height-s)/2, s, s, 0, 0, 88, 88); URL.revokeObjectURL(url); res(c.toDataURL("image/jpeg", .6)); };
+      im.onerror = () => { URL.revokeObjectURL(url); res(null); };
+      im.src = url;
+    });
+  }
+
+  // ---------- reading the tag (through the bridge) ----------
+  let authed = false;
+  function showGate(msg){ $("gate").hidden = false; $("gateErr").textContent = msg || ""; setTimeout(() => $("pinIn").focus(), 50); }
+  async function checkSession(){
+    try {
+      const r = await fetch("/cart/session", { credentials: "same-origin" });
+      const s = await r.json();
+      if (!s.configured) { showGate("The server has no PIN set yet."); return; }
+      authed = !!s.authed;
+      if (!authed) showGate();
+    } catch (e) { toast("Offline. You can still type items in."); }
+  }
+  $("gateForm").onsubmit = async ev => {
+    ev.preventDefault();
+    const pin = $("pinIn").value.trim(); if (!pin) return;
+    $("gateErr").textContent = "";
+    try {
+      const r = await fetch("/cart/login", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) });
+      if (r.ok) { authed = true; $("gate").hidden = true; $("pinIn").value = ""; startCam(); }
+      else { const d = await r.json().catch(() => ({})); $("gateErr").textContent = d.detail || "Sign-in failed"; }
+    } catch (e) { $("gateErr").textContent = "No connection. Try again."; }
+  };
+
+  function toBase64(blob){
+    return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
+  }
+  // Phone photos can be 5+ MB; shrink before upload.
+  function shrinkFile(file){
+    return new Promise(res => {
+      const url = URL.createObjectURL(file); const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, 1600 / Math.max(im.width, im.height));
+        const c = document.createElement("canvas"); c.width = Math.round(im.width * s); c.height = Math.round(im.height * s);
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(b => res(b || file), "image/jpeg", 0.85);
+      };
+      im.onerror = () => { URL.revokeObjectURL(url); res(file); };
+      im.src = url;
+    });
+  }
+
+  async function readImage(blob, thumb){
+    const it = { id: uid(), name: "", price: null, qty: 1, taxable: false, unit: null, status: "reading", thumb };
+    state.items.unshift(it); renderList();
+    let msg = null;
+    try {
+      const r = await fetch("/cart/read", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image: await toBase64(blob) }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { authed = false; showGate("Signed out. Enter your PIN."); msg = "Not read: you were signed out. Snap again after signing in."; }
+      else if (!r.ok) msg = (d.detail || "Couldn't read that one") + ". Snap again or type it in.";
+      else {
+        Object.assign(it, {
+          status: "done", name: d.name || "Item", price: d.price, unit: d.unit, taxable: !!d.taxable,
+          note: d.price == null ? ((d.note ? d.note + " " : "") + "Enter the price.") : (d.unit ? "Weighed item: set quantity to the weight." : null)
+        });
+        if (d.price != null) toast("Added " + it.name + " " + money(d.price));
+      }
+    } catch (e) { msg = "No connection. Type it in or snap again."; }
+    if (msg) Object.assign(it, { status: "error", note: msg });
+    save(); renderList();
+  }
+
+  $("shutter").onclick = async () => {
+    const f = $("flash"); f.classList.add("on"); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove("on")));
+    if (navigator.vibrate) navigator.vibrate(30);
+    try { const { blob, thumb } = await grabFrame(); readImage(blob, thumb); }
+    catch (e) { if (!stream) { startCam(); } else toast("Camera isn't ready yet."); }
+  };
+  $("fileIn").onchange = async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    readImage(await shrinkFile(file), await fileToThumb(file));
+  };
+  $("manualBtn").onclick = () => {
+    const it = { id: uid(), name: "", price: null, qty: 1, taxable: false, unit: null, status: "done" };
+    state.items.unshift(it); save(); renderList();
+    const first = document.querySelector("#list .item .name"); if (first) first.focus();
+  };
+
+  // ---------- settings ----------
+  const sheet = $("sheet");
+  $("settingsBtn").onclick = () => { $("budgetIn").value = state.budget ?? ""; $("rateIn").value = state.rate; sheet.showModal(); };
+  $("saveSettings").onclick = () => {
+    const b = $("budgetIn").value; state.budget = b === "" ? null : Math.max(0, Number(b));
+    const r = Number($("rateIn").value); state.rate = isFinite(r) && r >= 0 ? r : state.rate;
+    save(); renderList(); sheet.close();
+  };
+  $("clearBtn").onclick = () => {
+    if (!state.items.length) { sheet.close(); return; }
+    if (confirm("Clear all " + state.items.length + " items from this trip?")) { state.items = []; save(); renderList(); sheet.close(); toast("Cart cleared"); }
+  };
+
+  renderList();
+  checkSession().then(() => { if (authed) startCam(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && stream && video.paused) video.play().catch(()=>{}); });
+})();
+</script>
+</body>
+</html>

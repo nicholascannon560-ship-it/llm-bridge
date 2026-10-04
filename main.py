@@ -168,6 +168,13 @@ except Exception as _ui_routes_err:  # pragma: no cover
 # Include patch router
 app.include_router(patch_router)
 
+# Cart Tally (scan-as-you-shop budget app). Optional: must not take the bridge down.
+try:
+    from cart_app import cart_router
+    app.include_router(cart_router)
+except Exception as _cart_err:  # pragma: no cover
+    print(f"[cart_app] routes not mounted: {_cart_err}", flush=True)
+
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
@@ -176,7 +183,11 @@ BRIDGE_KEY_TTL_SECONDS = float(os.getenv("BRIDGE_KEY_TTL_HOURS", "24")) * 3600
 BRIDGE_KEY_GRACE_SECONDS = float(os.getenv("BRIDGE_KEY_GRACE_HOURS", "2")) * 3600
 # /ui serves only the shell HTML (it renders a password form and holds no data)
 # and /ui/login must be reachable to authenticate in the first place.
-_EXEMPT_PATHS = {"/health", "/ui", "/ui/", "/ui/login"}
+# /cart/* is the Cart Tally phone app. It never accepts the bridge key: the
+# page and login are public, and /cart/read checks its own CART_PIN session
+# cookie (see cart_app.py) so a leaked PIN can only spend vision calls.
+_EXEMPT_PATHS = {"/health", "/ui", "/ui/", "/ui/login",
+                 "/cart", "/cart/session", "/cart/login", "/cart/read"}
 
 
 class _KeyState:
