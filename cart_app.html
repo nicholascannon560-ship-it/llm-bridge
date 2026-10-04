@@ -276,15 +276,32 @@ label.f input{display:block;width:100%;margin-top:4px;border:1px solid var(--lin
   // ---------- camera ----------
   const video = $("video");
   let stream = null;
+  const inApp = /FBAN|FBAV|Instagram|Line\/|; wv\)|GSA\/|Claude/i.test(navigator.userAgent);
   async function startCam(){
-    if (!navigator.mediaDevices?.getUserMedia) return camFail("This browser can't show a live camera here.");
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
+      return camFail(inApp ? "This in-app browser can't use the live camera. Tap the ⋯ or share menu and choose Open in Safari or Chrome."
+                           : "This browser can't show a live camera here. Open the link in Safari or Chrome.");
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      video.srcObject = stream; await video.play();
-      $("camOff").hidden = true;
+      if (!stream) {
+        try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); }
+        catch (e) { if (e && e.name === "OverconstrainedError") stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); else throw e; }
+        video.srcObject = stream;
+      }
     } catch (e) {
-      camFail(e && e.name === "NotAllowedError" ? "Camera permission was blocked. Allow it in your browser, or take a photo instead." : "The live camera isn't available here. You can still take a photo.");
+      stream = null;
+      const n = e && e.name;
+      const msg = n === "NotAllowedError" || n === "SecurityError"
+        ? (inApp ? "This in-app browser blocks the camera. Open the link in Safari or Chrome."
+                 : "Camera access is blocked for this site. iPhone: Settings › Safari › Camera › Allow. Android Chrome: tap the icon left of the address › Permissions › Camera › Allow. Then tap Turn on camera.")
+        : n === "NotFoundError" ? "No camera found on this device."
+        : n === "NotReadableError" ? "Another app is using the camera. Close it, then tap Turn on camera."
+        : "Live camera failed (" + (n || "error") + ").";
+      return camFail(msg);
     }
+    // Permission is granted at this point. play() can still be refused by
+    // autoplay rules when not started from a tap; that is NOT a permission problem.
+    try { await video.play(); $("camOff").hidden = true; }
+    catch (e) { camFail("Camera is ready. Tap to start it."); $("startCam").textContent = "Start camera"; }
   }
   function camFail(msg){ $("camMsg").textContent = msg; $("camOff").hidden = false; }
   $("startCam").onclick = startCam;
@@ -379,6 +396,7 @@ label.f input{display:block;width:100%;margin-top:4px;border:1px solid var(--lin
   $("shutter").onclick = async () => {
     const f = $("flash"); f.classList.add("on"); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove("on")));
     if (navigator.vibrate) navigator.vibrate(30);
+    if (stream && video.paused) { try { await video.play(); $("camOff").hidden = true; } catch (e) {} }
     try { const { blob, thumb } = await grabFrame(); readImage(blob, thumb); }
     catch (e) { if (!stream) { startCam(); } else toast("Camera isn't ready yet."); }
   };
