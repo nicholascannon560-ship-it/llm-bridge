@@ -11,6 +11,7 @@ GET  /rv/ai_run/{id}     progress + per-trial results of an AI run
 GET  /rv/stats           hit rate per viewer vs the 25% chance line
 GET  /rv/history         recent finished trials
 GET  /rv/models          OpenRouter model list (id, name, vision)
+POST /rv/forget          {"id"} drop one invalid MODEL trial (human trials are permanent)
 
 Protocol: the server picks a target photo and 3 decoys before the viewer sees
 anything, and publishes sha256("target_id|nonce") as a commitment. The viewer
@@ -42,7 +43,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 rv_router = APIRouter()
 
-RV_APP_VERSION = "1.0.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+RV_APP_VERSION = "1.0.1"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "rv_session"
 SESSION_DAYS = 60
 DEFAULT_JUDGE = "z-ai/glm-5.3-flash"
@@ -265,7 +266,8 @@ def _target_label(trial: dict) -> str:
 
 
 # --------------------------------------------------------------------------- openrouter
-async def _or_chat(model: str, messages: list, max_tokens: int, temperature: float, title: str) -> str:
+async def _or_chat(model: str, messages: list, max_tokens: int, temperature: float, title: str,
+                   allow_reasoning: bool = True) -> str:
     key = os.getenv("OPENROUTER_API_KEY")
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY missing")
@@ -284,10 +286,11 @@ async def _or_chat(model: str, messages: list, max_tokens: int, temperature: flo
         raise RuntimeError(f"{model}: {err.get('message') or r.status_code}")
     msg = ((data.get("choices") or [{}])[0].get("message") or {})
     text = msg.get("content") or ""
-    if not text.strip():
+    if not text.strip() and allow_reasoning:
         text = msg.get("reasoning") or ""
     if not text.strip():
-        raise RuntimeError(f"{model} returned an empty reply")
+        fin = ((data.get("choices") or [{}])[0].get("finish_reason")) or "?"
+        raise RuntimeError(f"{model} returned no answer (finish_reason={fin})")
     return text
 
 
@@ -305,6 +308,16 @@ def _parse_json(text: str) -> dict:
         if a != -1 and b > a:
             return json.loads(text[a:b + 1])
         raise
+
+
+_REFUSAL = re.compile(r"\b(i can(?:no|')t|i'm not able|i am not able|i won't|as an ai|pseudoscien|"
+                      r"no (?:actual|real) (?:access|perception)|the user is asking)\b", re.I)
+
+
+def _looks_like_refusal(text: str) -> bool:
+    head = (text or "")[:600]
+    has_sensory = len(re.findall(r"(?im)^\s*(?:\d\.|#+|\*\*)?\s*(first impressions|sensory|dimensional|sketch|summary)", text or "")) >= 2
+    return bool(_REFUSAL.search(head)) and not has_sensory
 
 
 async def _fetch_b64(url: str) -> str:
@@ -499,7 +512,9 @@ async def _run_worker(run: dict) -> None:
             step["commitment"] = t["commitment"]
             transcript = await _or_chat(run["viewer_model"], [
                 {"role": "user", "content": VIEWER_PROMPT.format(coord=t["coordinate"])}],
-                1500, 1.0, "rv-lab-viewer")
+                4000, 1.0, "rv-lab-viewer", allow_reasoning=False)
+            if _looks_like_refusal(transcript):
+                raise RuntimeError("viewer declined or talked about the task instead of doing it; trial not scored")
             t["submitted"] = time.time()
             step["status"] = "judging"
             step["transcript"] = transcript[:4000]
@@ -562,6 +577,26 @@ async def rv_ai_run_cancel(run_id: str, request: Request):
         return JSONResponse({"detail": "Unknown run"}, status_code=404)
     run["cancel"] = True
     return {"ok": True}
+
+
+@rv_router.post("/rv/forget")
+async def rv_forget(request: Request):
+    """Drop one invalid MODEL trial (e.g. the model refused). Human trials can't be
+    removed, so nobody can quietly delete their own misses."""
+    if (d := _deny(request)):
+        return d
+    tid = str((await _body(request)).get("id") or "")
+    rows = await _all_results()
+    async with _results_lock:
+        keep = [r for r in rows if not (r["id"] == tid and r["kind"] == "ai")]
+        removed = len(rows) - len(keep)
+        if removed:
+            rows[:] = keep
+            snapshot = list(rows)
+    if not removed:
+        return JSONResponse({"detail": "No model trial with that id"}, status_code=404)
+    await asyncio.to_thread(_save_sync, snapshot)
+    return {"removed": removed}
 
 
 @rv_router.get("/rv/stats")
