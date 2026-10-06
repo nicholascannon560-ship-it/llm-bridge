@@ -175,6 +175,13 @@ try:
 except Exception as _cart_err:  # pragma: no cover
     print(f"[cart_app] routes not mounted: {_cart_err}", flush=True)
 
+# RV Lab (remote-viewing trainer + AI model tester). Optional, same rules as Cart Tally.
+try:
+    from rv_app import rv_router
+    app.include_router(rv_router)
+except Exception as _rv_err:  # pragma: no cover
+    print(f"[rv_app] routes not mounted: {_rv_err}", flush=True)
+
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
@@ -188,6 +195,9 @@ BRIDGE_KEY_GRACE_SECONDS = float(os.getenv("BRIDGE_KEY_GRACE_HOURS", "2")) * 360
 # cookie (see cart_app.py) so a leaked PIN can only spend vision calls.
 _EXEMPT_PATHS = {"/health", "/ui", "/ui/", "/ui/login",
                  "/cart", "/cart/session", "/cart/login", "/cart/read"}
+# /rv and /rv/* is RV Lab. Same model as Cart Tally: it never accepts the bridge
+# key, and every data route checks its own PIN session cookie (see rv_app.py).
+_EXEMPT_PREFIXES = ("/rv/",)
 
 
 class _KeyState:
@@ -205,7 +215,9 @@ def _auth_enabled() -> bool:
 
 class BridgeAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if not _auth_enabled() or request.url.path in _EXEMPT_PATHS:
+        path = request.url.path
+        if (not _auth_enabled() or path in _EXEMPT_PATHS or path == "/rv"
+                or path.startswith(_EXEMPT_PREFIXES)):
             return await call_next(request)
 
         # Console routes additionally accept a signed, expiring cookie. This is
@@ -1054,3 +1066,4 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", "8000")),
         reload=False,
     )
+

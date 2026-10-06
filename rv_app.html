@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RV Lab</title>
+<meta name="theme-color" content="#F3EEE3">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👁</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1D1B17; --muted:#6B6457; --paper:#F3EEE3; --sheet:#FBF8F1; --line:#D9D1C1; --rule:#E7E0D1;
+  --red:#A8322A; --red-soft:#F3DEDA; --green:#2F6B45; --green-soft:#DCEBDF; --blue:#2B4C7E;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#ECE6D8; --muted:#A39B8B; --paper:#16140F; --sheet:#1E1B15; --line:#3A352A; --rule:#2A261E;
+    --red:#E0675C; --red-soft:#3A1F1B; --green:#6FBF8A; --green-soft:#1C3324; --blue:#8DB0E6;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#ECE6D8; --muted:#A39B8B; --paper:#16140F; --sheet:#1E1B15; --line:#3A352A; --rule:#2A261E;
+  --red:#E0675C; --red-soft:#3A1F1B; --green:#6FBF8A; --green-soft:#1C3324; --blue:#8DB0E6;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);
+  font-family:"Newsreader",Georgia,"Times New Roman",serif;font-size:17px;line-height:1.5}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 96px}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0 14px;border-bottom:2px solid var(--ink)}
+header.top h1{margin:0;font-size:28px;font-weight:600;letter-spacing:-.01em}
+header.top .sub{font-size:13px;color:var(--muted)}
+nav.tabs{display:flex;gap:4px;margin:14px 0 18px}
+nav.tabs button{flex:1;padding:10px 6px;border:1px solid var(--line);background:transparent;border-radius:3px;font-family:"IBM Plex Mono",monospace;font-size:13px}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.sheet{background:var(--sheet);border:1px solid var(--line);border-radius:4px;padding:18px 16px;margin-bottom:16px}
+.sheet h2{margin:0 0 4px;font-size:21px;font-weight:600}
+.sheet p.hint{margin:0 0 14px;color:var(--muted);font-size:15px}
+label.f{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
+input.t,textarea.t,select.t{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:3px;background:var(--paper)}
+textarea.t{min-height:190px;resize:vertical;line-height:1.45;
+  background-image:linear-gradient(var(--rule) 1px,transparent 1px);background-size:100% 1.45em;background-position:0 .95em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 18px;border-radius:3px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.red{background:var(--red);border-color:var(--red);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.row .btn{flex:1;min-width:140px}
+.coord{font-family:"IBM Plex Mono",monospace;font-size:clamp(34px,11vw,52px);font-weight:600;letter-spacing:.04em;line-height:1;margin:6px 0 10px;color:var(--red)}
+.commit{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);word-break:break-all}
+.cues{font-size:14px;color:var(--muted);margin:10px 0 0;padding-left:18px}
+.cues li{margin:2px 0}
+canvas#pad{display:block;width:100%;height:240px;border:1px dashed var(--line);border-radius:3px;background:var(--paper);touch-action:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.cand{position:relative;border:2px solid transparent;border-radius:4px;overflow:hidden;background:var(--rule);aspect-ratio:4/3;padding:0}
+.cand img{display:block;width:100%;height:100%;object-fit:cover}
+.cand .lab{position:absolute;left:6px;top:6px;background:var(--sheet);color:var(--ink);font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;padding:2px 7px;border-radius:2px}
+.cand .rk{position:absolute;right:6px;top:6px;background:var(--blue);color:#fff;font-family:"IBM Plex Mono",monospace;font-size:13px;padding:2px 8px;border-radius:2px}
+.cand.target{border-color:var(--green)}
+.cand.target::after{content:"target";position:absolute;left:0;right:0;bottom:0;background:var(--green);color:#fff;font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:center;padding:3px}
+.cand.pick:not(.target){border-color:var(--red)}
+.verdict{font-size:30px;font-weight:600;margin:4px 0}
+.verdict.hit{color:var(--green)} .verdict.miss{color:var(--red)}
+.small{font-size:13px;color:var(--muted)}
+.ok{color:var(--green)} .bad{color:var(--red)}
+table.st{width:100%;border-collapse:collapse;font-size:14px}
+table.st th,table.st td{padding:8px 6px;border-bottom:1px solid var(--rule);text-align:right;font-family:"IBM Plex Mono",monospace}
+table.st th:first-child,table.st td:first-child{text-align:left;font-family:"Newsreader",serif}
+table.st th{font-weight:500;color:var(--muted);font-size:12px}
+.tablewrap{overflow-x:auto}
+.bar{position:relative;height:8px;background:var(--rule);border-radius:2px;margin-top:4px}
+.bar span{position:absolute;left:0;top:0;bottom:0;background:var(--blue);border-radius:2px}
+.bar i{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--red);left:25%}
+.trial{border-top:1px solid var(--rule);padding:12px 0}
+.trial:first-child{border-top:0}
+.trial .head{display:flex;justify-content:space-between;gap:8px;font-family:"IBM Plex Mono",monospace;font-size:13px}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.thumbs .cand .lab{font-size:11px;padding:1px 5px}
+.thumbs .cand.target::after{font-size:10px;padding:1px}
+details{margin-top:8px}
+summary{cursor:pointer;color:var(--blue);font-size:14px}
+pre.tx{white-space:pre-wrap;font-family:"Newsreader",serif;font-size:15px;background:var(--paper);border:1px solid var(--rule);padding:10px;border-radius:3px;margin:6px 0 0;max-height:320px;overflow:auto}
+.err{color:var(--red);font-size:14px;margin-top:10px;min-height:1em}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .8s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>RV Lab</h1>
+    <span class="sub mono" id="ver"></span>
+  </header>
+
+  <section id="login" class="sheet" hidden>
+    <h2>Sign in</h2>
+    <p class="hint">Same PIN as Cart Tally unless RV_PIN is set.</p>
+    <input class="t mono" id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN">
+    <div class="row"><button class="btn" id="loginBtn">Enter</button></div>
+    <div class="err" id="loginErr"></div>
+  </section>
+
+  <main id="app" hidden>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="view" aria-selected="true">View</button>
+      <button role="tab" data-tab="ai" aria-selected="false">Test a model</button>
+      <button role="tab" data-tab="res" aria-selected="false">Results</button>
+    </nav>
+
+    <!-- HUMAN VIEWING -->
+    <div data-pane="view">
+      <section class="sheet" id="vStart">
+        <h2>New session</h2>
+        <p class="hint">A photo and three decoys are locked in before you see anything. You get only a coordinate.</p>
+        <label class="f" for="viewerName">Viewer name</label>
+        <input class="t" id="viewerName" placeholder="Nicholas" maxlength="40">
+        <div class="row"><button class="btn red" id="getTarget">Get a target</button></div>
+        <div class="err" id="startErr"></div>
+      </section>
+
+      <section class="sheet" id="vSession" hidden>
+        <div class="small">Target coordinate</div>
+        <div class="coord" id="coord"></div>
+        <div class="commit">sealed: <span id="commitTxt"></span></div>
+        <label class="f" for="imp">Impressions</label>
+        <textarea class="t" id="imp" placeholder="Raw perceptions only. Don't name the target."></textarea>
+        <ul class="cues">
+          <li>First flashes, in fragments</li>
+          <li>Colors, textures, temperature, sound</li>
+          <li>Shapes, vertical vs horizontal, natural vs man-made, water</li>
+        </ul>
+        <label class="f">Sketch</label>
+        <canvas id="pad"></canvas>
+        <div class="row">
+          <button class="btn ghost" id="clearPad">Clear sketch</button>
+          <button class="btn" id="submitSession">Seal session</button>
+        </div>
+        <div class="err" id="sessErr"></div>
+      </section>
+
+      <section class="sheet" id="vJudge" hidden>
+        <h2>Judge it</h2>
+        <p class="hint">Tap photos in order of best match. First tap is your top pick. Or let a vision model judge it blind.</p>
+        <div class="grid" id="candGrid"></div>
+        <div class="row">
+          <button class="btn ghost" id="resetRank">Reset</button>
+          <button class="btn" id="lockPick" disabled>Lock in my ranking</button>
+        </div>
+        <label class="f" for="judgeModelH">AI judge model</label>
+        <input class="t mono" id="judgeModelH" list="visionModels" placeholder="z-ai/glm-5.3-flash">
+        <div class="row"><button class="btn ghost" id="aiJudge">Let AI judge</button></div>
+        <div class="err" id="judgeErr"></div>
+      </section>
+
+      <section class="sheet" id="vReveal" hidden>
+        <div class="verdict" id="verdict"></div>
+        <div class="small" id="verdictSub"></div>
+        <div class="grid" id="revealGrid"></div>
+        <p class="small" id="judgeReason"></p>
+        <p class="commit" id="verifyLine"></p>
+        <div class="row"><button class="btn red" id="again">Next target</button></div>
+      </section>
+    </div>
+
+    <!-- AI TESTING -->
+    <div data-pane="ai" hidden>
+      <section class="sheet">
+        <h2>Test a model</h2>
+        <p class="hint">The viewer model gets only a coordinate. A separate judge model ranks four photos without knowing which was real. Chance is 25%.</p>
+        <label class="f" for="viewerModel">Viewer model</label>
+        <input class="t mono" id="viewerModel" list="allModels" placeholder="z-ai/glm-5.3-flash">
+        <label class="f" for="judgeModel">Judge model (needs vision)</label>
+        <input class="t mono" id="judgeModel" list="visionModels" placeholder="z-ai/glm-5.3-flash">
+        <label class="f" for="trials">Trials (max 20)</label>
+        <input class="t mono" id="trials" type="number" min="1" max="20" value="10">
+        <div class="row">
+          <button class="btn red" id="runAi">Run test</button>
+          <button class="btn ghost" id="cancelAi" hidden>Stop</button>
+        </div>
+        <div class="err" id="aiErr"></div>
+      </section>
+      <section class="sheet" id="aiOut" hidden>
+        <h2 id="aiTitle"></h2>
+        <p class="small" id="aiSummary"></p>
+        <div id="aiLog"></div>
+      </section>
+    </div>
+
+    <!-- RESULTS -->
+    <div data-pane="res" hidden>
+      <section class="sheet">
+        <h2>Scoreboard</h2>
+        <p class="hint">Hit = real target ranked first. The red tick is chance (25%). A low p-value means the score is hard to get by luck; it takes dozens of trials to mean much.</p>
+        <div class="tablewrap"><table class="st" id="statTable"></table></div>
+        <p class="small" id="storageNote"></p>
+      </section>
+      <section class="sheet">
+        <h2>Recent trials</h2>
+        <div id="history"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<datalist id="allModels"></datalist>
+<datalist id="visionModels"></datalist>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("rv:"+k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("rv:"+k, v); }catch(e){} }
+};
+async function api(path, body){
+  const opt = body === undefined ? {credentials:"same-origin"} :
+    {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  let d = {}; try{ d = await r.json(); }catch(e){}
+  if(r.status === 401 && path !== "/rv/login"){ showLogin(); }
+  if(!r.ok) throw new Error(d.detail || ("Error " + r.status));
+  return d;
+}
+
+/* ---------- auth ---------- */
+function showLogin(){ $("#login").hidden = false; $("#app").hidden = true; }
+function showApp(){ $("#login").hidden = true; $("#app").hidden = false; loadModels(); }
+$("#loginBtn").onclick = async () => {
+  $("#loginErr").textContent = "";
+  try{ await api("/rv/login", {pin: $("#pin").value}); showApp(); }
+  catch(e){ $("#loginErr").textContent = e.message; }
+};
+$("#pin").addEventListener("keydown", e => { if(e.key === "Enter") $("#loginBtn").click(); });
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav.tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav.tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== b.dataset.tab);
+  if(b.dataset.tab === "res") loadResults();
+});
+
+/* ---------- models ---------- */
+let modelsLoaded = false;
+async function loadModels(){
+  if(modelsLoaded) return;
+  try{
+    const d = await api("/rv/models");
+    $("#allModels").innerHTML = d.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+    $("#visionModels").innerHTML = d.models.filter(m => m.vision).map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+    modelsLoaded = true;
+  }catch(e){}
+}
+["viewerModel","judgeModel","judgeModelH","viewerName"].forEach(id => {
+  const el = $("#"+id); el.value = store.get(id, el.value);
+  el.addEventListener("change", () => store.set(id, el.value.trim()));
+});
+
+/* ---------- sketch pad ---------- */
+const pad = $("#pad"), ctx = pad.getContext("2d");
+let drawing = false, drew = false;
+function sizePad(){
+  const r = pad.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if(!r.width) return;
+  pad.width = r.width * dpr; pad.height = r.height * dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0,0,r.width,r.height);
+  ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1D1B17";
+  drew = false;
+}
+function pt(e){ const r = pad.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+pad.addEventListener("pointerdown", e => { drawing = true; pad.setPointerCapture(e.pointerId); const [x,y] = pt(e); ctx.beginPath(); ctx.moveTo(x,y); });
+pad.addEventListener("pointermove", e => { if(!drawing) return; const [x,y] = pt(e); ctx.lineTo(x,y); ctx.stroke(); drew = true; });
+pad.addEventListener("pointerup", () => drawing = false);
+pad.addEventListener("pointercancel", () => drawing = false);
+$("#clearPad").onclick = sizePad;
+
+/* ---------- human session ---------- */
+let sid = null, commitment = "", ranking = [];
+function stage(id){ ["vStart","vSession","vJudge","vReveal"].forEach(s => $("#"+s).hidden = s !== id); window.scrollTo(0,0); }
+
+$("#getTarget").onclick = async () => {
+  $("#startErr").textContent = "";
+  const btn = $("#getTarget"); btn.disabled = true;
+  try{
+    const d = await api("/rv/new", {viewer: $("#viewerName").value.trim() || "me"});
+    sid = d.session_id; commitment = d.commitment;
+    $("#coord").textContent = d.coordinate;
+    $("#commitTxt").textContent = d.commitment;
+    $("#imp").value = ""; ranking = [];
+    stage("vSession"); requestAnimationFrame(sizePad);
+  }catch(e){ $("#startErr").textContent = e.message; }
+  btn.disabled = false;
+};
+
+$("#submitSession").onclick = async () => {
+  $("#sessErr").textContent = "";
+  const btn = $("#submitSession"); btn.disabled = true;
+  try{
+    const sketch = drew ? pad.toDataURL("image/jpeg", 0.8) : "";
+    const d = await api("/rv/submit", {session_id: sid, impressions: $("#imp").value, sketch});
+    renderCandidates(d.candidates); stage("vJudge");
+  }catch(e){ $("#sessErr").textContent = e.message; }
+  btn.disabled = false;
+};
+
+function renderCandidates(c){
+  $("#candGrid").innerHTML = Object.entries(c).map(([k,u]) =>
+    `<button class="cand" data-l="${k}"><img src="${esc(u)}" alt="Photo ${k}"><span class="lab">${k}</span></button>`).join("");
+  $("#candGrid").querySelectorAll(".cand").forEach(b => b.onclick = () => {
+    const l = b.dataset.l; if(ranking.includes(l)) return;
+    ranking.push(l); paintRanks();
+  });
+  paintRanks();
+}
+function paintRanks(){
+  $("#candGrid").querySelectorAll(".cand").forEach(b => {
+    b.querySelector(".rk")?.remove();
+    const i = ranking.indexOf(b.dataset.l);
+    if(i > -1) b.insertAdjacentHTML("beforeend", `<span class="rk">${i+1}</span>`);
+  });
+  $("#lockPick").disabled = ranking.length === 0;
+}
+$("#resetRank").onclick = () => { ranking = []; paintRanks(); };
+
+async function judge(body, btn){
+  $("#judgeErr").textContent = ""; btn.disabled = true;
+  const label = btn.innerHTML; btn.innerHTML = `<span class="spin"></span> Judging`;
+  try{ const d = await api("/rv/judge", Object.assign({session_id: sid}, body)); await showReveal(d); }
+  catch(e){ $("#judgeErr").textContent = e.message; }
+  btn.disabled = false; btn.innerHTML = label;
+}
+$("#lockPick").onclick = () => judge({mode:"self", ranking}, $("#lockPick"));
+$("#aiJudge").onclick = () => judge({mode:"ai", judge_model: $("#judgeModelH").value.trim() || undefined}, $("#aiJudge"));
+
+async function sha256(s){
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,"0")).join("");
+}
+async function showReveal(d){
+  $("#verdict").textContent = d.hit ? "Hit" : "Miss";
+  $("#verdict").className = "verdict " + (d.hit ? "hit" : "miss");
+  $("#verdictSub").textContent = `Target was ${d.target_label}. Ranked #${d.rank} of 4 by ${d.judge === "self" ? "you" : d.judge}.`;
+  $("#revealGrid").innerHTML = Object.entries(d.images).map(([k,u]) =>
+    `<div class="cand ${k === d.target_label ? "target" : ""} ${k === d.ranking[0] ? "pick" : ""}"><img src="${esc(u)}" alt="Photo ${k}"><span class="lab">${k}</span></div>`).join("");
+  $("#judgeReason").textContent = d.reason ? "Judge: " + d.reason : "";
+  try{
+    const h = await sha256(`${d.target_id}|${d.nonce}`);
+    $("#verifyLine").innerHTML = h === commitment
+      ? `<span class="ok">Seal verified.</span> The target was fixed before you started.`
+      : `<span class="bad">Seal mismatch.</span> Don't trust this trial.`;
+  }catch(e){ $("#verifyLine").textContent = d.verify; }
+  stage("vReveal");
+}
+$("#again").onclick = () => stage("vStart");
+
+/* ---------- AI runs ---------- */
+let runId = null, pollT = null;
+$("#runAi").onclick = async () => {
+  $("#aiErr").textContent = "";
+  try{
+    const d = await api("/rv/ai_run", {
+      viewer_model: $("#viewerModel").value.trim() || undefined,
+      judge_model: $("#judgeModel").value.trim() || undefined,
+      trials: +$("#trials").value || 10});
+    runId = d.run_id; store.set("lastRun", runId);
+    $("#aiOut").hidden = false; $("#runAi").disabled = true; $("#cancelAi").hidden = false;
+    poll();
+  }catch(e){ $("#aiErr").textContent = e.message; }
+};
+$("#cancelAi").onclick = async () => { if(runId) try{ await api(`/rv/ai_run/${runId}/cancel`, {}); }catch(e){} };
+
+async function poll(){
+  clearTimeout(pollT);
+  if(!runId) return;
+  let r;
+  try{ r = await api(`/rv/ai_run/${runId}`); }
+  catch(e){
+    if(/Unknown run/.test(e.message)){ store.set("lastRun",""); runId = null; }
+    else $("#aiErr").textContent = e.message;
+    $("#runAi").disabled = false; $("#cancelAi").hidden = true; return;
+  }
+  renderRun(r);
+  if(r.status === "running"){ pollT = setTimeout(poll, 3000); }
+  else { $("#runAi").disabled = false; $("#cancelAi").hidden = true; }
+}
+function renderRun(r){
+  $("#aiOut").hidden = false;
+  const done = r.log.filter(s => s.status === "done"), hits = done.filter(s => s.result.hit).length;
+  $("#aiTitle").textContent = `${r.viewer_model}`;
+  const st = r.status === "running" ? `Running trial ${r.log.length} of ${r.trials}` : r.status === "cancelled" ? "Stopped" : "Finished";
+  let sum = `${st} · judged by ${esc(r.judge_model)} · ${hits} hits in ${done.length}`;
+  if(r.summary && r.summary.n) sum += ` · ${Math.round(r.summary.hit_rate*100)}% vs 25% chance · p=${r.summary.p_value}`;
+  $("#aiSummary").innerHTML = sum;
+  $("#aiLog").innerHTML = r.log.slice().reverse().map(s => {
+    if(s.status === "error") return `<div class="trial"><div class="head"><span>#${s.n}</span><span class="bad">error</span></div><div class="small">${esc(s.error)}</div></div>`;
+    if(s.status !== "done") return `<div class="trial"><div class="head"><span>#${s.n} ${esc(s.coordinate||"")}</span><span><span class="spin"></span> ${s.status}</span></div></div>`;
+    return trialHtml(s.result, s.n);
+  }).join("");
+}
+function trialHtml(d, n){
+  const thumbs = Object.entries(d.images).map(([k,u]) =>
+    `<div class="cand ${k === d.target_label ? "target" : ""} ${k === d.ranking[0] ? "pick" : ""}"><img loading="lazy" src="${esc(u.replace("/640/480","/320/240"))}" alt="Photo ${k}"><span class="lab">${k}</span></div>`).join("");
+  const when = d.t ? new Date(d.t*1000).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}) : "";
+  return `<div class="trial">
+    <div class="head"><span>${n ? "#"+n+" " : ""}${esc(d.coordinate)}${n ? "" : " · "+esc(d.viewer)}</span>
+      <span class="${d.hit ? "ok" : "bad"}">${d.hit ? "HIT" : "rank "+d.rank}</span></div>
+    ${n ? "" : `<div class="small">${esc(when)} · judged by ${esc(d.judge === "self" ? "viewer" : d.judge)}</div>`}
+    <div class="thumbs">${thumbs}</div>
+    ${d.reason ? `<div class="small" style="margin-top:6px">${esc(d.reason)}</div>` : ""}
+    ${d.transcript ? `<details><summary>Session transcript</summary><pre class="tx">${esc(d.transcript)}</pre></details>` : ""}
+  </div>`;
+}
+
+/* ---------- results ---------- */
+async function loadResults(){
+  try{
+    const s = await api("/rv/stats");
+    const rows = s.viewers.map(v => `<tr>
+      <td>${esc(v.viewer)}<div class="small">${v.kind === "ai" ? "model" : "person"}</div>
+        <div class="bar"><span style="width:${(v.hit_rate||0)*100}%"></span><i></i></div></td>
+      <td>${v.n}</td><td>${v.hits}</td><td>${v.hit_rate == null ? "–" : Math.round(v.hit_rate*100)+"%"}</td>
+      <td>${v.mean_rank ?? "–"}</td><td>${v.p_value}</td></tr>`).join("");
+    $("#statTable").innerHTML = `<tr><th>Viewer</th><th>Trials</th><th>Hits</th><th>Rate</th><th>Avg rank</th><th>p</th></tr>` +
+      (rows || `<tr><td colspan="6">No trials yet.</td></tr>`);
+    $("#storageNote").textContent = `Chance: 25% hits, average rank 2.5. Saved to ${s.storage}.`;
+    const h = await api("/rv/history?limit=30");
+    $("#history").innerHTML = h.items.map(d => trialHtml(d)).join("") || `<p class="small">Nothing yet.</p>`;
+  }catch(e){ $("#history").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+/* ---------- boot ---------- */
+(async () => {
+  try{
+    const s = await api("/rv/session");
+    $("#ver").textContent = "v" + s.version;
+    if(!s.configured){ showLogin(); $("#loginErr").textContent = "No PIN is set on the server (RV_PIN or CART_PIN)."; return; }
+    if(s.authed){ showApp(); const last = store.get("lastRun", ""); if(last){ runId = last; poll(); } }
+    else showLogin();
+  }catch(e){ showLogin(); $("#loginErr").textContent = e.message; }
+})();
+</script>
+</body>
+</html>
