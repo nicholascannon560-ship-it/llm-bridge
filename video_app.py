@@ -65,7 +65,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.3.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.4.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -261,53 +261,124 @@ def _find(rows: list[dict], rid: str) -> dict | None:
 
 
 # --------------------------------------------------------------------------- pricing
-def _res_of(sku: str) -> str | None:
-    s = sku.lower()
-    return next((t for t in RES_TOKENS if t in s), None)
+RES_SIDE = {"480p": 480, "720p": 720, "768p": 768, "1080p": 1080, "1k": 1080, "2k": 1440, "4k": 2160}
+MODES = ("text", "image", "ref", "video")
 
 
-def _audio_of(sku: str) -> bool | None:
-    s = sku.lower()
-    if any(x in s for x in ("no-audio", "without-audio", "noaudio", "silent", "video-only")):
-        return False
-    if "audio" in s:
-        return True
-    return None
+def _sku_tags(key: str) -> dict | None:
+    """Read one of OpenRouter's pricing SKU names. Seen in the wild (Oct 2026):
+    duration_seconds_768p, reference_duration_seconds_768p, cents_per_second_output,
+    cents_per_video_output_second_720p, cents_per_image_input, duration_seconds_with_audio,
+    text_to_video_duration_seconds_720p, image_to_video_..., video_tokens_without_audio,
+    video_tokens_with_video_input, minimum_cents_per_generation, reference_images."""
+    k = key.lower()
+    t = {"res": next((r for r in RES_SIDE if re.search(rf"(^|[_-]){r}($|[_-])", k)), None),
+         "cents": "cent" in k, "audio": None, "mode": None, "kind": None}
+    if "without_audio" in k or "no_audio" in k or "silent" in k:
+        t["audio"] = False
+    elif "audio" in k:
+        t["audio"] = True
+    if "reference" in k or "video_input" in k:
+        t["mode"] = "refvid"
+    elif "image_to_video" in k:
+        t["mode"] = "image"
+    elif "text_to_video" in k:
+        t["mode"] = "text"
+    if "continuation" in k or "megapixel" in k or "upscale" in k:
+        t["kind"] = "skip"
+    elif "minimum" in k:
+        t["kind"] = "min"
+    elif "reference_images" in k or ("image" in k and "input" in k):
+        t["kind"] = "per_image"
+    elif "token" in k:
+        t["kind"] = "token"
+    elif "second" in k:
+        t["kind"] = "per_sec"
+    elif "video" in k or "generation" in k:
+        t["kind"] = "flat"
+    else:
+        return None
+    return t
 
 
-def estimate_cost(model: dict, duration: float, resolution: str, audio: bool) -> tuple[float | None, str]:
-    """Conservative cost estimate from OpenRouter's listed pricing SKUs.
+def _tokens_per_second(res: str) -> float:
+    side = RES_SIDE.get((res or "720p").lower(), 720)
+    return side * side * 16 / 9 * 24 / 1024  # Seedance-style: w*h*fps/1024, assumes 16:9-sized frames
 
-    Picks the SKUs that match the chosen resolution (or the unmarked base SKU when
-    none name it), drops ones that contradict the audio choice, and takes the MAX
-    so a guess errs toward refusing rather than overspending. None = unknown price.
-    """
-    skus = model.get("pricing_skus") or {}
-    nums: dict[str, float] = {}
-    for k, v in skus.items():
+
+def price_terms(model: dict, resolution: str, audio: bool, mode: str) -> dict | None:
+    """-> {"ps": $/second, "min": $ per video floor, "img": $ per input picture, "basis": str} or None."""
+    skus = []
+    for k, v in (model.get("pricing_skus") or {}).items():
         try:
-            nums[str(k)] = float(v)
+            val = float(v)
         except (TypeError, ValueError):
             continue
-    if not nums:
-        return None, "no price listed"
+        t = _sku_tags(str(k))
+        if not t or t["kind"] == "skip":
+            continue
+        kl = str(k).lower()
+        scale = (0.01 if t["cents"] else 1) / (1e6 if "million" in kl else 1e3 if "thousand" in kl else 1)
+        t.update(key=str(k), val=val * scale)
+        skus.append(t)
     res = (resolution or "").lower()
+    mclass = "refvid" if mode in ("ref", "video") else mode
 
-    def pool(keys: list[str]) -> list[str]:
-        exact = [k for k in keys if _res_of(k) == res]
-        base = exact or [k for k in keys if _res_of(k) is None]
-        fit = [k for k in base if _audio_of(k) in (None, audio)]
-        return fit or base
+    def respick(lst):
+        exact = [x for x in lst if x["res"] == res]
+        return exact or [x for x in lst if x["res"] is None]
 
-    per_sec = pool([k for k in nums if "second" in k.lower()])
-    if per_sec:
-        rate = max(nums[k] for k in per_sec)
-        return round(rate * float(duration), 4), f"${rate:g}/s ({', '.join(sorted(per_sec))})"
-    per_vid = pool([k for k in nums if "second" not in k.lower() and "token" not in k.lower()])
-    if per_vid:
-        flat = max(nums[k] for k in per_vid)
-        return round(flat, 4), f"${flat:g} per video ({', '.join(sorted(per_vid))})"
-    return None, f"unrecognised pricing: {', '.join(sorted(nums))}"
+    def rate(kind):
+        comp = [x for x in skus if x["kind"] == kind and x["audio"] in (None, audio)
+                and x["mode"] in (None, mclass)]
+        base = respick([x for x in comp if x["audio"] is None and x["mode"] != "refvid"])
+        if mclass == "refvid":
+            rv = respick([x for x in comp if x["mode"] == "refvid"])
+            if rv:
+                return max(x["val"] for x in rv), rv
+        aud = respick([x for x in comp if x["audio"] is not None and x["mode"] != "refvid"])
+        used = base + aud
+        if not used:
+            return None, []
+        if aud and not audio:  # an explicit "without audio" price replaces the base one
+            return max(x["val"] for x in aud), aud
+        return max(x["val"] for x in used), used
+
+    ps, used = rate("per_sec")
+    if ps is None:
+        tok, used = rate("token")
+        if tok is not None:
+            ps = tok * _tokens_per_second(res)
+    flat, fused = rate("flat")
+    if ps is None and flat is None:
+        return None
+    mins = [x["val"] for x in skus if x["kind"] == "min"]
+    imgs = [x["val"] for x in skus if x["kind"] == "per_image"]
+    basis = ", ".join(sorted({x["key"] for x in used + fused}))
+    return {"ps": ps or 0.0, "flat": flat or 0.0, "min": max(mins) if mins else 0.0,
+            "img": max(imgs) if imgs else 0.0, "basis": basis}
+
+
+def estimate_cost(model: dict, duration: float, resolution: str, audio: bool,
+                  mode: str = "text", n_images: int = 0) -> tuple[float | None, str]:
+    t = price_terms(model, resolution, audio, mode)
+    if t is None:
+        return None, f"unrecognised pricing: {', '.join(sorted((model.get('pricing_skus') or {})))}"
+    cost = max(t["ps"] * float(duration) + t["flat"], t["min"]) + t["img"] * n_images
+    return round(cost, 4), t["basis"]
+
+
+def price_table(model: dict) -> dict:
+    """Every resolution x audio x mode combination, so the page can price options instantly
+    with the same rules the server enforces."""
+    out = {}
+    for res in (model.get("resolutions") or [""]):
+        for audio in (True, False):
+            for mode in MODES:
+                t = price_terms(model, res, audio, mode)
+                out[f"{res}|{int(audio)}|{mode}"] = None if t is None else \
+                    {k: round(t[k], 6) for k in ("ps", "flat", "min", "img")}
+    return out
 
 
 def _public_base(request: Request) -> str:
@@ -368,6 +439,7 @@ async def _models(force: bool = False) -> list[dict]:
             "aspect_ratios": list(m.get("supported_aspect_ratios") or []),
             "pricing_skus": m.get("pricing_skus") or {},
         })
+        out[-1]["prices"] = price_table(out[-1])
     _models_cache.update(t=time.time(), data=out)
     return out
 
@@ -689,8 +761,9 @@ async def video_estimate(request: Request):
     if not m:
         return _err("Unknown model")
     cost, basis = estimate_cost(m, float(b.get("duration") or 0), str(b.get("resolution") or ""),
-                                bool(b.get("audio", True)))
+                                bool(b.get("audio", True)), str(b.get("mode") or "text"), int(b.get("n_images") or 0))
     return {"cost": cost, "basis": basis}
+
 
 
 @video_router.post("/video/generate")
@@ -760,7 +833,9 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         parts = max(1, min(12, int(b.get("parts") or 1)))
     except (TypeError, ValueError):
         parts = 1
-    est, basis = estimate_cost(m, duration, resolution, audio)
+    mode = "video" if extra.get("video_ref_url") else "image" if frames else "ref" if refs else "text"
+    n_img = len(frames) + len(refs)
+    est, basis = estimate_cost(m, duration, resolution, audio, mode, n_img)
     if est is None:
         return _err(f"Can't price {m['name']} ({basis}), so it won't run. Pick another model.")
     if est * parts > budget + 1e-9:
@@ -806,7 +881,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                 elif payload.get("generate_audio") is False and "generate_audio" in low:
                     # Some models (HeyGen) always render sound. A song replaces it anyway,
                     # so let the model make sound, but re-check the price with audio on.
-                    est2, basis2 = estimate_cost(m, duration, resolution, True)
+                    est2, basis2 = estimate_cost(m, duration, resolution, True, mode, n_img)
                     if est2 is None or est2 * parts > budget + 1e-9:
                         return _err(f"{m['name']} always makes its own sound, which brings this to about "
                                     f"${(est2 or 0) * parts:.2f}, over your ${budget:.2f} budget.")
@@ -1015,6 +1090,7 @@ async def video_job_edit(jid: str, request: Request):
         if spec.get(k) in (None, ""):
             spec[k] = orig.get(k)
     extra = {"parent_id": orig["id"], "edit_mode": mode, "change": change}
+    user_imgs = [i for i in (b.get("images") or []) if isinstance(i, dict)][:8]
 
     if mode == "edit":
         if not orig.get("src_token"):
@@ -1025,7 +1101,7 @@ async def video_job_edit(jid: str, request: Request):
             extra["previous_job_id"] = orig["or_id"]
         spec["prompt"] = (f"Edit the input video: {change}. "
                           f"Keep everything else about the video the same.")
-        spec["images"] = []
+        spec["images"] = [{"id": i.get("id"), "role": "ref"} for i in user_imgs]
     else:
         try:
             spec["prompt"] = (await _or_chat(REMAKE_PROMPT.format(old=orig.get("prompt", ""), change=change)))\
@@ -1033,8 +1109,8 @@ async def video_job_edit(jid: str, request: Request):
         except Exception as e:
             print(f"[video] remake rewrite failed, falling back: {e!r}", flush=True)
             spec["prompt"] = f"{orig.get('prompt', '')} Change: {change}"[:2500]
-        imgs = [dict(i) for i in (orig.get("images") or [])]
-        if b.get("keep_look", True):
+        imgs = user_imgs if user_imgs else [dict(i) for i in (orig.get("images") or [])]
+        if b.get("keep_look", True) and not any(i.get("role") == "first" for i in user_imgs):
             try:
                 frame = await asyncio.to_thread(first_frame_sync, await _get(orig["clip_key"]) or b"")
                 fid = secrets.token_urlsafe(24)

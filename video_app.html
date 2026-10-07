@@ -209,23 +209,20 @@ async function api(path, opts={}){
 function showErr(el, msg){ el.textContent = msg; el.hidden = !msg; }
 
 // ---------------- pricing (mirrors estimate_cost in video_app.py)
-const RES = ['480p','720p','768p','1080p','1k','2k','4k'];
-const resOf = k => RES.find(t => k.toLowerCase().includes(t)) || null;
-function audioOf(k){ k = k.toLowerCase();
-  if (['no-audio','without-audio','noaudio','silent','video-only'].some(x => k.includes(x))) return false;
-  return k.includes('audio') ? true : null; }
-function estimate(m, duration, resolution, audio){
-  const nums = {}; for (const [k,v] of Object.entries(m.pricing_skus || {})){ const n = parseFloat(v); if (!isNaN(n)) nums[k] = n; }
-  const keys = Object.keys(nums); if (!keys.length) return null;
-  const res = (resolution || '').toLowerCase();
-  const pool = ks => { const exact = ks.filter(k => resOf(k) === res);
-    const base = exact.length ? exact : ks.filter(k => resOf(k) === null);
-    const fit = base.filter(k => [null, audio].includes(audioOf(k))); return fit.length ? fit : base; };
-  const ps = pool(keys.filter(k => k.toLowerCase().includes('second')));
-  if (ps.length) return Math.max(...ps.map(k => nums[k])) * duration;
-  const pv = pool(keys.filter(k => !k.toLowerCase().includes('second') && !k.toLowerCase().includes('token')));
-  if (pv.length) return Math.max(...pv.map(k => nums[k]));
-  return null;
+// Prices come pre-worked from the server (same rules it enforces), keyed by
+// resolution | audio | mode, where mode is text, image (start/end picture), ref, or video (editing a clip).
+function estimate(m, duration, resolution, audio, mode = 'text', nimg = 0){
+  const t = (m.prices || {})[`${resolution || ''}|${audio ? 1 : 0}|${mode}`];
+  if (!t) return null;
+  return Math.max(t.ps * duration + t.flat, t.min) + t.img * nimg;
+}
+function picMode(list){
+  if (list.some(p => p.role === 'first' || p.role === 'last')) return 'image';
+  return list.some(p => p.role === 'ref') ? 'ref' : 'text';
+}
+function picCount(list){
+  const frames = list.filter(p => p.role !== 'ref').length;
+  return frames ? frames : list.length;
 }
 const audioOn = () => $('audio').checked && !$('song').value;
 const durationsFor = m => (m.durations && m.durations.length) ? m.durations : [5];
@@ -276,7 +273,9 @@ function render(){
     v => ({'9:16':'9:16 vertical','16:9':'16:9 wide','1:1':'1:1 square'}[v] || v || 'Default'));
   $('audio').disabled = !!$('song').value;
   $('songStartRow').hidden = !$('song').value;
-  { const e = estimate(m, L.seg, state.resolution, audioOn()); state.estimate = e == null ? null : e * L.parts; }
+  { const e1 = estimate(m, L.seg, state.resolution, audioOn(), picMode(state.pics), picCount(state.pics));
+    const en = L.parts > 1 ? estimate(m, L.seg, state.resolution, audioOn(), 'image', 1) : 0;
+    state.estimate = (e1 == null || en == null) ? null : e1 + en * (L.parts - 1); }
   const budget = parseFloat($('budget').value) || 0;
   $('est').textContent = money(state.estimate);
   const fill = $('fill');
@@ -305,7 +304,10 @@ function fitToBudget(){
   const lower = rsSorted.slice(0, Math.max(0, rsSorted.indexOf(state.resolution))).reverse();
   const tryRes = [state.resolution, ...lower];
   for (const r of tryRes){
-    const fits = lengthOptions(m).filter(o => { const e = estimate(m, o.seg, r, audioOn()); return e != null && e * o.parts <= budget; });
+    const fits = lengthOptions(m).filter(o => {
+      const e1 = estimate(m, o.seg, r, audioOn(), picMode(state.pics), picCount(state.pics));
+      const en = o.parts > 1 ? estimate(m, o.seg, r, audioOn(), 'image', 1) : 0;
+      return e1 != null && en != null && e1 + en * (o.parts - 1) <= budget; });
     if (fits.length){ state.resolution = r; state.length = Math.max(...fits.map(o => o.total)); render(); return; }
   }
   showErr($('goErr'), 'Nothing on this model fits ' + money(budget) + '. Raise the budget or pick a cheaper model.');
@@ -344,7 +346,7 @@ function renderPics(){
     d.querySelector('button').onclick = () => { state.pics.splice(i, 1); renderPics(); };
     box.appendChild(d);
   });
-  checkPics();
+  checkPics(); render();
 }
 function checkPics(){
   const n = r => state.pics.filter(p => p.role === r).length;
@@ -543,7 +545,7 @@ function openExtender(j, el){
   const audio = j.audio && !j.song_id;
   function upd(){
     chips(q('[data-secs]'), ds, secs, v => { secs = v; upd(); }, v => '+' + v + 's');
-    const e = estimate(m, secs, j.resolution, audio), budget = parseFloat(q('[data-budget]').value) || 0;
+    const e = estimate(m, secs, j.resolution, audio, 'image', 1), budget = parseFloat(q('[data-budget]').value) || 0;
     q('[data-est]').textContent = money(e);
     q('[data-est]').style.color = (e == null || e > budget) ? 'var(--red)' : '';
     q('[data-spec]').textContent = `${(j.total_seconds || j.duration) + secs}s total${e != null && e > budget ? ', over budget' : ''}`;
@@ -571,7 +573,7 @@ function nearest(list, want){
 function openEditor(j, el){
   if (!el.hidden){ el.hidden = true; return; }
   el.hidden = false;
-  const ed = {mode: 'edit', model: j.model};
+  const ed = {mode: 'edit', model: j.model, pics: []};
   el.innerHTML = `
     <div class="seg" role="group" aria-label="How to change it">
       <button type="button" data-m="edit">Edit this video</button>
@@ -580,6 +582,12 @@ function openEditor(j, el){
     <label class="f">What should change?</label>
     <textarea data-change placeholder="Make it night, with snow falling"></textarea>
     <label class="toggle" data-keep><input type="checkbox" checked> Start from this clip's first frame so it keeps its look</label>
+    <label class="f">Pictures <span class="hint">(optional)</span></label>
+    <div class="row"><button class="btn ghost small" type="button" data-addpic>Add a picture</button>
+      <span class="hint" style="margin:0" data-pichint></span></div>
+    <input type="file" class="vh" accept="image/*" multiple tabindex="-1" data-picfile>
+    <div class="pics" data-pics></div>
+    <div class="err" data-picerr hidden></div>
     <label class="f">Model</label>
     <select data-model>${state.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select>
     <div class="row" style="margin-top:12px;justify-content:space-between">
@@ -597,14 +605,58 @@ function openEditor(j, el){
     return {m, duration: nearest(durationsFor(m), j.duration), resolution: nearest(m.resolutions, j.resolution),
       aspect_ratio: nearest(m.aspect_ratios, j.aspect_ratio), audio};
   }
+  // Pictures for this change. Editing a clip can only take Reference pictures (the clip
+  // itself is the input); a remake can also use Start/End pictures.
+  function sentPics(){
+    const keep = ed.mode === 'remake' && q('[data-keep] input').checked && !ed.pics.some(p => p.role === 'first');
+    const list = ed.mode === 'edit' ? ed.pics.map(p => ({...p, role: 'ref'})) : ed.pics.slice();
+    return {list, keep};
+  }
+  function drawPics(){
+    const box = q('[data-pics]'); box.innerHTML = '';
+    q('[data-pichint]').textContent = ed.mode === 'edit' ? 'Used as a look or subject reference'
+      : 'Start, End, or a look reference';
+    ed.pics.forEach((p, i) => {
+      const d = document.createElement('div'); d.className = 'pic';
+      d.innerHTML = `<img alt="" src="${p.thumb}"><div class="ctl">
+        ${ed.mode === 'edit' ? '<span class="hint" style="margin:0;padding:6px 4px;flex:1">Reference</span>'
+          : `<select aria-label="How to use this picture"><option value="first">Start</option><option value="last">End</option><option value="ref">Reference</option></select>`}
+        <button type="button" aria-label="Remove picture">✕</button></div>`;
+      const sel = d.querySelector('select');
+      if (sel){ sel.value = p.role; sel.onchange = () => { p.role = sel.value; upd(); }; }
+      d.querySelector('button').onclick = () => { ed.pics.splice(i, 1); upd(); };
+      box.appendChild(d);
+    });
+    const n = r => ed.pics.filter(p => p.role === r).length;
+    showErr(q('[data-picerr]'), ed.mode === 'remake' && (n('first') > 1 || n('last') > 1) ? 'Only one Start and one End picture.'
+      : ed.pics.length > 4 && ed.mode === 'edit' ? 'Use at most 4 pictures.' : '');
+  }
+  q('[data-addpic]').onclick = () => q('[data-picfile]').click();
+  q('[data-picfile]').onchange = async () => {
+    const files = [...q('[data-picfile]').files]; q('[data-picfile]').value = '';
+    const b = q('[data-addpic]'); b.disabled = true; b.textContent = 'Uploading…';
+    for (const f of files){
+      try { const sm = await shrink(f);
+        const out = await api('/video/images', {method:'POST', body: JSON.stringify({data: sm.data})});
+        ed.pics.push({id: out.id, role: 'ref', thumb: sm.data});
+      } catch(e){ showErr(q('[data-picerr]'), e.message); }
+    }
+    b.disabled = false; b.textContent = 'Add a picture'; upd();
+  };
+  q('[data-keep] input').onchange = () => upd();
   function upd(){
+    drawPics();
     el.querySelectorAll('[data-m]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.m === ed.mode)));
     q('[data-mh]').textContent = ed.mode === 'edit'
       ? 'Sends this clip to the model and changes it. Only some models take a video in; you\'ll be told if this one can\'t.'
       : 'Makes a fresh clip from the old prompt plus your change. Works with every model.';
     q('[data-keep]').hidden = ed.mode !== 'remake';
     const sp = spec(); if (!sp) return;
-    const e = estimate(sp.m, sp.duration, sp.resolution, sp.audio);
+    const {list, keep} = sentPics();
+    const all = keep ? [...list, {role: 'first'}] : list;
+    const e = ed.mode === 'edit'
+      ? estimate(sp.m, sp.duration, sp.resolution, sp.audio, 'video', list.length)
+      : estimate(sp.m, sp.duration, sp.resolution, sp.audio, picMode(all), picCount(all));
     const budget = parseFloat(q('[data-budget]').value) || 0;
     q('[data-est]').textContent = money(e);
     q('[data-est]').style.color = (e == null || e > budget) ? 'var(--red)' : '';
@@ -621,6 +673,7 @@ function openEditor(j, el){
         mode: ed.mode, change: q('[data-change]').value.trim(), model: sp.m.id, duration: sp.duration,
         resolution: sp.resolution, aspect_ratio: sp.aspect_ratio, audio: sp.audio,
         budget: parseFloat(q('[data-budget]').value) || 0, keep_look: q('[data-keep] input').checked,
+        images: sentPics().list.map(p => ({id: p.id, role: p.role})),
         song_id: j.song_id || null, song_start: j.song_start || 0})});
       el.hidden = true; state.stale = true; await loadJobs(); window.scrollTo({top: $('clips').offsetTop, behavior: 'auto'});
     } catch(e){ showErr(q('[data-err]'), e.message); }
