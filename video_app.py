@@ -61,7 +61,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.2.3"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.2.4"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -713,17 +713,32 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
             data = r.json()
-            # previous_job_id is a hint some providers don't take; retry once without it.
-            if (r.status_code >= 400 and "previous_job_id" in payload
-                    and "previous" in str(_msg(data, r)).lower()):
-                payload.pop("previous_job_id")
+            for _ in range(2):
+                if r.status_code < 400:
+                    break
+                low = str(_msg(data, r)).lower()
+                if "previous_job_id" in payload and "previous" in low:
+                    # A hint some providers don't take: retry without it.
+                    payload.pop("previous_job_id")
+                elif payload.get("generate_audio") is False and "generate_audio" in low:
+                    # Some models (HeyGen) always render sound. A song replaces it anyway,
+                    # so let the model make sound, but re-check the price with audio on.
+                    est2, basis2 = estimate_cost(m, duration, resolution, True)
+                    if est2 is None or est2 > budget:
+                        return _err(f"{m['name']} always makes its own sound, which brings this to about "
+                                    f"${(est2 or 0):.2f}, over your ${budget:.2f} budget.")
+                    est, basis = est2, basis2
+                    payload.pop("generate_audio")
+                    audio = True
+                else:
+                    break
                 r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
                 data = r.json()
     except Exception as e:
         return _err(f"OpenRouter did not answer: {e}", 502)
     if r.status_code >= 400 or not data.get("id"):
         msg = str(_msg(data, r))
-        if extra.get("video_ref_url"):
+        if extra.get("video_ref_url") and any(w in msg.lower() for w in ("video", "reference", "input")):
             return _err(f"{m['name']} couldn't edit this video ({msg}). Try a model that takes video "
                         f"input, or use Remake with changes, which works on every model.", 502)
         return _err(f"OpenRouter refused the job: {msg}", 502)
