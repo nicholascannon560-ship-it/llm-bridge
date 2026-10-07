@@ -593,7 +593,7 @@ function renderJobs(){
     d.innerHTML = `${stateLabel(j)} <span class="meta num">${esc(j.model)}, ${j.total_seconds || j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${j.chain_estimate ? 'about ' + money(j.chain_estimate) + ' total' : cost + ' of ' + money(j.budget)}</span>
       ${j.parts_total > 1 ? `<div class="edit-of">${j.chain_remaining > 0 || !['ready','failed','cancelled','expired'].includes(j.status)
           ? `Long video: making part ${j.part_no} of ${j.parts_total}` : `Long video, ${j.parts_total} parts`}</div>`
-        : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended', timeline:'Made in the editor', talk:'Talking video'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
+        : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended', timeline:'Made in the editor', talk:'Talking video', upscale:'Sharpened'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
       ${j.chain_error ? `<div class="err">${esc(j.chain_error)}</div>` : ''}
       <div class="prompt">${esc(j.prompt)}</div>
       ${(j.images || []).length ? `<div class="thumbs">${j.images.map(im => `<img alt="${im.role === 'ref' ? 'Reference' : im.role === 'first' ? 'Start' : 'End'} picture" src="/video/img/${esc(im.id)}">`).join('')}</div>` : ''}
@@ -607,7 +607,9 @@ function renderJobs(){
           ${j.has_scored ? `<button class="btn ghost small" data-save="${j.id}" data-song="1">Save with song</button>` : ''}
           <button class="btn ghost small" data-open="${j.id}">${j.has_scored ? 'Change song' : 'Add song'}</button>
           <button class="btn small" data-edit="${j.id}">Edit</button>
-          <button class="btn ghost small" data-extend="${j.id}">Make longer</button></div>
+          <button class="btn ghost small" data-extend="${j.id}">Make longer</button>
+          <button class="btn ghost small" data-upscale="${j.id}">Sharpen (upscale)</button></div>
+        <div class="editor" data-upscaler="${j.id}" hidden></div>
         <div class="editor" data-editor="${j.id}" hidden></div>
         <div class="editor" data-extender="${j.id}" hidden></div>
         <div class="scorer" data-scorer="${j.id}" hidden>
@@ -626,6 +628,10 @@ function renderJobs(){
     const sel = sc.querySelector('select');
     sel.innerHTML = songOptions() || '<option value="">Upload a song first</option>';
     sc.querySelector('[data-upfor]').addEventListener('click', () => { songUploadTarget = b.dataset.open; });
+  });
+  box.querySelectorAll('[data-upscale]').forEach(b => b.onclick = () => {
+    const j = state.jobs.find(x => x.id === b.dataset.upscale);
+    if (j) openUpscaler(j, box.querySelector(`[data-upscaler="${j.id}"]`));
   });
   box.querySelectorAll('[data-extend]').forEach(b => b.onclick = () => {
     const j = state.jobs.find(x => x.id === b.dataset.extend);
@@ -674,6 +680,51 @@ async function saveClip(b){
     b.textContent = 'Tap to save';
   } catch(e){ b.textContent = label; alert("Couldn't get the video: " + e.message); }
   b.disabled = false;
+}
+function openUpscaler(j, el){
+  if (!el.hidden){ el.hidden = true; return; }
+  el.hidden = false;
+  const up = {factor: 1.5, mode: 'precise', quote: null};
+  el.innerHTML = `
+    <label class="f" style="margin-top:0">How much sharper</label><div class="chips" data-factor></div>
+    <label class="f">Style</label><div class="chips" data-mode></div>
+    <div class="hint" data-modehint></div>
+    <div class="row" style="margin-top:12px;justify-content:space-between">
+      <div><div class="num" style="font-size:24px;font-weight:700" data-est>…</div><div class="hint" style="margin:0" data-spec></div></div>
+      <div><label class="f" style="margin:0 0 6px">Budget</label>
+        <div class="money"><span>$</span><input class="num" type="number" min="0.05" step="0.05" value="3" data-budget></div></div>
+    </div>
+    <button class="btn go" data-submit>Sharpen it</button>
+    <div class="hint">Makes a new, sharper copy. Clips up to 20 seconds; trim longer ones in the editor first.</div>
+    <div class="err" data-err hidden></div>`;
+  const q = sel => el.querySelector(sel);
+  const FACT = {1.5: '1.5× (about 1080p)', 2: '2× (about 1440p)', 3: '3× (up to 4K)'};
+  function draw(){
+    chips(q('[data-factor]'), [1.5, 2, 3], up.factor, v => { up.factor = v; quote(); }, v => FACT[v]);
+    chips(q('[data-mode]'), ['precise', 'creative'], up.mode, v => { up.mode = v; quote(); }, v => v === 'precise' ? 'Precise' : 'Creative');
+    q('[data-modehint]').textContent = up.mode === 'precise' ? 'Stays faithful: best for faces, people and products.'
+      : 'Invents extra fine detail: best for scenery and textures. Faces can drift.';
+    const qt = up.quote, budget = parseFloat(q('[data-budget]').value) || 0;
+    q('[data-est]').textContent = qt && qt.cost != null ? money(qt.cost) : '…';
+    q('[data-spec]').textContent = qt && qt.width ? `${qt.src_width}×${qt.src_height} → ${qt.width}×${qt.height}, ${qt.seconds}s${qt.note ? ' · ' + qt.note : ''}` : '';
+    q('[data-submit]').disabled = !qt || qt.cost == null || qt.cost > budget;
+  }
+  async function quote(){
+    up.quote = null; draw(); showErr(q('[data-err]'), '');
+    try { up.quote = await api('/video/jobs/' + j.id + '/upscale/quote', {method:'POST', body: JSON.stringify({factor: up.factor, mode: up.mode})}); }
+    catch(e){ showErr(q('[data-err]'), e.message); }
+    draw();
+  }
+  q('[data-budget]').oninput = draw;
+  q('[data-submit]').onclick = async () => {
+    const btn = q('[data-submit]'); btn.disabled = true; btn.textContent = 'Sending…'; showErr(q('[data-err]'), '');
+    try { await api('/video/jobs/' + j.id + '/upscale', {method:'POST', body: JSON.stringify({factor: up.factor, mode: up.mode,
+        budget: parseFloat(q('[data-budget]').value) || 0})});
+      el.hidden = true; state.stale = true; await loadJobs(); window.scrollTo({top: $('clips').offsetTop, behavior: 'auto'}); }
+    catch(e){ showErr(q('[data-err]'), e.message); }
+    btn.textContent = 'Sharpen it'; draw();
+  };
+  quote();
 }
 function openExtender(j, el){
   if (!el.hidden){ el.hidden = true; return; }

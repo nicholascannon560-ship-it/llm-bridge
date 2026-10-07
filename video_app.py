@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.3.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.4.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -481,6 +481,7 @@ async def _models(force: bool = False) -> list[dict]:
             "resolutions": list(m.get("supported_resolutions") or []),
             "aspect_ratios": list(m.get("supported_aspect_ratios") or []),
             "pricing_skus": m.get("pricing_skus") or {},
+            "passthrough": list(m.get("allowed_passthrough_parameters") or []),
         })
         out[-1]["prices"] = price_table(out[-1])
     _models_cache.update(t=time.time(), data=out)
@@ -883,7 +884,10 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         parts = 1
     mode = "video" if extra.get("video_ref_url") else "image" if frames else "ref" if refs else "text"
     n_img = len(frames) + len(refs)
-    est, basis = estimate_cost(m, duration, resolution, audio, mode, n_img)
+    if extra.get("est_override") is not None:  # priced by the caller (upscaling is per megapixel-second)
+        est, basis = round(float(extra["est_override"]), 4), extra.get("est_basis") or "fixed"
+    else:
+        est, basis = estimate_cost(m, duration, resolution, audio, mode, n_img)
     if est is None:
         return _err(f"Can't price {m['name']} ({basis}), so it won't run. Pick another model.")
     if est * parts > budget + 1e-9:
@@ -929,6 +933,11 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         payload["frame_images"] = frames
     elif refs:
         payload["input_references"] = refs
+    if extra.get("provider_params"):
+        # Provider-specific knobs go under provider.options keyed by provider slug; only the
+        # slug that actually serves the request is forwarded, so naming a couple is harmless.
+        payload["provider"] = {"options": {slug: {"parameters": extra["provider_params"]}
+                                           for slug in extra.get("provider_slugs") or []}}
     if extra.get("previous_job_id"):
         payload["previous_job_id"] = extra["previous_job_id"]
 
@@ -1212,7 +1221,9 @@ async def video_src(token: str, request: Request):
     if not IMG_ID.match(token):
         return _err("Not found", 404)
     j = next((x for x in await _all_jobs() if x.get("src_token") == token), None)
-    data = await _get(j["clip_key"]) if j and j.get("clip_key") else None
+    key = (j or {}).get("scored_key") if request.query_params.get("song") == "1" else None
+    key = key or (j or {}).get("clip_key")
+    data = await _get(key) if key else None
     if not data:
         return _err("Not found", 404)
     return Response(data, media_type="video/mp4", headers={"Cache-Control": "public, max-age=86400",
@@ -2294,3 +2305,97 @@ async def video_song_file(sid: str, request: Request):
         return _err("Not found", 404)
     return Response(data, media_type=SONG_EXT.get(s["ext"], "audio/mpeg"),
                     headers={"Cache-Control": "private, max-age=3600", "Accept-Ranges": "none"})
+
+
+# =========================================================================== upscale
+# FLUX Video Upscale: sharpens a finished clip 1.5-3x (to 1080p/2K/4K). Priced per output
+# megapixel-second; precise keeps faces/products faithful, creative invents more detail.
+UPSCALE_MODEL = os.getenv("VIDEO_UPSCALE_MODEL") or "black-forest-labs/flux-video-upscale"
+UPSCALE_MAX_SECONDS, UPSCALE_MAX_MB, UPSCALE_MAX_SIDE, UPSCALE_CAP_MP = 20, 50, 2560, 14.4
+
+
+def upscale_plan(w: int, h: int, secs: float, factor: float, mode: str, skus: dict) -> dict:
+    """Output size and cost. Output frames are capped near 14.4 MP (4K)."""
+    factor = max(1.5, min(3.0, float(factor)))
+    ow, oh = w * factor, h * factor
+    mp = ow * oh / 1e6
+    if mp > UPSCALE_CAP_MP:
+        k = (UPSCALE_CAP_MP / mp) ** 0.5
+        ow, oh, mp = ow * k, oh * k, UPSCALE_CAP_MP
+    key = next((k for k in skus if "megapixel" in k.lower() and mode in k.lower()), None)
+    if key is None:
+        return {"error": "can't price upscaling right now"}
+    rate = float(skus[key]) / (100 if "cent" in key.lower() else 1)
+    return {"factor": factor, "width": int(ow), "height": int(oh), "mp": round(mp, 3),
+            "cost": round(rate * mp * secs, 4), "rate": rate, "basis": key}
+
+
+def _video_info_sync(data: bytes) -> tuple[int, int, float]:
+    with tempfile.TemporaryDirectory() as d:
+        pth = f"{d}/v.mp4"
+        Path(pth).write_bytes(data)
+        w, h, _ = _probe(pth)
+        return w, h, _probe_duration(pth) or 0.0
+
+
+async def _upscale_quote(request: Request, jid: str, factor, mode: str):
+    j = _mine(request, await _all_jobs(), jid)
+    if not j or not j.get("clip_key"):
+        return None, None, _err("That video isn't ready yet", 404)
+    m = await _model(UPSCALE_MODEL)
+    if not m:
+        return None, None, _err("The upscaler isn't available on OpenRouter right now.", 503)
+    data = await _get(j.get("scored_key") or j["clip_key"])
+    if not data:
+        return None, None, _err("The video file is missing", 404)
+    if len(data) > UPSCALE_MAX_MB * 1024 * 1024:
+        return None, None, _err(f"Upscaling takes clips up to {UPSCALE_MAX_MB} MB")
+    w, h, secs = await asyncio.to_thread(_video_info_sync, data)
+    if secs > UPSCALE_MAX_SECONDS + 0.3:
+        return None, None, _err(f"Upscaling takes clips up to {UPSCALE_MAX_SECONDS} seconds. "
+                                f"Trim it in the editor first (this one is {secs:.0f}s).")
+    if max(w, h) > UPSCALE_MAX_SIDE:
+        return None, None, _err("This clip is already larger than the upscaler accepts")
+    plan = upscale_plan(w, h, secs, factor or 2, "precise" if mode == "precise" else "creative", m["pricing_skus"])
+    if plan.get("error"):
+        return None, None, _err(plan["error"], 503)
+    plan.update(src_width=w, src_height=h, seconds=round(secs, 2),
+                can_tune=all(k in m["passthrough"] for k in ("upscale_factor", "creativity")))
+    if not plan["can_tune"]:  # the provider will use its defaults: 2x, creative
+        plan.update(upscale_plan(w, h, secs, 2, "creative", m["pricing_skus"]), note="Using the default 2x creative mode")
+    return j, plan, None
+
+
+@video_router.post("/video/jobs/{jid}/upscale/quote")
+async def video_upscale_quote(jid: str, request: Request):
+    if (d := await _deny(request)):
+        return d
+    b = await _body(request)
+    _, plan, err = await _upscale_quote(request, jid, b.get("factor"), str(b.get("mode") or "precise"))
+    return err or plan
+
+
+@video_router.post("/video/jobs/{jid}/upscale")
+async def video_upscale(jid: str, request: Request):
+    """{"factor": 1.5-3, "mode": "precise"|"creative", "budget"} -> a new job with the sharper clip."""
+    if (d := await _deny(request)):
+        return d
+    b = await _body(request)
+    mode = "precise" if b.get("mode") == "precise" else "creative"
+    j, plan, err = await _upscale_quote(request, jid, b.get("factor"), mode)
+    if err:
+        return err
+    if not j.get("src_token"):
+        j["src_token"] = secrets.token_urlsafe(24)
+        await _save_jobs()
+    extra = {"video_ref_url": f"{_public_base(request)}/video/src/{j['src_token']}" + ("?song=1" if j.get("scored_key") else ""),
+             "no_duration": True, "est_override": plan["cost"], "est_basis": plan["basis"],
+             "parent_id": j["id"], "edit_mode": "upscale",
+             "change": f"Upscaled {plan['factor']:g}x ({mode}) to {plan['width']}x{plan['height']}"}
+    if plan["can_tune"]:
+        extra["provider_params"] = {"upscale_factor": plan["factor"], "creativity": 0 if mode == "precise" else 1}
+        extra["provider_slugs"] = ["black-forest-labs", "bfl"]
+    spec = {"model": UPSCALE_MODEL, "prompt": (j.get("base_prompt") or j.get("prompt") or "Upscale this video.")[:1000],
+            "duration": max(1, int(plan["seconds"] + 0.999)), "resolution": "", "aspect_ratio": "",
+            "audio": True, "budget": b.get("budget"), "images": []}
+    return await _start_job(request, spec, extra)
