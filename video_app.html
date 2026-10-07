@@ -115,11 +115,17 @@ label.btn{display:inline-block;text-align:center}
 
   <section class="panel" id="login" hidden>
     <div id="pkStep">
-      <button class="btn go" id="pkLogin" style="margin-top:0">Sign in with Face ID</button>
-      <p class="hint" style="margin:14px 0 6px">New here? Create an account. Your phone keeps the key behind Face ID, so there's no password.</p>
-      <label class="f" for="email" style="margin-top:6px">Your email</label>
-      <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
-      <button class="btn ghost" id="pkSignup" style="margin-top:8px;width:100%">Create account with Face ID</button>
+      <div id="newBox">
+        <p style="margin:0 0 4px;font-weight:600">First time here? Create your account</p>
+        <p class="hint" style="margin:0 0 6px">Your phone saves a passkey behind Face ID, so there's no password.</p>
+        <label class="f" for="email" style="margin-top:6px">Your email</label>
+        <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+        <button class="btn go" id="pkSignup">Create account with Face ID</button>
+      </div>
+      <div id="backBox" style="margin-top:18px">
+        <p class="hint" style="margin:0 0 6px" id="backHint">Already made an account on this phone?</p>
+        <button class="btn ghost" id="pkLogin" style="width:100%">Sign in with Face ID</button>
+      </div>
     </div>
     <div class="err" id="loginErr" hidden></div>
     <details style="margin-top:16px"><summary class="hint">Owner sign-in</summary>
@@ -781,7 +787,7 @@ function credJSON(c){
   return out;
 }
 function pkError(e){
-  if (e && e.name === 'NotAllowedError') return 'Face ID was cancelled or timed out. Try again.';
+  if (e && e.name === 'NotAllowedError') return "Face ID was cancelled. If your phone showed a QR code, it has no passkey for this site yet: create your account above first.";
   if (e && e.name === 'InvalidStateError') return 'This phone already has a passkey for this account. Tap Sign in with Face ID.';
   return e.message || String(e);
 }
@@ -793,6 +799,7 @@ async function passkeySignup(){
     const st = await api('/video/passkey/register/start', {method:'POST', body: JSON.stringify({email: $('email').value.trim()})});
     const cred = await navigator.credentials.create({publicKey: createOpts(st.options)});
     await api('/video/passkey/register/finish', {method:'POST', body: JSON.stringify({token: st.token, credential: credJSON(cred)})});
+    try { localStorage.setItem('vs_passkey', '1'); } catch(_){}
     await boot();
   } catch(e){ showErr($('loginErr'), pkError(e)); }
   b.disabled = false;
@@ -805,6 +812,7 @@ async function passkeyLogin(){
     const st = await api('/video/passkey/login/start', {method:'POST'});
     const cred = await navigator.credentials.get({publicKey: getOpts(st.options)});
     await api('/video/passkey/login/finish', {method:'POST', body: JSON.stringify({token: st.token, credential: credJSON(cred)})});
+    try { localStorage.setItem('vs_passkey', '1'); } catch(_){}
     await boot();
   } catch(e){ showErr($('loginErr'), pkError(e)); }
   b.disabled = false;
@@ -851,6 +859,11 @@ async function boot(){
   const s = await api('/video/session');
   // Where email sign-up is off (the bridge), only the owner PIN is offered.
   $('pkStep').hidden = !s.accounts;
+  // Returning on a phone that already made a passkey: lead with sign-in.
+  let known = false; try { known = localStorage.getItem('vs_passkey') === '1'; } catch(_){}
+  if (known){ $('pkStep').prepend($('backBox')); $('backBox').style.marginTop = '0';
+    $('pkLogin').className = 'btn go'; $('backHint').hidden = true;
+    $('newBox').style.marginTop = '18px'; $('pkSignup').className = 'btn ghost'; $('pkSignup').style.width = '100%'; }
   $('login').querySelector('details').open = !s.accounts;
   if (!s.authed){ showLogin(); return; }
   $('login').hidden = true; $('app').hidden = false;
