@@ -86,6 +86,14 @@ textarea{min-height:92px;resize:vertical}
 .empty{color:var(--muted);font-size:15px}
 .toggle{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:15px}
 .toggle input{width:20px;height:20px;accent-color:var(--teal)}
+.pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:8px}
+.pic{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--paper)}
+.pic img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.pic .ctl{display:flex;gap:4px;padding:6px}
+.pic select{padding:6px 8px;font-size:13px;border-radius:8px}
+.pic button{border:1px solid var(--line);background:transparent;border-radius:8px;padding:0 9px;font-size:13px}
+.thumbs{display:flex;gap:6px;margin:4px 0 6px}
+.thumbs img{width:56px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -108,6 +116,16 @@ textarea{min-height:92px;resize:vertical}
         <button class="btn ghost small" id="improveBtn">Improve prompt</button>
         <span class="hint" id="improveHint">Rewrites your idea with camera, light and motion detail.</span>
       </div>
+
+      <label class="f">Pictures</label>
+      <div class="row">
+        <button class="btn ghost small" id="addPic" type="button">Add a picture</button>
+        <span class="hint" style="margin:0">Optional</span>
+      </div>
+      <input type="file" id="picFile" accept="image/*" multiple hidden>
+      <div class="pics" id="pics"></div>
+      <div class="hint" id="picHint" hidden>Start: the video opens on this exact picture. End: it finishes on it. Reference: the model borrows its look, subject or style.</div>
+      <div class="err" id="picErr" hidden></div>
 
       <label class="f" for="model">Model</label>
       <select id="model"></select>
@@ -162,7 +180,7 @@ textarea{min-height:92px;resize:vertical}
 <script>
 const $ = id => document.getElementById(id);
 const state = {models:[], songs:[], model:null, duration:null, resolution:null, aspect:null,
-  estimate:null, basis:'', jobs:[], spent:0, cap:0, timer:null};
+  estimate:null, basis:'', jobs:[], spent:0, cap:0, timer:null, pics:[]};
 const money = v => v == null ? '$—' : '$' + Number(v).toFixed(2);
 
 async function api(path, opts={}){
@@ -242,7 +260,7 @@ function render(){
   else if (state.estimate > left){ st.classList.add('over'); st.textContent = 'Over today\'s limit'; ok = false; }
   else st.textContent = money(budget - state.estimate) + ' under budget';
   $('today').textContent = money(state.spent) + ' of ' + money(state.cap) + ' used in the last 24 hours';
-  $('goBtn').disabled = !ok;
+  $('goBtn').disabled = !ok || !checkPics();
 }
 function fitToBudget(){
   const m = state.model; if (!m) return;
@@ -259,6 +277,66 @@ function fitToBudget(){
   }
   showErr($('goErr'), 'Nothing on this model fits ' + money(budget) + '. Raise the budget or pick a cheaper model.');
 }
+
+// ---------------- pictures
+function shrink(file){
+  // Re-encode on the phone: caps size at 1920px and turns iPhone HEIC into JPEG.
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => { const max = 1920, k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res({data: c.toDataURL('image/jpeg', 0.9), w: c.width, h: c.height}); };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Couldn't read that picture")); };
+    img.src = url; });
+}
+function closestAspect(w, h){
+  const m = state.model; if (!m || !m.aspect_ratios.length) return;
+  const r = w / h; let best = null, diff = 1e9;
+  for (const a of m.aspect_ratios){ const [x, y] = a.split(':').map(Number); if (!x || !y) continue;
+    const d = Math.abs(Math.log(r / (x / y))); if (d < diff){ diff = d; best = a; } }
+  if (best) state.aspect = best;
+}
+function renderPics(){
+  const box = $('pics'); box.innerHTML = '';
+  $('picHint').hidden = !state.pics.length;
+  state.pics.forEach((p, i) => {
+    const d = document.createElement('div'); d.className = 'pic';
+    d.innerHTML = `<img alt="" src="${p.thumb}"><div class="ctl">
+      <select aria-label="How to use this picture">
+        <option value="first">Start</option><option value="last">End</option><option value="ref">Reference</option></select>
+      <button type="button" aria-label="Remove picture">✕</button></div>`;
+    const sel = d.querySelector('select'); sel.value = p.role;
+    sel.onchange = () => { p.role = sel.value; if (p.role === 'first') closestAspect(p.w, p.h); checkPics(); render(); };
+    d.querySelector('button').onclick = () => { state.pics.splice(i, 1); renderPics(); };
+    box.appendChild(d);
+  });
+  checkPics();
+}
+function checkPics(){
+  const n = r => state.pics.filter(p => p.role === r).length;
+  let msg = '';
+  if (n('first') > 1) msg = 'Only one Start picture.';
+  else if (n('last') > 1) msg = 'Only one End picture.';
+  else if (n('ref') > 4) msg = 'Use at most 4 Reference pictures.';
+  else if ((n('first') || n('last')) && n('ref')) msg = 'Reference pictures are ignored when there\'s a Start or End picture.';
+  showErr($('picErr'), msg);
+  return !/^Only|^Use at most/.test(msg);
+}
+$('addPic').onclick = () => $('picFile').click();
+$('picFile').onchange = async () => {
+  const files = [...$('picFile').files]; $('picFile').value = '';
+  const b = $('addPic'); b.disabled = true; b.textContent = 'Uploading…';
+  for (const f of files){
+    try { const sm = await shrink(f);
+      const out = await api('/video/images', {method:'POST', body: JSON.stringify({data: sm.data})});
+      const role = state.pics.some(p => p.role === 'first') ? 'ref' : 'first';
+      state.pics.push({id: out.id, role, thumb: sm.data, w: sm.w, h: sm.h});
+      if (role === 'first') closestAspect(sm.w, sm.h);
+    } catch(e){ showErr($('picErr'), e.message); }
+  }
+  b.disabled = false; b.textContent = 'Add a picture'; renderPics(); render();
+};
 
 // ---------------- songs
 function renderSongs(keep){
@@ -307,6 +385,8 @@ function renderJobs(){
     const src = '/video/clip/' + j.id + (j.has_scored ? '?song=1' : '');
     d.innerHTML = `${stateLabel(j)} <span class="meta num">${esc(j.model)}, ${j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${cost} of ${money(j.budget)}</span>
       <div class="prompt">${esc(j.prompt)}</div>
+      ${(j.images || []).length ? `<div class="thumbs">${j.images.map(im => `<img alt="${im.role === 'ref' ? 'Reference' : im.role === 'first' ? 'Start' : 'End'} picture" src="/video/img/${esc(im.id)}">`).join('')}</div>` : ''}
+      ${j.image_note ? `<div class="meta">${esc(j.image_note)}</div>` : ''}
       ${j.has_clip ? `<video controls playsinline preload="metadata" src="${src}"></video>` : ''}
       ${j.error ? `<div class="err">${esc(j.error)}</div>` : ''}
       ${j.song_error ? `<div class="err">Song: ${esc(j.song_error)}</div>` : ''}
@@ -367,7 +447,8 @@ $('goBtn').onclick = async () => {
   const body = {model: state.model.id, prompt: $('idea').value.trim(), duration: state.duration,
     resolution: state.resolution, aspect_ratio: state.aspect, audio: audioOn(),
     budget: parseFloat($('budget').value) || 0,
-    song_id: song && song !== '__upload' ? song : null, song_start: parseFloat($('songStart').value) || 0};
+    song_id: song && song !== '__upload' ? song : null, song_start: parseFloat($('songStart').value) || 0,
+    images: state.pics.map(p => ({id: p.id, role: p.role}))};
   const b = $('goBtn'); b.disabled = true; b.textContent = 'Sending…';
   try { await api('/video/generate', {method:'POST', body: JSON.stringify(body)}); await loadJobs();
     $('clips').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); }

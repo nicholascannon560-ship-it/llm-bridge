@@ -14,6 +14,13 @@ POST /video/jobs/{id}/song      {"song_id","song_start"} -> re-score a finished 
 GET  /video/clip/{id}           the mp4 (Range supported for iOS); ?song=1 for the scored version, ?dl=1 to download
 POST /video/songs               {"name","data"(base64)} upload a song (mp3/m4a/wav, <= 15 MB)
 GET  /video/songs               uploaded songs
+POST /video/images              {"data"(base64 jpeg/png/webp)} upload a picture prompt -> {"id","url"}
+GET  /video/img/{id}            the picture, PUBLIC on purpose: the video provider has to fetch it.
+                                The id is 24 random bytes, so it can't be guessed or listed.
+
+Pictures: generate takes "images": [{"id","role"}], role = first (start frame),
+last (end frame) or ref (style/content reference). Frames win over refs when
+both are sent, so refs are dropped with a warning in that case.
 
 Money guards, both enforced server-side:
   - per-video budget: every request carries "budget"; the job is refused if the
@@ -46,7 +53,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.0.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.1.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -55,6 +62,10 @@ JOBS_KEY = "video/jobs.json"
 SONGS_KEY = "video/songs.json"
 LOCAL_DIR = Path(os.getenv("VIDEO_DATA_DIR") or "/tmp") / "video"
 MAX_SONG_BYTES = 15 * 1024 * 1024
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_REFS = 4
+IMG_ID = re.compile(r"^[A-Za-z0-9_-]{30,40}$")
+IMG_TYPES = {b"\xff\xd8\xff": ("jpg", "image/jpeg"), b"\x89PNG": ("png", "image/png"), b"RIFF": ("webp", "image/webp")}
 POLL_EVERY = 15
 POLL_GIVE_UP = 30 * 60
 _HTML_PATH = Path(__file__).with_name("video_app.html")
@@ -285,6 +296,23 @@ def estimate_cost(model: dict, duration: float, resolution: str, audio: bool) ->
     return None, f"unrecognised pricing: {', '.join(sorted(nums))}"
 
 
+def _public_base(request: Request) -> str:
+    dom = os.getenv("VIDEO_PUBLIC_DOMAIN") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    if dom:
+        return f"https://{dom.strip().rstrip('/')}"
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    return f"https://{host}"
+
+
+def _sniff(data: bytes) -> tuple[str, str] | None:
+    for magic, kind in IMG_TYPES.items():
+        if data.startswith(magic):
+            if magic == b"RIFF" and data[8:12] != b"WEBP":
+                return None
+            return kind
+    return None
+
+
 def _job_cost(j: dict) -> float:
     if j.get("actual_cost") is not None:
         return float(j["actual_cost"])
@@ -468,7 +496,7 @@ def _ensure_poller(job: dict) -> None:
 def _public(job: dict) -> dict:
     keep = ("id", "created", "finished", "model", "prompt", "duration", "resolution", "aspect_ratio",
             "audio", "budget", "estimate", "actual_cost", "status", "error", "poll_error",
-            "song_id", "song_name", "song_start", "song_error")
+            "song_id", "song_name", "song_start", "song_error", "images", "image_note")
     out = {k: job.get(k) for k in keep}
     out["has_clip"] = bool(job.get("clip_key"))
     out["has_scored"] = bool(job.get("scored_key"))
@@ -589,6 +617,29 @@ async def video_generate(request: Request):
     if song_id and not _find(await _all_songs(), song_id):
         return _err("That song is gone. Pick another.")
 
+    images, frames, refs, image_note = [], [], [], None
+    raw_imgs = b.get("images") or []
+    if not isinstance(raw_imgs, list):
+        return _err("Pictures came through wrong. Re-add them.")
+    base = _public_base(request)
+    for it in raw_imgs[:8]:
+        iid, role = str((it or {}).get("id", "")), str((it or {}).get("role", ""))
+        if not IMG_ID.match(iid) or role not in ("first", "last", "ref"):
+            return _err("Pictures came through wrong. Re-add them.")
+        url = f"{base}/video/img/{iid}"
+        if role in ("first", "last"):
+            if any(f["frame_type"] == f"{role}_frame" for f in frames):
+                return _err(f"Only one {'starting' if role == 'first' else 'ending'} picture is allowed")
+            frames.append({"type": "image_url", "image_url": {"url": url}, "frame_type": f"{role}_frame"})
+        else:
+            refs.append({"type": "image_url", "image_url": {"url": url}})
+        images.append({"id": iid, "role": role})
+    if len(refs) > MAX_REFS:
+        return _err(f"Use at most {MAX_REFS} reference pictures")
+    if frames and refs:
+        refs = []
+        image_note = "Reference pictures were skipped: models use start/end pictures instead when both are given."
+
     est, basis = estimate_cost(m, duration, resolution, audio)
     if est is None:
         return _err(f"Can't price {m['name']} ({basis}), so it won't run. Pick another model.")
@@ -607,6 +658,10 @@ async def video_generate(request: Request):
         payload["aspect_ratio"] = aspect
     if not audio:
         payload["generate_audio"] = False
+    if frames:
+        payload["frame_images"] = frames
+    elif refs:
+        payload["input_references"] = refs
     try:
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
@@ -622,7 +677,7 @@ async def video_generate(request: Request):
            "budget": budget, "estimate": est, "price_basis": basis, "or_id": data["id"],
            "polling_url": data.get("polling_url") or f"{OR_BASE}/videos/{data['id']}",
            "status": data.get("status") or "pending", "song_id": song_id,
-           "song_start": float(b.get("song_start") or 0)}
+           "song_start": float(b.get("song_start") or 0), "images": images, "image_note": image_note}
     jobs = await _all_jobs()
     async with _lock:
         jobs.append(job)
@@ -738,3 +793,39 @@ async def video_song_upload(request: Request):
         songs.append({"id": sid, "name": name, "ext": ext, "key": key, "created": time.time()})
     await _save_songs()
     return {"id": sid, "name": name}
+
+
+@video_router.post("/video/images")
+async def video_image_upload(request: Request):
+    if (d := _deny(request)):
+        return d
+    raw = str((await _body(request)).get("data") or "")
+    if "," in raw[:100]:
+        raw = raw.split(",", 1)[1]
+    try:
+        img = base64.b64decode(raw, validate=True)
+    except Exception:
+        return _err("That picture didn't come through. Try again.")
+    if not img:
+        return _err("Empty picture")
+    if len(img) > MAX_IMAGE_BYTES:
+        return _err("Pictures must be under 8 MB")
+    kind = _sniff(img)
+    if not kind:
+        return _err("Use a JPEG, PNG or WebP picture")
+    iid = secrets.token_urlsafe(24)
+    await _put(f"video/images/{iid}", img, kind[1])
+    return {"id": iid, "url": f"/video/img/{iid}"}
+
+
+@video_router.get("/video/img/{iid}")
+async def video_image(iid: str):
+    # Deliberately no PIN check: OpenRouter's provider fetches this URL.
+    if not IMG_ID.match(iid):
+        return _err("Not found", 404)
+    data = await _get(f"video/images/{iid}")
+    if not data:
+        return _err("Not found", 404)
+    kind = _sniff(data) or ("jpg", "image/jpeg")
+    return Response(data, media_type=kind[1], headers={"Cache-Control": "public, max-age=86400",
+                                                       "X-Robots-Tag": "noindex"})
