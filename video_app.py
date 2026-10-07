@@ -33,8 +33,8 @@ both are sent, so refs are dropped with a warning in that case.
 Money guards, both enforced server-side:
   - per-video budget: every request carries "budget"; the job is refused if the
     estimate from OpenRouter's listed price exceeds it. Unknown price = refused.
-  - daily cap: VIDEO_DAILY_USD (default 3) over a rolling 24h, using actual
-    cost once OpenRouter reports it and the estimate until then.
+  - optional daily cap: only if VIDEO_DAILY_USD is set above 0 (off by default),
+    over a rolling 24h, using actual cost once known and the estimate until then.
 
 Auth: VIDEO_PIN, falling back to CART_PIN. Never the bridge key.
 Storage: S3 (AWS_S3_BUCKET, prefix video/) with a /tmp fallback.
@@ -61,7 +61,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.2.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.2.1"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -89,11 +89,13 @@ _lock = asyncio.Lock()
 _models_cache: dict = {"t": 0.0, "data": []}
 
 
-def _daily_cap() -> float:
+def _daily_cap() -> float | None:
+    """None = no daily cap (the default). Set VIDEO_DAILY_USD > 0 to turn one on."""
     try:
-        return max(0.0, float(os.getenv("VIDEO_DAILY_USD") or "3"))
+        v = float(os.getenv("VIDEO_DAILY_USD") or "0")
     except ValueError:
-        return 3.0
+        return None
+    return v if v > 0 else None
 
 
 # --------------------------------------------------------------------------- auth
@@ -683,7 +685,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         return _err(f"This video would cost about ${est:.2f}, over your ${budget:.2f} budget. "
                     f"Shorten it, lower the resolution, or raise the budget.")
     cap, spent = _daily_cap(), await _spent_24h()
-    if spent + est > cap:
+    if cap is not None and spent + est > cap:
         return _err(f"Daily cap reached: ${spent:.2f} of ${cap:.2f} used in the last 24 hours, "
                     f"this one is about ${est:.2f}.")
 

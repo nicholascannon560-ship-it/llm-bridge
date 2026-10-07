@@ -259,14 +259,14 @@ function render(){
   else { fill.style.width = Math.min(100, budget > 0 ? state.estimate / budget * 100 : 100) + '%';
     if (state.estimate > budget) fill.classList.add('over'); }
   const st = $('budgetStatus'); st.className = 'status';
-  const left = Math.max(0, state.cap - state.spent);
+  const left = state.cap == null ? Infinity : Math.max(0, state.cap - state.spent);
   let ok = true;
   if (state.estimate == null){ st.textContent = 'Can\'t price this model.'; ok = false; }
   else if (budget <= 0){ st.textContent = 'Set a budget.'; ok = false; }
   else if (state.estimate > budget){ st.classList.add('over'); st.textContent = money(state.estimate - budget) + ' over budget'; ok = false; }
   else if (state.estimate > left){ st.classList.add('over'); st.textContent = 'Over today\'s limit'; ok = false; }
   else st.textContent = money(budget - state.estimate) + ' under budget';
-  $('today').textContent = money(state.spent) + ' of ' + money(state.cap) + ' used in the last 24 hours';
+  $('today').textContent = money(state.spent) + (state.cap == null ? '' : ' of ' + money(state.cap)) + ' spent in the last 24 hours';
   $('goBtn').disabled = !ok || !checkPics();
 }
 function fitToBudget(){
@@ -482,7 +482,7 @@ function openEditor(j, el){
     q('[data-est]').textContent = money(e);
     q('[data-est]').style.color = (e == null || e > budget) ? 'var(--red)' : '';
     q('[data-spec]').textContent = `${sp.duration}s, ${sp.resolution || 'default'}${e != null && e > budget ? ', over budget' : ''}`;
-    q('[data-submit]').disabled = e == null || e > budget || e > Math.max(0, state.cap - state.spent);
+    q('[data-submit]').disabled = e == null || e > budget || (state.cap != null && e > Math.max(0, state.cap - state.spent));
   }
   el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { ed.mode = b.dataset.m; upd(); });
   q('[data-model]').onchange = upd; q('[data-budget]').oninput = upd;
