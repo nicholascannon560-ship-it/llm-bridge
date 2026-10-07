@@ -290,6 +290,13 @@ label.btn{display:inline-block;text-align:center}
         </div>
         <label class="f">Shape</label>
         <div class="chips" id="talkShape"></div>
+        <label class="f">Extras</label>
+        <label class="toggle" style="margin-top:4px"><input type="checkbox" id="talkCaps"> Add captions</label>
+        <label class="toggle"><input type="checkbox" id="talkNoBg"> Remove the background</label>
+        <label class="f">How animated</label>
+        <div class="chips" id="talkExpr"></div>
+        <label class="f">Movement <span class="hint">(optional)</span></label>
+        <input type="text" id="talkMotion" placeholder="Smiles, nods, small hand gestures">
         <div class="row" style="margin-top:12px;justify-content:space-between">
           <div><div class="num" style="font-size:24px;font-weight:700" id="talkEst">$—</div><div class="hint" style="margin:0" id="talkSpec"></div></div>
           <div><label class="f" style="margin:0 0 6px">Budget</label>
@@ -337,6 +344,13 @@ label.btn{display:inline-block;text-align:center}
     </section>
 
     <section class="panel" id="clips">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <strong style="font-size:18px">Your clips</strong>
+        <label class="btn ghost small" for="vidFile" id="vidUpBtn">Upload a video</label>
+      </div>
+      <input type="file" class="vh" accept="video/*" tabindex="-1" id="vidFile">
+      <div class="hint" id="vidUpHint" style="margin-top:-4px">Bring in your own footage to restyle, caption, add a song to, or cut in the editor.</div>
+      <div class="err" id="vidUpErr" hidden></div>
       <div class="empty" id="noClips">Your videos show up here. Most take one to five minutes.</div>
     </section>
   </div>
@@ -590,11 +604,12 @@ function renderJobs(){
     const d = document.createElement('div'); d.className = 'clip';
     const cost = j.actual_cost != null ? money(j.actual_cost) : 'about ' + money(j.estimate);
     const src = '/video/clip/' + j.id + (j.has_scored ? '?song=1' : '');
-    d.innerHTML = `${stateLabel(j)} <span class="meta num">${esc(j.model)}, ${j.total_seconds || j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${j.chain_estimate ? 'about ' + money(j.chain_estimate) + ' total' : cost + ' of ' + money(j.budget)}</span>
+    d.innerHTML = `${stateLabel(j)} <span class="meta num">${j.uploaded ? 'Your video' : esc(j.model)}, ${j.total_seconds || j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${j.chain_estimate ? 'about ' + money(j.chain_estimate) + ' total' : cost + ' of ' + money(j.budget)}</span>
       ${j.parts_total > 1 ? `<div class="edit-of">${j.chain_remaining > 0 || !['ready','failed','cancelled','expired'].includes(j.status)
           ? `Long video: making part ${j.part_no} of ${j.parts_total}` : `Long video, ${j.parts_total} parts`}</div>`
         : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended', timeline:'Made in the editor', talk:'Talking video', upscale:'Sharpened'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
       ${j.chain_error ? `<div class="err">${esc(j.chain_error)}</div>` : ''}
+      ${j.options_note ? `<div class="hint">${esc(j.options_note)}</div>` : ''}
       <div class="prompt">${esc(j.prompt)}</div>
       ${(j.images || []).length ? `<div class="thumbs">${j.images.map(im => `<img alt="${im.role === 'ref' ? 'Reference' : im.role === 'first' ? 'Start' : 'End'} picture" src="/video/img/${esc(im.id)}">`).join('')}</div>` : ''}
       ${j.image_note ? `<div class="meta">${esc(j.image_note)}</div>` : ''}
@@ -790,6 +805,7 @@ function openEditor(j, el){
     <div class="hint" data-mh></div>
     <label class="f">What should change?</label>
     <textarea data-change placeholder="Make it night, with snow falling"></textarea>
+    <div class="chips" data-ideas style="margin-top:6px"></div>
     <label class="toggle" data-keep><input type="checkbox" checked> Start from this clip's first frame so it keeps its look</label>
     <label class="f">Pictures <span class="hint">(optional)</span></label>
     <div class="row"><button class="btn ghost small" type="button" data-addpic>Add a picture</button>
@@ -807,7 +823,17 @@ function openEditor(j, el){
     <button class="btn go" data-submit>Make the new version</button>
     <div class="err" data-err hidden></div>`;
   const q = sel => el.querySelector(sel);
-  q('[data-model]').value = state.models.some(m => m.id === j.model) ? j.model : (state.models[0] || {}).id;
+  // Restyling a clip needs a model that takes video in; prefer those for "Edit this video".
+  const videoModels = state.models.filter(m => /aleph|edit|lucy|restyle|seedance|wan/i.test(m.id + ' ' + m.name) && !/upscale|avatar/i.test(m.id));
+  const pickDefault = () => ed.mode === 'edit' && (j.model === 'upload' || j.model === 'editor' || !state.models.some(m => m.id === j.model))
+    ? (videoModels[0] || state.models[0] || {}).id
+    : (state.models.some(m => m.id === j.model) ? j.model : (videoModels[0] || state.models[0] || {}).id);
+  q('[data-model]').value = pickDefault();
+  const IDEAS = {'Anime': 'Turn it into Japanese anime', 'Claymation': 'Turn it into stop-motion claymation',
+    '3D cartoon': 'Turn it into a polished 3D animated film', 'Comic book': 'Turn it into a comic book with bold ink lines',
+    'Oil painting': 'Turn it into a moving oil painting', 'Cyberpunk': 'Set it in a neon cyberpunk city at night',
+    'Winter': 'Make it a snowy winter scene', 'Night': 'Make it night time', 'New person': 'Replace the person with a different person, keep the same movements'};
+  chips(q('[data-ideas]'), Object.keys(IDEAS), null, v => { q('[data-change]').value = IDEAS[v]; });
   function spec(){
     const m = state.models.find(x => x.id === q('[data-model]').value); if (!m) return null;
     const audio = j.audio && !j.song_id;
@@ -1084,7 +1110,7 @@ $('mpGo').onclick = async () => {
 };
 
 // ---------------- talking video
-const talk = {img: null, mode: 'script', shape: '9:16'};
+const talk = {img: null, mode: 'script', shape: '9:16', expr: 'medium'};
 function talkModel(){ return state.models.find(m => m.id === 'heygen/avatar-iv'); }
 function talkSeconds(){
   if (talk.mode === 'script'){ const w = $('talkScript').value.trim().split(/\s+/).filter(Boolean).length; return w ? Math.max(3, Math.floor(w / 2.4 + 1.5)) : 0; }
@@ -1097,6 +1123,7 @@ function drawTalk(){
   $('talkVoice').innerHTML = songOptions() || '<option value="">Upload a recording first</option>';
   if (talk.voice) $('talkVoice').value = talk.voice;
   chips($('talkShape'), ['9:16', '16:9', '1:1'], talk.shape, v => { talk.shape = v; drawTalk(); }, v => SHAPE_NAMES[v]);
+  chips($('talkExpr'), ['low', 'medium', 'high'], talk.expr, v => { talk.expr = v; drawTalk(); }, v => ({low: 'Calm', medium: 'Natural', high: 'Lively'})[v]);
   $('talkPic').innerHTML = talk.img ? `<div class="pic"><img alt="" src="${talk.img.thumb}"></div>` : '';
   const m = talkModel(), secs = talkSeconds();
   const e = m && secs ? estimate(m, secs, '720p', true, 'image', 1) : null, budget = parseFloat($('talkBudget').value) || 0;
@@ -1125,10 +1152,32 @@ $('talkGo').onclick = async () => {
   const b = $('talkGo'); b.disabled = true; b.textContent = 'Sending…'; showErr($('talkErr'), '');
   try { await api('/video/talk', {method:'POST', body: JSON.stringify({image: talk.img.id,
       script: $('talkScript').value.trim(), voice_id: talk.mode === 'voice' ? $('talkVoice').value : null,
-      aspect_ratio: talk.shape, resolution: '720p', budget: parseFloat($('talkBudget').value) || 0})});
+      aspect_ratio: talk.shape, resolution: '720p', budget: parseFloat($('talkBudget').value) || 0,
+      captions: $('talkCaps').checked, remove_background: $('talkNoBg').checked,
+      expressiveness: talk.expr === 'medium' ? null : talk.expr, motion: $('talkMotion').value.trim()})});
     state.stale = true; await loadJobs(); $('clips').scrollIntoView(); }
   catch(e){ showErr($('talkErr'), e.message); }
   b.textContent = 'Make talking video'; drawTalk();
+};
+
+// ---------------- upload your own video (raw file with a progress readout)
+$('vidFile').onchange = () => {
+  const f = $('vidFile').files[0]; $('vidFile').value = ''; if (!f) return;
+  showErr($('vidUpErr'), '');
+  if (f.size > 200 * 1024 * 1024){ showErr($('vidUpErr'), 'Videos must be under 200 MB. Trim it in Photos first.'); return; }
+  const xhr = new XMLHttpRequest(), btn = $('vidUpBtn');
+  xhr.open('POST', '/video/uploads?name=' + encodeURIComponent((f.name || 'My video').replace(/\.[^.]+$/, '')));
+  xhr.setRequestHeader('Content-Type', f.type || 'video/mp4');
+  xhr.upload.onprogress = e => { if (e.lengthComputable) btn.textContent = `Uploading ${Math.round(e.loaded / e.total * 100)}%`; };
+  xhr.upload.onload = () => { btn.textContent = 'Converting…'; };
+  xhr.onload = async () => {
+    btn.textContent = 'Upload a video';
+    let out = {}; try { out = JSON.parse(xhr.responseText); } catch(_){}
+    if (xhr.status >= 400){ showErr($('vidUpErr'), out.detail || ('Upload failed: ' + xhr.status)); return; }
+    state.stale = true; await loadJobs();
+  };
+  xhr.onerror = () => { btn.textContent = 'Upload a video'; showErr($('vidUpErr'), 'Upload failed. Check your connection and try again.'); };
+  xhr.send(f);
 };
 
 $('fitBtn').onclick = () => { showErr($('goErr'), ''); fitToBudget(); };

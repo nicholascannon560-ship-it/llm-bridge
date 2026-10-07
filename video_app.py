@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.4.1"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.5.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -727,7 +727,7 @@ def _public(job: dict) -> dict:
             "audio", "budget", "estimate", "actual_cost", "status", "error", "poll_error",
             "song_id", "song_name", "song_start", "song_error", "images", "image_note",
             "parent_id", "edit_mode", "change", "total_seconds", "parts_total", "part_no",
-            "chain_remaining", "chain_error", "chain_estimate", "charged")
+            "chain_remaining", "chain_error", "chain_estimate", "charged", "options_note", "uploaded")
     out = {k: job.get(k) for k in keep}
     out["has_clip"] = bool(job.get("clip_key"))
     out["has_scored"] = bool(job.get("scored_key"))
@@ -949,11 +949,16 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
             data = r.json()
-            for _ in range(2):
+            options_dropped = False
+            for _ in range(3):
                 if r.status_code < 400:
                     break
                 low = str(_msg(data, r)).lower()
-                if "previous_job_id" in payload and "previous" in low:
+                if "provider" in payload and r.status_code in (400, 422) and not options_dropped:
+                    # Extra provider options are nice-to-haves: if refused, run without them.
+                    payload.pop("provider")
+                    options_dropped = True
+                elif "previous_job_id" in payload and "previous" in low:
                     # A hint some providers don't take: retry without it.
                     payload.pop("previous_job_id")
                 elif payload.get("generate_audio") is False and "generate_audio" in low:
@@ -998,6 +1003,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
            "song_start": float(b.get("song_start") or 0), "images": images, "image_note": image_note,
            "parent_id": extra.get("parent_id"), "edit_mode": extra.get("edit_mode"),
            "change": extra.get("change"), "base": base, "talk": extra.get("talk"),
+           "options_note": "Some extra options weren't accepted, so it ran without them." if options_dropped else None,
            "base_prompt": extra.get("base_prompt") or prompt,
            "extend_of": extra.get("extend_of"),
            "parts_total": extra.get("parts_total") or parts,
@@ -2286,6 +2292,18 @@ async def video_talk(request: Request):
         return _err("Type what they should say, or pick a voice recording")
     if duration > 120:
         return _err("Keep it under 2 minutes")
+    opts = {}
+    if b.get("captions"):
+        opts["caption"] = True
+    if b.get("remove_background"):
+        opts["remove_background"] = True
+    if b.get("expressiveness") in ("low", "medium", "high"):
+        opts["expressiveness"] = b["expressiveness"]
+    if str(b.get("motion") or "").strip():
+        opts["motion_prompt"] = str(b["motion"]).strip()[:300]
+    if opts:
+        extra["provider_params"] = opts
+        extra["provider_slugs"] = ["heygen"]
     spec = {"model": TALK_MODEL, "prompt": prompt, "duration": duration,
             "resolution": b.get("resolution") or "720p", "aspect_ratio": b.get("aspect_ratio") or "9:16",
             "audio": True, "budget": b.get("budget"), "images": [{"id": image, "role": "first"}]}
@@ -2399,3 +2417,70 @@ async def video_upscale(jid: str, request: Request):
             "duration": max(1, int(plan["seconds"] + 0.999)), "resolution": "", "aspect_ratio": "",
             "audio": True, "budget": b.get("budget"), "images": []}
     return await _start_job(request, spec, extra)
+
+
+# =========================================================================== your own videos
+# Upload a video from the phone (sent as the raw file, not base64). It's converted to a
+# standard mp4 and becomes a clip like any other: restyle it with Edit, add songs or
+# captions, sharpen it, or use it in the editor.
+MAX_UPLOAD_MB = int(os.getenv("VIDEO_MAX_UPLOAD_MB") or "200")
+MAX_UPLOAD_SECONDS = 180
+
+
+def normalize_upload_sync(data: bytes) -> tuple[bytes, float, int, int]:
+    """Any phone video (mov/HEVC/mp4) -> h264/aac mp4, long side at most 1920, 30 fps."""
+    with tempfile.TemporaryDirectory() as d:
+        src, out = f"{d}/in", f"{d}/out.mp4"
+        Path(src).write_bytes(data)
+        secs = _probe_duration(src)
+        if not secs:
+            raise RuntimeError("that file isn't a video this app can read")
+        if secs > MAX_UPLOAD_SECONDS + 0.5:
+            raise RuntimeError(f"videos can be up to {MAX_UPLOAD_SECONDS // 60} minutes; this one is {secs / 60:.1f}")
+        _, _, snd = _probe(src)
+        cmd = [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", src,
+               "-vf", "scale='if(gt(iw,ih),min(1920,iw),-2)':'if(gt(iw,ih),-2,min(1920,ih))',fps=30,format=yuv420p",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-movflags", "+faststart"]
+        cmd += ["-c:a", "aac", "-b:a", "160k"] if snd else ["-an"]
+        p = subprocess.run(cmd + [out], capture_output=True, text=True, timeout=900)
+        if p.returncode != 0 or not Path(out).exists():
+            raise RuntimeError(f"couldn't convert the video: {(p.stderr or '').strip()[-300:]}")
+        w, h, _ = _probe(out)
+        return Path(out).read_bytes(), secs, w, h
+
+
+@video_router.post("/video/uploads")
+async def video_upload(request: Request):
+    """Raw video body (Content-Type video/*), ?name=. Returns the new clip."""
+    if (d := await _deny(request)):
+        return d
+    if int(request.headers.get("content-length") or 0) > MAX_UPLOAD_MB * 1024 * 1024:
+        return _err(f"Videos must be under {MAX_UPLOAD_MB} MB")
+    chunks, size = [], 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > MAX_UPLOAD_MB * 1024 * 1024:
+            return _err(f"Videos must be under {MAX_UPLOAD_MB} MB")
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    if not raw:
+        return _err("Empty file")
+    try:
+        mp4, secs, w, h = await asyncio.to_thread(normalize_upload_sync, raw)
+    except Exception as e:
+        return _err(str(e)[:300])
+    jid = secrets.token_urlsafe(8)
+    key = f"{PREFIX}clips/{jid}.mp4"
+    await _put(key, mp4, "video/mp4")
+    name = str(request.query_params.get("name") or "My video")[:80]
+    aspect = "9:16" if h > w * 1.2 else "16:9" if w > h * 1.2 else "1:1"
+    job = {"id": jid, "created": time.time(), "finished": time.time(), "model": "upload",
+           "prompt": name, "duration": round(secs, 1), "total_seconds": round(secs, 1),
+           "resolution": f"{min(w, h)}p", "aspect_ratio": aspect, "audio": True, "budget": 0, "estimate": 0,
+           "actual_cost": 0, "status": "ready", "clip_key": key, "user": _uid(request), "settled": True,
+           "uploaded": True}
+    jobs = await _all_jobs()
+    async with _lock:
+        jobs.append(job)
+    await _save_jobs()
+    return _public(job)
