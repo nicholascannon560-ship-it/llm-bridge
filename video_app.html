@@ -114,16 +114,12 @@ label.btn{display:inline-block;text-align:center}
   <p class="lede">Describe a shot, set what you'll pay for it, and get a clip.</p>
 
   <section class="panel" id="login" hidden>
-    <div id="emailStep">
-      <label class="f" for="email">Your email</label>
+    <div id="pkStep">
+      <button class="btn go" id="pkLogin" style="margin-top:0">Sign in with Face ID</button>
+      <p class="hint" style="margin:14px 0 6px">New here? Create an account. Your phone keeps the key behind Face ID, so there's no password.</p>
+      <label class="f" for="email" style="margin-top:6px">Your email</label>
       <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
-      <button class="btn go" id="sendCode">Email me a sign-in code</button>
-    </div>
-    <div id="codeStep" hidden>
-      <label class="f" for="code">The 6-digit code we emailed you</label>
-      <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-      <button class="btn go" id="verifyCode">Sign in</button>
-      <button class="btn ghost small" id="backEmail" style="margin-top:8px">Use a different email</button>
+      <button class="btn ghost" id="pkSignup" style="margin-top:8px;width:100%">Create account with Face ID</button>
     </div>
     <div class="err" id="loginErr" hidden></div>
     <details style="margin-top:16px"><summary class="hint">Owner sign-in</summary>
@@ -763,22 +759,59 @@ $('goBtn').onclick = async () => {
   b.textContent = 'Make video'; render();
 };
 function showLogin(){ $('login').hidden = false; $('app').hidden = true; }
-$('sendCode').onclick = async () => {
-  showErr($('loginErr'), ''); const b = $('sendCode'); b.disabled = true; b.textContent = 'Sending…';
-  try { await api('/video/auth/start', {method:'POST', body: JSON.stringify({email: $('email').value.trim()})});
-    $('emailStep').hidden = true; $('codeStep').hidden = false; $('code').focus(); }
-  catch(e){ showErr($('loginErr'), e.message); }
-  b.disabled = false; b.textContent = 'Email me a sign-in code';
-};
-$('email').onkeydown = e => { if (e.key === 'Enter') $('sendCode').click(); };
-$('verifyCode').onclick = async () => {
+// ---------------- passkeys
+const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = str => { str = str.replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '=';
+  return Uint8Array.from(atob(str), c => c.charCodeAt(0)).buffer; };
+function createOpts(o){
+  return {...o, challenge: unb64u(o.challenge), user: {...o.user, id: unb64u(o.user.id)},
+    excludeCredentials: (o.excludeCredentials || []).map(c => ({...c, id: unb64u(c.id)}))};
+}
+function getOpts(o){
+  return {...o, challenge: unb64u(o.challenge), allowCredentials: (o.allowCredentials || []).map(c => ({...c, id: unb64u(c.id)}))};
+}
+function credJSON(c){
+  const r = c.response, out = {id: c.id, rawId: b64u(c.rawId), type: c.type,
+    clientExtensionResults: c.getClientExtensionResults ? c.getClientExtensionResults() : {},
+    authenticatorAttachment: c.authenticatorAttachment || undefined, response: {clientDataJSON: b64u(r.clientDataJSON)}};
+  if (r.attestationObject){ out.response.attestationObject = b64u(r.attestationObject);
+    out.response.transports = r.getTransports ? r.getTransports() : []; }
+  else { out.response.authenticatorData = b64u(r.authenticatorData); out.response.signature = b64u(r.signature);
+    if (r.userHandle) out.response.userHandle = b64u(r.userHandle); }
+  return out;
+}
+function pkError(e){
+  if (e && e.name === 'NotAllowedError') return 'Face ID was cancelled or timed out. Try again.';
+  if (e && e.name === 'InvalidStateError') return 'This phone already has a passkey for this account. Tap Sign in with Face ID.';
+  return e.message || String(e);
+}
+async function passkeySignup(){
   showErr($('loginErr'), '');
-  try { await api('/video/auth/verify', {method:'POST', body: JSON.stringify({email: $('email').value.trim(), code: $('code').value})});
-    await boot(); }
-  catch(e){ showErr($('loginErr'), e.message); }
-};
-$('code').oninput = () => { if ($('code').value.replace(/\D/g, '').length === 6) $('verifyCode').click(); };
-$('backEmail').onclick = () => { $('codeStep').hidden = true; $('emailStep').hidden = false; };
+  if (!window.PublicKeyCredential){ showErr($('loginErr'), "This browser can't use passkeys. Open the link in Safari or Chrome."); return; }
+  const b = $('pkSignup'); b.disabled = true;
+  try {
+    const st = await api('/video/passkey/register/start', {method:'POST', body: JSON.stringify({email: $('email').value.trim()})});
+    const cred = await navigator.credentials.create({publicKey: createOpts(st.options)});
+    await api('/video/passkey/register/finish', {method:'POST', body: JSON.stringify({token: st.token, credential: credJSON(cred)})});
+    await boot();
+  } catch(e){ showErr($('loginErr'), pkError(e)); }
+  b.disabled = false;
+}
+async function passkeyLogin(){
+  showErr($('loginErr'), '');
+  if (!window.PublicKeyCredential){ showErr($('loginErr'), "This browser can't use passkeys. Open the link in Safari or Chrome."); return; }
+  const b = $('pkLogin'); b.disabled = true;
+  try {
+    const st = await api('/video/passkey/login/start', {method:'POST'});
+    const cred = await navigator.credentials.get({publicKey: getOpts(st.options)});
+    await api('/video/passkey/login/finish', {method:'POST', body: JSON.stringify({token: st.token, credential: credJSON(cred)})});
+    await boot();
+  } catch(e){ showErr($('loginErr'), pkError(e)); }
+  b.disabled = false;
+}
+$('pkSignup').onclick = passkeySignup;
+$('pkLogin').onclick = passkeyLogin;
+$('email').onkeydown = e => { if (e.key === 'Enter') $('pkSignup').click(); };
 $('logoutBtn').onclick = async () => { await api('/video/logout', {method:'POST'}).catch(() => {}); location.href = '/video'; };
 
 // ---------------- account & billing
@@ -817,7 +850,7 @@ $('pin').onkeydown = e => { if (e.key === 'Enter') $('loginBtn').click(); };
 async function boot(){
   const s = await api('/video/session');
   // Where email sign-up is off (the bridge), only the owner PIN is offered.
-  $('emailStep').hidden = !s.accounts; $('codeStep').hidden = true;
+  $('pkStep').hidden = !s.accounts;
   $('login').querySelector('details').open = !s.accounts;
   if (!s.authed){ showLogin(); return; }
   $('login').hidden = true; $('app').hidden = false;

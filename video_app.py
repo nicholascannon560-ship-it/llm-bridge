@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.0.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.1.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -747,7 +747,7 @@ async def video_page():
 async def video_session(request: Request):
     u = await _current_user(request)
     out = {"authed": bool(u), "configured": True, "version": VIDEO_APP_VERSION,
-           "accounts": _accounts_on(), "billing": _billing_ready()}
+           "accounts": _accounts_on(), "email_codes": _email_codes_on(), "billing": _billing_ready()}
     if u:
         out.update(daily_cap=_daily_cap(), spent_today=await _spent_24h(), account=_account(u))
     return out
@@ -1302,8 +1302,13 @@ def _packs() -> dict[str, str]:
 
 
 def _accounts_on() -> bool:
-    """Email sign-up only where VIDEO_ACCOUNTS=1 (the Video Studio service), never on the bridge."""
-    return os.getenv("VIDEO_ACCOUNTS") == "1" and bool(os.getenv("RESEND_API_KEY"))
+    """Customer accounts (passkeys) only where VIDEO_ACCOUNTS=1 (the Video Studio service), never on the bridge."""
+    return os.getenv("VIDEO_ACCOUNTS") == "1"
+
+
+def _email_codes_on() -> bool:
+    """The older emailed-code sign-in, kept switched off unless a verified sender exists."""
+    return _accounts_on() and os.getenv("VIDEO_EMAIL_CODES") == "1" and bool(os.getenv("RESEND_API_KEY"))
 
 
 def _billing_ready() -> bool:
@@ -1399,7 +1404,7 @@ def _account(u: dict) -> dict:
             "status": "owner" if u.get("owner") else (u.get("sub_status") or "none"),
             "period_end": u.get("period_end"), "credit": None if u.get("owner") else _credit(u),
             "packs": sorted(int(k) for k in _packs()), "billing": _billing_ready(),
-            "has_customer": bool(u.get("stripe_customer")),
+            "has_customer": bool(u.get("stripe_customer")), "passkeys": len(u.get("passkeys") or []),
             "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:]))}
 
 
@@ -1423,7 +1428,7 @@ async def _send_code_email(email: str, code: str) -> None:
 
 @video_router.post("/video/auth/start")
 async def video_auth_start(request: Request):
-    if not _accounts_on():
+    if not _email_codes_on():
         return _err("Sign-up isn't available here.", 404)
     email = str((await _body(request)).get("email") or "").strip().lower()[:200]
     if not EMAIL_RE.match(email):
@@ -1445,7 +1450,7 @@ async def video_auth_start(request: Request):
 
 @video_router.post("/video/auth/verify")
 async def video_auth_verify(request: Request):
-    if not _accounts_on():
+    if not _email_codes_on():
         return _err("Sign-up isn't available here.", 404)
     b = await _body(request)
     email = str(b.get("email") or "").strip().lower()
@@ -1650,3 +1655,160 @@ async def video_stripe_webhook(request: Request):
         doc["events"].append(ev.get("id"))
     await _save_users()
     return {"ok": True}
+
+
+# --------------------------------------------------------------------------- passkeys (Face ID)
+# Sign-in with no email service: the phone keeps a private key behind Face ID/Touch ID and
+# proves it holds it. Passkeys sync through iCloud Keychain / Google Password Manager, so a
+# new phone on the same account keeps working. Email is only a label (and Stripe receipts).
+_pk_pending: dict[str, dict] = {}
+
+
+def _rp(request: Request) -> tuple[str, str]:
+    host = (os.getenv("VIDEO_PUBLIC_DOMAIN") or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+            or request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(":")[0].strip()
+    return host, f"https://{host}"
+
+
+def _pk_stash(data: dict) -> str:
+    now = time.time()
+    for k in [k for k, v in _pk_pending.items() if v["exp"] < now]:
+        _pk_pending.pop(k, None)
+    tok = secrets.token_urlsafe(16)
+    _pk_pending[tok] = {**data, "exp": now + 300}
+    return tok
+
+
+def _pk_take(tok: str) -> dict | None:
+    rec = _pk_pending.pop(str(tok or ""), None)
+    return rec if rec and rec["exp"] >= time.time() else None
+
+
+@video_router.post("/video/passkey/register/start")
+async def video_pk_register_start(request: Request):
+    if not _accounts_on():
+        return _err("Sign-up isn't available here.", 404)
+    import webauthn  # noqa: WPS433
+    from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
+                                          ResidentKeyRequirement, UserVerificationRequirement)
+    from webauthn.helpers import base64url_to_bytes
+    me = await _current_user(request)
+    if me and me.get("owner"):
+        return _err("The owner signs in with the PIN.")
+    if me:  # signed in: add another passkey to this account
+        uid, email = me["id"], me["email"]
+    else:
+        email = str((await _body(request)).get("email") or "").strip().lower()[:200]
+        if not EMAIL_RE.match(email):
+            return _err("Enter your email so we can label your account and send receipts")
+        if await _user_by_email(email):
+            return _err("There's already an account for that email. Tap Sign in with Face ID.", 409)
+        uid = secrets.token_urlsafe(9).replace("-", "a").replace("_", "b")
+    rp_id, _ = _rp(request)
+    existing = (me or {}).get("passkeys") or []
+    opts = webauthn.generate_registration_options(
+        rp_id=rp_id, rp_name="Video Studio", user_id=uid.encode(), user_name=email, user_display_name=email,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            resident_key=ResidentKeyRequirement.REQUIRED, user_verification=UserVerificationRequirement.REQUIRED),
+        exclude_credentials=[PublicKeyCredentialDescriptor(id=base64url_to_bytes(p["id"])) for p in existing])
+    tok = _pk_stash({"kind": "register", "challenge": opts.challenge, "uid": uid, "email": email,
+                     "adding": bool(me)})
+    return {"token": tok, "options": json.loads(webauthn.options_to_json(opts))}
+
+
+@video_router.post("/video/passkey/register/finish")
+async def video_pk_register_finish(request: Request):
+    if not _accounts_on():
+        return _err("Sign-up isn't available here.", 404)
+    import webauthn  # noqa: WPS433
+    from webauthn.helpers import bytes_to_base64url
+    b = await _body(request)
+    rec = _pk_take(b.get("token"))
+    if not rec or rec["kind"] != "register":
+        return _err("That took too long. Try again.", 400)
+    rp_id, origin = _rp(request)
+    try:
+        v = webauthn.verify_registration_response(credential=b.get("credential"), expected_challenge=rec["challenge"],
+                                                  expected_rp_id=rp_id, expected_origin=origin,
+                                                  require_user_verification=True)
+    except Exception as e:
+        print(f"[video] passkey register failed: {e!r}", flush=True)
+        return _err("Face ID setup didn't go through. Try again.", 400)
+    key = {"id": bytes_to_base64url(v.credential_id), "pk": bytes_to_base64url(v.credential_public_key),
+           "count": v.sign_count, "created": time.time()}
+    if rec["adding"]:
+        u = await _user_by_id(rec["uid"])
+        if not u:
+            return _err("Sign in again", 401)
+        u.setdefault("passkeys", []).append(key)
+        await _save_users()
+    else:
+        if await _user_by_email(rec["email"]):
+            return _err("There's already an account for that email. Tap Sign in with Face ID.", 409)
+        u = {"id": rec["uid"], "email": rec["email"], "created": time.time(), "credit": 0.0, "ledger": [],
+             "passkeys": [key]}
+        doc = await _users_doc()
+        async with _lock:
+            doc["users"].append(u)
+        await _save_users()
+    resp = JSONResponse({"ok": True})
+    _set_user_cookie(resp, u["id"])
+    return resp
+
+
+@video_router.post("/video/passkey/login/start")
+async def video_pk_login_start(request: Request):
+    if not _accounts_on():
+        return _err("Sign-in isn't available here.", 404)
+    import webauthn  # noqa: WPS433
+    from webauthn.helpers.structs import UserVerificationRequirement
+    rp_id, _ = _rp(request)
+    opts = webauthn.generate_authentication_options(rp_id=rp_id,
+                                                     user_verification=UserVerificationRequirement.REQUIRED)
+    tok = _pk_stash({"kind": "login", "challenge": opts.challenge})
+    return {"token": tok, "options": json.loads(webauthn.options_to_json(opts))}
+
+
+@video_router.post("/video/passkey/login/finish")
+async def video_pk_login_finish(request: Request):
+    if not _accounts_on():
+        return _err("Sign-in isn't available here.", 404)
+    import webauthn  # noqa: WPS433
+    from webauthn.helpers import base64url_to_bytes
+    ip, now = _client_ip(request), time.time()
+    recent = [t for t in _fails.get("pk:" + ip, []) if now - t < 900]
+    if len(recent) >= 15:
+        return _err("Too many tries. Wait 15 minutes.", 429)
+    b = await _body(request)
+    rec = _pk_take(b.get("token"))
+    if not rec or rec["kind"] != "login":
+        return _err("That took too long. Try again.", 400)
+    cred = b.get("credential") or {}
+    cid = str(cred.get("id") or cred.get("rawId") or "")
+    u, key = None, None
+    for x in (await _users_doc())["users"]:
+        key = next((p for p in (x.get("passkeys") or []) if p["id"] == cid), None)
+        if key:
+            u = x
+            break
+    if not u:
+        _fails["pk:" + ip] = recent + [now]
+        return _err("No account uses that passkey. Create an account first.", 404)
+    rp_id, origin = _rp(request)
+    try:
+        v = webauthn.verify_authentication_response(
+            credential=cred, expected_challenge=rec["challenge"], expected_rp_id=rp_id, expected_origin=origin,
+            credential_public_key=base64url_to_bytes(key["pk"]), credential_current_sign_count=key.get("count") or 0,
+            require_user_verification=True)
+    except Exception as e:
+        _fails["pk:" + ip] = recent + [now]
+        print(f"[video] passkey login failed: {e!r}", flush=True)
+        return _err("Face ID sign-in didn't match. Try again.", 401)
+    if u.get("blocked"):
+        return _err("This account is closed.", 403)
+    key["count"] = v.new_sign_count
+    key["used"] = time.time()
+    await _save_users()
+    resp = JSONResponse({"ok": True})
+    _set_user_cookie(resp, u["id"])
+    return resp
