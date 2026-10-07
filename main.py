@@ -182,6 +182,13 @@ try:
 except Exception as _rv_err:  # pragma: no cover
     print(f"[rv_app] routes not mounted: {_rv_err}", flush=True)
 
+# Video Studio (AI video generation via OpenRouter). Optional, same rules as RV Lab.
+try:
+    from video_app import video_router
+    app.include_router(video_router)
+except Exception as _video_err:  # pragma: no cover
+    print(f"[video_app] routes not mounted: {_video_err}", flush=True)
+
 
 # --------------------------------------------------------------------------- #
 # Bridge key auth
@@ -197,7 +204,8 @@ _EXEMPT_PATHS = {"/health", "/ui", "/ui/", "/ui/login",
                  "/cart", "/cart/session", "/cart/login", "/cart/read"}
 # /rv and /rv/* is RV Lab. Same model as Cart Tally: it never accepts the bridge
 # key, and every data route checks its own PIN session cookie (see rv_app.py).
-_EXEMPT_PREFIXES = ("/rv/",)
+# /video and /video/* is Video Studio: same model, its own VIDEO_PIN/CART_PIN cookie.
+_EXEMPT_PREFIXES = ("/rv/", "/video/")
 
 
 class _KeyState:
@@ -216,7 +224,7 @@ def _auth_enabled() -> bool:
 class BridgeAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
-        if (not _auth_enabled() or path in _EXEMPT_PATHS or path == "/rv"
+        if (not _auth_enabled() or path in _EXEMPT_PATHS or path in ("/rv", "/video")
                 or path.startswith(_EXEMPT_PREFIXES)):
             return await call_next(request)
 

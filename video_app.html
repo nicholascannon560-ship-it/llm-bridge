@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Video Studio</title>
+<meta name="theme-color" content="#E6EBE8">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E6EBE8; --sheet:#F5F7F6; --ink:#16211E; --muted:#5D6B66; --line:#C9D2CE;
+  --teal:#0E6E6A; --teal-soft:#D3E7E4; --amber:#A8661A; --red:#B23A2E; --red-soft:#F4DDDA;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#131A18; --sheet:#1B2421; --ink:#E3EAE7; --muted:#97A6A0; --line:#33403C;
+    --teal:#4FB8B1; --teal-soft:#183532; --amber:#E0A050; --red:#E57466; --red-soft:#3A1F1C;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131A18; --sheet:#1B2421; --ink:#E3EAE7; --muted:#97A6A0; --line:#33403C;
+  --teal:#4FB8B1; --teal-soft:#183532; --amber:#E0A050; --red:#E57466; --red-soft:#3A1F1C;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:var(--paper);color:var(--ink);
+  font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.45}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.wrap{max-width:600px;margin:0 auto;padding:18px 16px 80px}
+h1{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1;margin:4px 0 2px}
+.lede{color:var(--muted);margin:0 0 20px;font-size:15px}
+section.panel{background:var(--sheet);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+label.f{display:block;font-size:14px;font-weight:500;margin:14px 0 6px}
+label.f:first-child{margin-top:0}
+textarea,input[type=text],input[type=password],input[type=number],select{
+  width:100%;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+textarea{min-height:92px;resize:vertical}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 13px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chip:disabled{opacity:.35;cursor:default}
+.btn{border:0;border-radius:10px;padding:12px 16px;font-weight:600;background:var(--teal);color:#fff}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:500}
+.btn.small{padding:8px 12px;font-size:14px}
+.btn:disabled{opacity:.45;cursor:default}
+.hint{font-size:13px;color:var(--muted);margin-top:6px}
+.err{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:12px}
+
+/* The budget meter: the one loud thing on the page. */
+.budget{margin-top:4px}
+.budget .top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.budget .est{font-size:44px;font-weight:700;letter-spacing:-.04em;line-height:1}
+.budget .of{font-size:15px;color:var(--muted);padding-bottom:5px}
+.money{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--paper);width:132px}
+.money span{padding-left:12px;color:var(--muted)}
+.money input{border:0;background:transparent;width:100%;padding:10px 10px 10px 4px}
+.meter{position:relative;height:22px;border-radius:6px;background:var(--paper);border:1px solid var(--line);margin:14px 0 6px;overflow:hidden}
+.meter .fill{position:absolute;inset:0 auto 0 0;background:var(--teal);transition:width .25s ease}
+.meter .fill.over{background:var(--red)}
+.meter .fill.unknown{background:repeating-linear-gradient(45deg,var(--line) 0 6px,transparent 6px 12px)}
+@media (prefers-reduced-motion: reduce){.meter .fill{transition:none}}
+.budget .status{font-size:14px}
+.budget .status.over{color:var(--red)}
+.today{font-size:13px;color:var(--muted);margin-top:10px}
+.go{width:100%;margin-top:14px;font-size:17px;padding:14px}
+
+.clip{border-top:1px solid var(--line);padding:14px 0}
+.clip:first-of-type{border-top:0;padding-top:0}
+.clip .meta{font-size:13px;color:var(--muted)}
+.clip .prompt{margin:4px 0 8px;font-size:15px}
+.clip video{width:100%;border-radius:10px;background:#000;display:block;margin:6px 0 8px}
+.state{display:inline-block;font-size:13px;font-weight:600;border-radius:6px;padding:2px 8px;background:var(--teal-soft);color:var(--teal)}
+.state.bad{background:var(--red-soft);color:var(--red)}
+.state.wait{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.scorer{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px}
+.empty{color:var(--muted);font-size:15px}
+.toggle{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:15px}
+.toggle input{width:20px;height:20px;accent-color:var(--teal)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Video Studio</h1>
+  <p class="lede">Describe a shot, set what you'll pay for it, and get a clip.</p>
+
+  <section class="panel" id="login" hidden>
+    <label class="f" for="pin">PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="current-password">
+    <button class="btn go" id="loginBtn">Sign in</button>
+    <div class="err" id="loginErr" hidden></div>
+  </section>
+
+  <div id="app" hidden>
+    <section class="panel">
+      <label class="f" for="idea">What should happen on screen?</label>
+      <textarea id="idea" placeholder="A fox trotting through fresh snow at dawn, low camera following it"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ghost small" id="improveBtn">Improve prompt</button>
+        <span class="hint" id="improveHint">Rewrites your idea with camera, light and motion detail.</span>
+      </div>
+
+      <label class="f" for="model">Model</label>
+      <select id="model"></select>
+      <div class="hint" id="modelHint"></div>
+
+      <label class="f">Length</label>
+      <div class="chips" id="durations"></div>
+      <label class="f">Quality</label>
+      <div class="chips" id="resolutions"></div>
+      <label class="f">Shape</label>
+      <div class="chips" id="aspects"></div>
+
+      <label class="toggle"><input type="checkbox" id="audio" checked> Let the model make sound</label>
+
+      <label class="f" for="song">Song</label>
+      <select id="song"></select>
+      <input type="file" id="songFile" accept=".mp3,.m4a,.aac,.wav,.ogg,audio/*" hidden>
+      <div class="row" id="songStartRow" style="margin-top:8px" hidden>
+        <label for="songStart" style="font-size:14px">Start the song at</label>
+        <input id="songStart" type="number" min="0" step="1" value="0" style="width:90px"> <span class="hint" style="margin:0">seconds</span>
+      </div>
+      <div class="hint" id="songHint">A song replaces the model's sound, so model sound is switched off and you aren't charged for it.</div>
+    </section>
+
+    <section class="panel budget">
+      <div class="top">
+        <div>
+          <div class="est num" id="est">$—</div>
+          <div class="of">estimated for this video</div>
+        </div>
+        <div>
+          <label class="f" for="budget" style="margin:0 0 6px">Budget</label>
+          <div class="money"><span>$</span><input id="budget" class="num" type="number" min="0.05" step="0.05" value="0.50" inputmode="decimal"></div>
+        </div>
+      </div>
+      <div class="meter" aria-hidden="true"><div class="fill" id="fill" style="width:0"></div></div>
+      <div class="row" style="justify-content:space-between">
+        <div class="status" id="budgetStatus"></div>
+        <button class="btn ghost small" id="fitBtn">Fit to budget</button>
+      </div>
+      <div class="today num" id="today"></div>
+      <button class="btn go" id="goBtn">Make video</button>
+      <div class="err" id="goErr" hidden></div>
+    </section>
+
+    <section class="panel" id="clips">
+      <div class="empty" id="noClips">Your videos show up here. Most take one to five minutes.</div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = {models:[], songs:[], model:null, duration:null, resolution:null, aspect:null,
+  estimate:null, basis:'', jobs:[], spent:0, cap:0, timer:null};
+const money = v => v == null ? '$—' : '$' + Number(v).toFixed(2);
+
+async function api(path, opts={}){
+  const r = await fetch(path, Object.assign({credentials:'same-origin',
+    headers:{'Content-Type':'application/json'}}, opts));
+  let data = {}; try { data = await r.json(); } catch(e) {}
+  if (r.status === 401 && path !== '/video/login'){ showLogin(); throw new Error('Sign in again'); }
+  if (!r.ok) throw new Error(data.detail || ('Error ' + r.status));
+  return data;
+}
+function showErr(el, msg){ el.textContent = msg; el.hidden = !msg; }
+
+// ---------------- pricing (mirrors estimate_cost in video_app.py)
+const RES = ['480p','720p','768p','1080p','1k','2k','4k'];
+const resOf = k => RES.find(t => k.toLowerCase().includes(t)) || null;
+function audioOf(k){ k = k.toLowerCase();
+  if (['no-audio','without-audio','noaudio','silent','video-only'].some(x => k.includes(x))) return false;
+  return k.includes('audio') ? true : null; }
+function estimate(m, duration, resolution, audio){
+  const nums = {}; for (const [k,v] of Object.entries(m.pricing_skus || {})){ const n = parseFloat(v); if (!isNaN(n)) nums[k] = n; }
+  const keys = Object.keys(nums); if (!keys.length) return null;
+  const res = (resolution || '').toLowerCase();
+  const pool = ks => { const exact = ks.filter(k => resOf(k) === res);
+    const base = exact.length ? exact : ks.filter(k => resOf(k) === null);
+    const fit = base.filter(k => [null, audio].includes(audioOf(k))); return fit.length ? fit : base; };
+  const ps = pool(keys.filter(k => k.toLowerCase().includes('second')));
+  if (ps.length) return Math.max(...ps.map(k => nums[k])) * duration;
+  const pv = pool(keys.filter(k => !k.toLowerCase().includes('second') && !k.toLowerCase().includes('token')));
+  if (pv.length) return Math.max(...pv.map(k => nums[k]));
+  return null;
+}
+const audioOn = () => $('audio').checked && !$('song').value;
+const durationsFor = m => (m.durations && m.durations.length) ? m.durations : [5];
+
+// ---------------- render controls
+function chips(el, values, current, onPick, fmt){
+  el.innerHTML = '';
+  values.forEach(v => { const b = document.createElement('button');
+    b.className = 'chip'; b.type = 'button'; b.textContent = fmt ? fmt(v) : v;
+    b.setAttribute('aria-pressed', String(v === current)); b.onclick = () => onPick(v); el.appendChild(b); });
+}
+function pickModel(id){
+  const m = state.models.find(x => x.id === id); if (!m) return; state.model = m;
+  const ds = durationsFor(m);
+  if (!ds.includes(state.duration)) state.duration = ds.includes(5) ? 5 : ds[0];
+  const rs = m.resolutions.length ? m.resolutions : [''];
+  if (!rs.includes(state.resolution)) state.resolution = rs.includes('720p') ? '720p' : rs[0];
+  const as = m.aspect_ratios.length ? m.aspect_ratios : [''];
+  if (!as.includes(state.aspect)) state.aspect = as.includes('9:16') ? '9:16' : as[0];
+  const rate = estimate(m, 1, state.resolution, audioOn());
+  $('modelHint').textContent = rate == null ? 'No price listed for this model, so it can\'t be used.'
+    : (m.durations.length ? 'About ' + money(rate) + ' per second at ' + (state.resolution || 'default quality') + '.' : 'Priced per video.');
+  render();
+}
+function render(){
+  const m = state.model; if (!m) return;
+  chips($('durations'), durationsFor(m), state.duration, v => { state.duration = v; render(); }, v => v + 's');
+  chips($('resolutions'), m.resolutions.length ? m.resolutions : [''], state.resolution, v => { state.resolution = v; render(); }, v => v || 'Default');
+  chips($('aspects'), m.aspect_ratios.length ? m.aspect_ratios : [''], state.aspect, v => { state.aspect = v; render(); },
+    v => ({'9:16':'9:16 vertical','16:9':'16:9 wide','1:1':'1:1 square'}[v] || v || 'Default'));
+  $('audio').disabled = !!$('song').value;
+  $('songStartRow').hidden = !$('song').value || $('song').value === '__upload';
+  state.estimate = estimate(m, state.duration, state.resolution, audioOn());
+  const budget = parseFloat($('budget').value) || 0;
+  $('est').textContent = money(state.estimate);
+  const fill = $('fill');
+  fill.className = 'fill';
+  if (state.estimate == null){ fill.classList.add('unknown'); fill.style.width = '100%'; }
+  else { fill.style.width = Math.min(100, budget > 0 ? state.estimate / budget * 100 : 100) + '%';
+    if (state.estimate > budget) fill.classList.add('over'); }
+  const st = $('budgetStatus'); st.className = 'status';
+  const left = Math.max(0, state.cap - state.spent);
+  let ok = true;
+  if (state.estimate == null){ st.textContent = 'Can\'t price this model.'; ok = false; }
+  else if (budget <= 0){ st.textContent = 'Set a budget.'; ok = false; }
+  else if (state.estimate > budget){ st.classList.add('over'); st.textContent = money(state.estimate - budget) + ' over budget'; ok = false; }
+  else if (state.estimate > left){ st.classList.add('over'); st.textContent = 'Over today\'s limit'; ok = false; }
+  else st.textContent = money(budget - state.estimate) + ' under budget';
+  $('today').textContent = money(state.spent) + ' of ' + money(state.cap) + ' used in the last 24 hours';
+  $('goBtn').disabled = !ok;
+}
+function fitToBudget(){
+  const m = state.model; if (!m) return;
+  const budget = parseFloat($('budget').value) || 0;
+  const rs = m.resolutions.length ? m.resolutions : [''];
+  const order = ['480p','720p','768p','1080p','1K','2K','4K'];
+  const rsSorted = [...rs].sort((a,b) => order.indexOf(a) - order.indexOf(b));
+  // Keep the chosen quality if any length fits; otherwise step quality down.
+  const lower = rsSorted.slice(0, Math.max(0, rsSorted.indexOf(state.resolution))).reverse();
+  const tryRes = [state.resolution, ...lower];
+  for (const r of tryRes){
+    const fits = durationsFor(m).filter(d => { const e = estimate(m, d, r, audioOn()); return e != null && e <= budget; });
+    if (fits.length){ state.resolution = r; state.duration = Math.max(...fits); render(); return; }
+  }
+  showErr($('goErr'), 'Nothing on this model fits ' + money(budget) + '. Raise the budget or pick a cheaper model.');
+}
+
+// ---------------- songs
+function renderSongs(keep){
+  const sel = $('song'); const cur = keep ?? sel.value;
+  sel.innerHTML = '<option value="">No song</option>' +
+    state.songs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('') +
+    '<option value="__upload">Upload a song…</option>';
+  sel.value = state.songs.some(s => s.id === cur) ? cur : '';
+}
+async function uploadSong(file){
+  if (file.size > 15 * 1024 * 1024){ alert('Songs must be under 15 MB'); return null; }
+  const data = await new Promise((res, rej) => { const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+  const out = await api('/video/songs', {method:'POST', body: JSON.stringify({name:file.name, data})});
+  state.songs.unshift(out); return out.id;
+}
+let songUploadTarget = null; // null = composer, else job id
+$('song').onchange = () => {
+  if ($('song').value === '__upload'){ songUploadTarget = null; $('songFile').click(); }
+  render();
+};
+$('songFile').onchange = async () => {
+  const f = $('songFile').files[0]; $('songFile').value = '';
+  if (!f){ renderSongs(''); render(); return; }
+  try { const id = await uploadSong(f);
+    if (songUploadTarget){ renderSongs(); renderJobs(); const sel = document.querySelector(`[data-scorer="${songUploadTarget}"] select`); if (sel) sel.value = id; }
+    else { renderSongs(id); }
+  } catch(e){ alert(e.message); renderSongs(''); }
+  render();
+};
+
+// ---------------- jobs
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function stateLabel(j){
+  if (j.status === 'ready') return '<span class="state">Ready</span>';
+  if (['failed','cancelled','expired'].includes(j.status)) return '<span class="state bad">Failed</span>';
+  return '<span class="state wait">' + (j.status === 'in_progress' ? 'Rendering' : 'Queued') + '</span>';
+}
+function renderJobs(){
+  const box = $('clips');
+  box.querySelectorAll('.clip').forEach(n => n.remove());
+  $('noClips').hidden = state.jobs.length > 0;
+  for (const j of state.jobs){
+    const d = document.createElement('div'); d.className = 'clip';
+    const cost = j.actual_cost != null ? money(j.actual_cost) : 'about ' + money(j.estimate);
+    const src = '/video/clip/' + j.id + (j.has_scored ? '?song=1' : '');
+    d.innerHTML = `${stateLabel(j)} <span class="meta num">${esc(j.model)}, ${j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${cost} of ${money(j.budget)}</span>
+      <div class="prompt">${esc(j.prompt)}</div>
+      ${j.has_clip ? `<video controls playsinline preload="metadata" src="${src}"></video>` : ''}
+      ${j.error ? `<div class="err">${esc(j.error)}</div>` : ''}
+      ${j.song_error ? `<div class="err">Song: ${esc(j.song_error)}</div>` : ''}
+      ${j.has_scored ? `<div class="meta">With ${esc(j.song_name)} from ${j.song_start || 0}s</div>` : ''}
+      ${j.has_clip ? `<div class="row" style="margin-top:6px">
+          <a class="btn ghost small" href="/video/clip/${j.id}?dl=1">Download</a>
+          ${j.has_scored ? `<a class="btn ghost small" href="/video/clip/${j.id}?song=1&dl=1">Download with song</a>` : ''}
+          <button class="btn ghost small" data-open="${j.id}">${j.has_scored ? 'Change song' : 'Add song'}</button></div>
+        <div class="scorer" data-scorer="${j.id}" hidden>
+          <select></select>
+          <div class="row" style="margin-top:8px"><label style="font-size:14px">Start at</label>
+            <input type="number" min="0" step="1" value="${j.song_start || 0}" style="width:90px"> <span class="hint" style="margin:0">seconds</span>
+            <button class="btn small" data-apply="${j.id}">Add song</button></div>
+          <div class="hint">Free. This doesn't make a new video.</div>
+        </div>` : ''}`;
+    box.appendChild(d);
+  }
+  box.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+    const sc = box.querySelector(`[data-scorer="${b.dataset.open}"]`); sc.hidden = !sc.hidden;
+    const sel = sc.querySelector('select');
+    sel.innerHTML = state.songs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('') + '<option value="__upload">Upload a song…</option>';
+    sel.onchange = () => { if (sel.value === '__upload'){ songUploadTarget = b.dataset.open; $('songFile').click(); } };
+  });
+  box.querySelectorAll('[data-apply]').forEach(b => b.onclick = async () => {
+    const sc = box.querySelector(`[data-scorer="${b.dataset.apply}"]`);
+    const song_id = sc.querySelector('select').value; if (!song_id || song_id === '__upload') return;
+    b.disabled = true; b.textContent = 'Adding…';
+    try { await api('/video/jobs/' + b.dataset.apply + '/song', {method:'POST',
+      body: JSON.stringify({song_id, song_start: parseFloat(sc.querySelector('input').value) || 0})}); await loadJobs(); }
+    catch(e){ alert(e.message); b.disabled = false; b.textContent = 'Add song'; }
+  });
+}
+async function loadJobs(){
+  const out = await api('/video/jobs');
+  const before = JSON.stringify(state.jobs.map(j => [j.id, j.status, j.has_scored, j.song_name]));
+  state.jobs = out.jobs; state.spent = out.spent_today; state.cap = out.daily_cap;
+  if (JSON.stringify(state.jobs.map(j => [j.id, j.status, j.has_scored, j.song_name])) !== before) renderJobs();
+  render();
+  const busy = state.jobs.some(j => ['pending','in_progress'].includes(j.status));
+  clearTimeout(state.timer); if (busy) state.timer = setTimeout(() => loadJobs().catch(() => {}), 10000);
+}
+
+// ---------------- actions
+$('improveBtn').onclick = async () => {
+  const idea = $('idea').value.trim(); if (!idea) return;
+  const b = $('improveBtn'); b.disabled = true; b.textContent = 'Improving…';
+  try { const out = await api('/video/prompt', {method:'POST', body: JSON.stringify({idea})}); $('idea').value = out.prompt; }
+  catch(e){ showErr($('goErr'), e.message); }
+  b.disabled = false; b.textContent = 'Improve prompt';
+};
+$('model').onchange = () => pickModel($('model').value);
+$('audio').onchange = render;
+$('budget').oninput = render;
+$('fitBtn').onclick = () => { showErr($('goErr'), ''); fitToBudget(); };
+$('goBtn').onclick = async () => {
+  showErr($('goErr'), '');
+  const song = $('song').value;
+  const body = {model: state.model.id, prompt: $('idea').value.trim(), duration: state.duration,
+    resolution: state.resolution, aspect_ratio: state.aspect, audio: audioOn(),
+    budget: parseFloat($('budget').value) || 0,
+    song_id: song && song !== '__upload' ? song : null, song_start: parseFloat($('songStart').value) || 0};
+  const b = $('goBtn'); b.disabled = true; b.textContent = 'Sending…';
+  try { await api('/video/generate', {method:'POST', body: JSON.stringify(body)}); await loadJobs();
+    $('clips').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); }
+  catch(e){ showErr($('goErr'), e.message); }
+  b.textContent = 'Make video'; render();
+};
+function showLogin(){ $('login').hidden = false; $('app').hidden = true; }
+$('loginBtn').onclick = async () => {
+  showErr($('loginErr'), '');
+  try { await api('/video/login', {method:'POST', body: JSON.stringify({pin: $('pin').value})}); await boot(); }
+  catch(e){ showErr($('loginErr'), e.message); }
+};
+$('pin').onkeydown = e => { if (e.key === 'Enter') $('loginBtn').click(); };
+
+async function boot(){
+  const s = await api('/video/session');
+  if (!s.configured){ showLogin(); showErr($('loginErr'), 'Set VIDEO_PIN (or CART_PIN) on the server first.'); return; }
+  if (!s.authed){ showLogin(); return; }
+  $('login').hidden = true; $('app').hidden = false;
+  state.spent = s.spent_today; state.cap = s.daily_cap;
+  try {
+    const [mo, so] = await Promise.all([api('/video/models'), api('/video/songs')]);
+    state.songs = so.songs;
+    // Cheapest first, unpriced last.
+    const rate = m => { const r = m.resolutions.includes('720p') ? '720p' : (m.resolutions[0] || '');
+      const e = estimate(m, (m.durations && m.durations.length) ? Math.min(...m.durations) : 5, r, true); return e == null ? 1e9 : e; };
+    state.models = mo.models.sort((a,b) => rate(a) - rate(b));
+    $('model').innerHTML = state.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+    renderSongs('');
+    if (state.models.length) pickModel(state.models[0].id);
+  } catch(e){ showErr($('goErr'), e.message); }
+  await loadJobs();
+}
+boot().catch(e => { showLogin(); showErr($('loginErr'), e.message); });
+</script>
+</body>
+</html>

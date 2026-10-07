@@ -12,3 +12,6 @@ pyyaml>=6.0
 # aws_routes.py imports boto3 lazily, so the bridge still boots without it —
 # but the S3 routes return 503 until this is installed.
 boto3>=1.34.0
+
+# video_app.py: static ffmpeg binary for laying songs over clips.
+imageio-ffmpeg>=0.5.1

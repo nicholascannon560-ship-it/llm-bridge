@@ -148,6 +148,7 @@ service variable if you want it to persist.
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-10-07 | phone apps served by the bridge: /cart (cart_app), /rv (rv_app), NEW /video (video_app: OpenRouter video gen, per-video budget, VIDEO_DAILY_USD cap, song mux via imageio-ffmpeg). PIN-cookie auth, exempt from bridge key | files: video_app.py, video_app.html, main.py, requirements.txt
 - 2026-10-06 | RV Lab at /rv: remote-viewing trainer + OpenRouter model tester; PIN cookie, S3 results | files: rv_app.py, rv_app.html, main.py
 - 2026-10-04 | /cart Cart Tally app: CART_PIN cookie auth, OpenRouter vision; .html not in watchPatterns, redeploy after html-only edits | files: cart_app.py, cart_app.html, main.py
 - 2026-08-27 | watchPatterns `/**` matched NOTHING: every push was SKIPPED, redeploy built one commit behind. Replaced with explicit allowlist | files: -
