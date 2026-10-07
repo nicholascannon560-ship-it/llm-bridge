@@ -24,6 +24,10 @@ POST /video/jobs/{id}/edit       {"mode":"edit"|"remake","change", model/duratio
                                           (only models that accept video input; OpenRouter says if not)
                                  remake = GLM folds the change into the old prompt, reuses the old
                                           pictures, and (keep_look) starts on the old clip's first frame
+POST /video/jobs/{id}/extend     {"seconds","budget","change"?} -> a NEW job that continues from the clip's
+                                 last frame and is joined onto the end (the original stays)
+     generate also takes "parts": N > 1 builds a long video automatically, one part
+     after another, each starting on the last frame of the one before, joined as it goes.
 GET  /video/src/{token}         the original clip, PUBLIC on purpose for video-to-video (random token)
 
 Pictures: generate takes "images": [{"id","role"}], role = first (start frame),
@@ -61,7 +65,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.2.4"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.3.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -453,6 +457,51 @@ def first_frame_sync(video: bytes) -> bytes:
         return Path(op).read_bytes()
 
 
+def last_frame_sync(video: bytes) -> bytes:
+    with tempfile.TemporaryDirectory() as d:
+        vp, op = f"{d}/v.mp4", f"{d}/f.jpg"
+        Path(vp).write_bytes(video)
+        p = subprocess.run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-sseof", "-0.25", "-i", vp,
+                            "-update", "1", "-q:v", "2", op], capture_output=True, text=True, timeout=60)
+        if p.returncode != 0 or not Path(op).exists():
+            raise RuntimeError(f"couldn't grab the last frame: {(p.stderr or '').strip()[-300:]}")
+        return Path(op).read_bytes()
+
+
+def _probe(path: str) -> tuple[int, int, bool]:
+    p = subprocess.run([_ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True)
+    m = re.search(r"Video:.*?(\d{2,5})x(\d{2,5})", p.stderr)
+    w, h = (int(m.group(1)), int(m.group(2))) if m else (1280, 720)
+    return w - w % 2, h - h % 2, "Audio:" in p.stderr
+
+
+def concat_sync(first: bytes, second: bytes) -> bytes:
+    """Join two clips end to end. Re-encodes so different sizes/frame rates still line up;
+    the second is scaled to the first's frame. Keeps sound only if both clips have it."""
+    with tempfile.TemporaryDirectory() as d:
+        a, b, o = f"{d}/a.mp4", f"{d}/b.mp4", f"{d}/o.mp4"
+        Path(a).write_bytes(first)
+        Path(b).write_bytes(second)
+        w, h, a_snd = _probe(a)
+        _, _, b_snd = _probe(b)
+        sound = a_snd and b_snd
+        vf = (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v0];"
+              f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v1];")
+        if sound:
+            graph = vf + "[0:a]aresample=44100[a0];[1:a]aresample=44100[a1];[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]"
+            maps = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
+        else:
+            graph = vf + "[v0][v1]concat=n=2:v=1:a=0[v]"
+            maps = ["-map", "[v]"]
+        cmd = [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", a, "-i", b,
+               "-filter_complex", graph, *maps, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+               "-pix_fmt", "yuv420p", "-movflags", "+faststart", o]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if p.returncode != 0 or not Path(o).exists():
+            raise RuntimeError(f"couldn't join the clips: {(p.stderr or '').strip()[-400:]}")
+        return Path(o).read_bytes()
+
+
 async def _apply_song(job: dict, song_id: str, start: float) -> None:
     song = _find(await _all_songs(), song_id)
     if not song:
@@ -493,28 +542,56 @@ async def _poll(job: dict) -> None:
                     if v.status_code >= 400 or not v.content:
                         raise RuntimeError(f"download HTTP {v.status_code}")
                     key = f"video/clips/{job['id']}.mp4"
-                    await _put(key, v.content, "video/mp4")
+                    src = _find(await _all_jobs(), job["extend_of"]) if job.get("extend_of") else None
+                    if src and src.get("clip_key"):
+                        await _put(f"video/clips/{job['id']}-part.mp4", v.content, "video/mp4")
+                        before = await _get(src["clip_key"])
+                        joined = await asyncio.to_thread(concat_sync, before or b"", v.content)
+                        await _put(key, joined, "video/mp4")
+                        job["total_seconds"] = (src.get("total_seconds") or src.get("duration") or 0) + job["duration"]
+                    else:
+                        await _put(key, v.content, "video/mp4")
+                        job["total_seconds"] = job["duration"]
                     job["clip_key"] = key
-                    if job.get("song_id"):
+                    if job.get("song_id") and not job.get("chain_remaining"):
                         try:
                             await _apply_song(job, job["song_id"], float(job.get("song_start") or 0))
                         except Exception as e:
                             job["song_error"] = str(e)[:300]
                     job.update(status="ready", finished=time.time())
                     await _save_jobs()
+                    if job.get("chain_remaining"):
+                        try:
+                            await _extend(job, auto=True)
+                        except Exception as e:
+                            job["chain_error"] = f"Stopped at {job['total_seconds']}s: {e}"[:300]
+                            job["chain_remaining"] = 0
+                            await _save_jobs()
                     return
                 if status in ("failed", "cancelled", "expired"):
                     job["error"] = str(st.get("error") or status)[:300]
                     job["finished"] = time.time()
+                    await _unhide_parent(job)
                     await _save_jobs()
                     return
                 await asyncio.sleep(POLL_EVERY)
         job.update(status="failed", error="gave up waiting after 30 minutes", finished=time.time())
+        await _unhide_parent(job)
         await _save_jobs()
     except Exception as e:
         print(f"[video] poll {job.get('id')} error: {e!r}", flush=True)
         job["poll_error"] = str(e)[:300]
         await _save_jobs()
+
+
+async def _unhide_parent(job: dict) -> None:
+    """If an automatic part fails, bring back the video built so far instead of losing it."""
+    if job.get("extend_of") and (job.get("part_no") or 1) > 1:
+        src = _find(await _all_jobs(), job["extend_of"])
+        if src and src.get("superseded"):
+            src["superseded"] = False
+            src["chain_remaining"] = 0
+            src["chain_error"] = f"Stopped at {src.get('total_seconds') or src.get('duration')}s: the next part failed."
 
 
 def _ensure_poller(job: dict) -> None:
@@ -530,7 +607,8 @@ def _public(job: dict) -> dict:
     keep = ("id", "created", "finished", "model", "prompt", "duration", "resolution", "aspect_ratio",
             "audio", "budget", "estimate", "actual_cost", "status", "error", "poll_error",
             "song_id", "song_name", "song_start", "song_error", "images", "image_note",
-            "parent_id", "edit_mode", "change")
+            "parent_id", "edit_mode", "change", "total_seconds", "parts_total", "part_no",
+            "chain_remaining", "chain_error", "chain_estimate")
     out = {k: job.get(k) for k in keep}
     out["has_clip"] = bool(job.get("clip_key"))
     out["has_scored"] = bool(job.get("scored_key"))
@@ -659,7 +737,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
     raw_imgs = b.get("images") or []
     if not isinstance(raw_imgs, list):
         return _err("Pictures came through wrong. Re-add them.")
-    base = _public_base(request)
+    base = extra.get("base") or _public_base(request)
     for it in raw_imgs[:8]:
         iid, role = str((it or {}).get("id", "")), str((it or {}).get("role", ""))
         if not IMG_ID.match(iid) or role not in ("first", "last", "ref"):
@@ -678,16 +756,21 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         refs = []
         image_note = "Reference pictures were skipped: models use start/end pictures instead when both are given."
 
+    try:
+        parts = max(1, min(12, int(b.get("parts") or 1)))
+    except (TypeError, ValueError):
+        parts = 1
     est, basis = estimate_cost(m, duration, resolution, audio)
     if est is None:
         return _err(f"Can't price {m['name']} ({basis}), so it won't run. Pick another model.")
-    if est > budget:
-        return _err(f"This video would cost about ${est:.2f}, over your ${budget:.2f} budget. "
+    if est * parts > budget + 1e-9:
+        what = f"This {duration * parts}s video ({parts} parts)" if parts > 1 else "This video"
+        return _err(f"{what} would cost about ${est * parts:.2f}, over your ${budget:.2f} budget. "
                     f"Shorten it, lower the resolution, or raise the budget.")
     cap, spent = _daily_cap(), await _spent_24h()
-    if cap is not None and spent + est > cap:
+    if cap is not None and spent + est * parts > cap:
         return _err(f"Daily cap reached: ${spent:.2f} of ${cap:.2f} used in the last 24 hours, "
-                    f"this one is about ${est:.2f}.")
+                    f"this one is about ${est * parts:.2f}.")
 
     payload = {"model": m["id"], "prompt": prompt, "duration": duration}
     if resolution:
@@ -724,9 +807,9 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                     # Some models (HeyGen) always render sound. A song replaces it anyway,
                     # so let the model make sound, but re-check the price with audio on.
                     est2, basis2 = estimate_cost(m, duration, resolution, True)
-                    if est2 is None or est2 > budget:
+                    if est2 is None or est2 * parts > budget + 1e-9:
                         return _err(f"{m['name']} always makes its own sound, which brings this to about "
-                                    f"${(est2 or 0):.2f}, over your ${budget:.2f} budget.")
+                                    f"${(est2 or 0) * parts:.2f}, over your ${budget:.2f} budget.")
                     est, basis = est2, basis2
                     payload.pop("generate_audio")
                     audio = True
@@ -750,7 +833,15 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
            "status": data.get("status") or "pending", "song_id": song_id,
            "song_start": float(b.get("song_start") or 0), "images": images, "image_note": image_note,
            "parent_id": extra.get("parent_id"), "edit_mode": extra.get("edit_mode"),
-           "change": extra.get("change")}
+           "change": extra.get("change"), "base": base,
+           "base_prompt": extra.get("base_prompt") or prompt,
+           "extend_of": extra.get("extend_of"),
+           "parts_total": extra.get("parts_total") or parts,
+           "part_no": extra.get("part_no") or 1,
+           "chain_remaining": extra["chain_remaining"] if "chain_remaining" in extra else parts - 1,
+           "chain_estimate": extra.get("chain_estimate") or (round(est * parts, 4) if parts > 1 else None),
+           # what each later part may spend; the total was already checked against the budget above
+           "part_budget": extra.get("part_budget") or (round(max(budget / parts, est) + 0.01, 2) if parts > 1 else None)}
     jobs = await _all_jobs()
     async with _lock:
         jobs.append(job)
@@ -766,7 +857,7 @@ async def video_jobs(request: Request):
     jobs = await _all_jobs()
     for j in jobs:
         _ensure_poller(j)
-    return {"jobs": [_public(j) for j in reversed(jobs[-60:])],
+    return {"jobs": [_public(j) for j in reversed(jobs[-80:]) if not j.get("superseded")][:60],
             "spent_today": await _spent_24h(), "daily_cap": _daily_cap()}
 
 
@@ -966,3 +1057,72 @@ async def video_src(token: str, request: Request):
         return _err("Not found", 404)
     return Response(data, media_type="video/mp4", headers={"Cache-Control": "public, max-age=86400",
                                                            "X-Robots-Tag": "noindex"})
+
+
+CONTINUE = " Continue the same scene smoothly from the opening frame: same characters, look, lighting and camera style."
+
+
+async def _extend(src: dict, *, auto: bool, seconds: int | None = None, budget: float | None = None,
+                  change: str | None = None):
+    """Start a job that picks up from src's last frame. Returns the job dict, raises on refusal."""
+    if not src.get("clip_key"):
+        raise RuntimeError("that video isn't ready")
+    clip = await _get(src["clip_key"])
+    if not clip:
+        raise RuntimeError("the video file is missing")
+    frame = await asyncio.to_thread(last_frame_sync, clip)
+    fid = secrets.token_urlsafe(24)
+    await _put(f"video/images/{fid}", frame, "image/jpeg")
+    base_prompt = src.get("base_prompt") or src.get("prompt") or ""
+    prompt = (f"{change.strip()}." if change else base_prompt) + CONTINUE
+    if auto:
+        left = src["chain_remaining"] - 1
+        seg_budget = src.get("part_budget") or src.get("budget") or 0
+    else:
+        left = 0
+        seg_budget = budget or 0
+    spec = {"model": src["model"], "prompt": prompt[:2500], "duration": seconds or src["duration"],
+            "resolution": src.get("resolution"), "aspect_ratio": src.get("aspect_ratio"),
+            "audio": src.get("audio", True), "budget": seg_budget,
+            "song_id": src.get("song_id"), "song_start": src.get("song_start") or 0,
+            "images": [{"id": fid, "role": "first"}]}
+    extra = {"base": src.get("base"), "extend_of": src["id"], "parent_id": src["id"],
+             "edit_mode": "extend", "change": change or (None if auto else "continued"),
+             "base_prompt": base_prompt, "chain_remaining": left,
+             "parts_total": src.get("parts_total") if auto else 1,
+             "part_no": (src.get("part_no") or 1) + 1 if auto else 1,
+             "chain_estimate": src.get("chain_estimate") if auto else None,
+             "part_budget": src.get("part_budget") if auto else None}
+    out = await _start_job(None, spec, extra)
+    if isinstance(out, Response):
+        try:
+            detail = json.loads(out.body).get("detail")
+        except Exception:
+            detail = "refused"
+        raise RuntimeError(detail)
+    if auto:
+        src["superseded"] = True
+        await _save_jobs()
+    return out
+
+
+@video_router.post("/video/jobs/{jid}/extend")
+async def video_job_extend(jid: str, request: Request):
+    if (d := _deny(request)):
+        return d
+    src = _find(await _all_jobs(), jid)
+    if not src or not src.get("clip_key"):
+        return _err("That video isn't ready yet", 404)
+    b = await _body(request)
+    try:
+        seconds = int(float(b.get("seconds") or src["duration"]))
+        budget = round(float(b.get("budget") or 0), 2)
+    except (TypeError, ValueError):
+        return _err("Seconds and budget must be numbers")
+    if not src.get("base"):
+        src["base"] = _public_base(request)
+    try:
+        return await _extend(src, auto=False, seconds=seconds, budget=budget,
+                             change=str(b.get("change") or "").strip()[:1500] or None)
+    except Exception as e:
+        return _err(f"Couldn't extend: {e}", 400)
