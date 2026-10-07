@@ -18,6 +18,14 @@ POST /video/images              {"data"(base64 jpeg/png/webp)} upload a picture 
 GET  /video/img/{id}            the picture, PUBLIC on purpose: the video provider has to fetch it.
                                 The id is 24 random bytes, so it can't be guessed or listed.
 
+POST /video/jobs/{id}/edit       {"mode":"edit"|"remake","change", model/duration/resolution/aspect/budget/audio,
+                                 "keep_look"?, "song_id"?} -> a NEW job; the original is never touched
+                                 edit   = video-to-video: the finished clip goes in as a video reference
+                                          (only models that accept video input; OpenRouter says if not)
+                                 remake = GLM folds the change into the old prompt, reuses the old
+                                          pictures, and (keep_look) starts on the old clip's first frame
+GET  /video/src/{token}         the original clip, PUBLIC on purpose for video-to-video (random token)
+
 Pictures: generate takes "images": [{"id","role"}], role = first (start frame),
 last (end frame) or ref (style/content reference). Frames win over refs when
 both are sent, so refs are dropped with a warning in that case.
@@ -53,7 +61,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.1.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.2.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -385,6 +393,18 @@ Reply with only the description, no preamble and no quotes.
 Idea: {idea}"""
 
 
+
+REMAKE_PROMPT = """You edit prompts for an AI video model.
+Here is the prompt that made the current video, and a change the user wants.
+Write the new prompt: keep everything from the old prompt that the change doesn't touch,
+apply the change, and stay concrete about subject, motion, camera, light and mood.
+Reply with only the new prompt, no preamble and no quotes.
+
+Old prompt: {old}
+
+Change: {change}"""
+
+
 # --------------------------------------------------------------------------- ffmpeg
 def _ffmpeg() -> str:
     import imageio_ffmpeg  # noqa: WPS433
@@ -417,6 +437,17 @@ def mux_song_sync(video: bytes, song: bytes, song_ext: str, start: float) -> byt
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         if p.returncode != 0 or not Path(op).exists():
             raise RuntimeError(f"ffmpeg failed: {(p.stderr or '').strip()[-400:]}")
+        return Path(op).read_bytes()
+
+
+def first_frame_sync(video: bytes) -> bytes:
+    with tempfile.TemporaryDirectory() as d:
+        vp, op = f"{d}/v.mp4", f"{d}/f.jpg"
+        Path(vp).write_bytes(video)
+        p = subprocess.run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", vp,
+                            "-frames:v", "1", "-q:v", "2", op], capture_output=True, text=True, timeout=60)
+        if p.returncode != 0 or not Path(op).exists():
+            raise RuntimeError(f"couldn't grab the first frame: {(p.stderr or '').strip()[-300:]}")
         return Path(op).read_bytes()
 
 
@@ -496,7 +527,8 @@ def _ensure_poller(job: dict) -> None:
 def _public(job: dict) -> dict:
     keep = ("id", "created", "finished", "model", "prompt", "duration", "resolution", "aspect_ratio",
             "audio", "budget", "estimate", "actual_cost", "status", "error", "poll_error",
-            "song_id", "song_name", "song_start", "song_error", "images", "image_note")
+            "song_id", "song_name", "song_start", "song_error", "images", "image_note",
+            "parent_id", "edit_mode", "change")
     out = {k: job.get(k) for k in keep}
     out["has_clip"] = bool(job.get("clip_key"))
     out["has_scored"] = bool(job.get("scored_key"))
@@ -585,7 +617,11 @@ async def video_estimate(request: Request):
 async def video_generate(request: Request):
     if (d := _deny(request)):
         return d
-    b = await _body(request)
+    return await _start_job(request, await _body(request))
+
+
+async def _start_job(request: Request, b: dict, extra: dict | None = None):
+    extra = extra or {}
     prompt = str(b.get("prompt", "")).strip()[:2500]
     if not prompt:
         return _err("Write a prompt first")
@@ -658,26 +694,46 @@ async def video_generate(request: Request):
         payload["aspect_ratio"] = aspect
     if not audio:
         payload["generate_audio"] = False
-    if frames:
+    if extra.get("video_ref_url"):
+        payload["input_references"] = [{"type": "video_url", "video_url": {"url": extra["video_ref_url"]}}] + refs
+    elif frames:
         payload["frame_images"] = frames
     elif refs:
         payload["input_references"] = refs
+    if extra.get("previous_job_id"):
+        payload["previous_job_id"] = extra["previous_job_id"]
+
+    def _msg(data, r):
+        e = data.get("error") if isinstance(data, dict) else None
+        return (e.get("message") if isinstance(e, dict) else e) or f"HTTP {r.status_code}"
+
     try:
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
-        data = r.json()
+            data = r.json()
+            # previous_job_id is a hint some providers don't take; retry once without it.
+            if (r.status_code >= 400 and "previous_job_id" in payload
+                    and "previous" in str(_msg(data, r)).lower()):
+                payload.pop("previous_job_id")
+                r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
+                data = r.json()
     except Exception as e:
         return _err(f"OpenRouter did not answer: {e}", 502)
     if r.status_code >= 400 or not data.get("id"):
-        msg = (data.get("error") or {}).get("message") if isinstance(data.get("error"), dict) else data.get("error")
-        return _err(f"OpenRouter refused the job: {msg or r.status_code}", 502)
+        msg = str(_msg(data, r))
+        if extra.get("video_ref_url"):
+            return _err(f"{m['name']} couldn't edit this video ({msg}). Try a model that takes video "
+                        f"input, or use Remake with changes, which works on every model.", 502)
+        return _err(f"OpenRouter refused the job: {msg}", 502)
 
     job = {"id": secrets.token_urlsafe(8), "created": time.time(), "model": m["id"], "prompt": prompt,
            "duration": duration, "resolution": resolution, "aspect_ratio": aspect, "audio": audio,
            "budget": budget, "estimate": est, "price_basis": basis, "or_id": data["id"],
            "polling_url": data.get("polling_url") or f"{OR_BASE}/videos/{data['id']}",
            "status": data.get("status") or "pending", "song_id": song_id,
-           "song_start": float(b.get("song_start") or 0), "images": images, "image_note": image_note}
+           "song_start": float(b.get("song_start") or 0), "images": images, "image_note": image_note,
+           "parent_id": extra.get("parent_id"), "edit_mode": extra.get("edit_mode"),
+           "change": extra.get("change")}
     jobs = await _all_jobs()
     async with _lock:
         jobs.append(job)
@@ -829,3 +885,67 @@ async def video_image(iid: str):
     kind = _sniff(data) or ("jpg", "image/jpeg")
     return Response(data, media_type=kind[1], headers={"Cache-Control": "public, max-age=86400",
                                                        "X-Robots-Tag": "noindex"})
+
+
+@video_router.post("/video/jobs/{jid}/edit")
+async def video_job_edit(jid: str, request: Request):
+    if (d := _deny(request)):
+        return d
+    orig = _find(await _all_jobs(), jid)
+    if not orig or not orig.get("clip_key"):
+        return _err("That video isn't ready yet", 404)
+    b = await _body(request)
+    mode = str(b.get("mode") or "edit")
+    change = str(b.get("change") or "").strip()[:1500]
+    if mode not in ("edit", "remake"):
+        return _err("Unknown edit mode")
+    if not change:
+        return _err("Say what to change")
+    spec = {k: b.get(k) for k in ("model", "duration", "resolution", "aspect_ratio", "budget", "audio",
+                                  "song_id", "song_start")}
+    for k in ("model", "duration", "resolution", "aspect_ratio"):
+        if spec.get(k) in (None, ""):
+            spec[k] = orig.get(k)
+    extra = {"parent_id": orig["id"], "edit_mode": mode, "change": change}
+
+    if mode == "edit":
+        if not orig.get("src_token"):
+            orig["src_token"] = secrets.token_urlsafe(24)
+            await _save_jobs()
+        extra["video_ref_url"] = f"{_public_base(request)}/video/src/{orig['src_token']}"
+        if spec["model"] == orig.get("model") and orig.get("or_id"):
+            extra["previous_job_id"] = orig["or_id"]
+        spec["prompt"] = (f"Edit the input video: {change}. "
+                          f"Keep everything else about the video the same.")
+        spec["images"] = []
+    else:
+        try:
+            spec["prompt"] = (await _or_chat(REMAKE_PROMPT.format(old=orig.get("prompt", ""), change=change)))\
+                .strip().strip('"')[:2500]
+        except Exception as e:
+            print(f"[video] remake rewrite failed, falling back: {e!r}", flush=True)
+            spec["prompt"] = f"{orig.get('prompt', '')} Change: {change}"[:2500]
+        imgs = [dict(i) for i in (orig.get("images") or [])]
+        if b.get("keep_look", True):
+            try:
+                frame = await asyncio.to_thread(first_frame_sync, await _get(orig["clip_key"]) or b"")
+                fid = secrets.token_urlsafe(24)
+                await _put(f"video/images/{fid}", frame, "image/jpeg")
+                imgs = [i for i in imgs if i.get("role") != "first"] + [{"id": fid, "role": "first"}]
+            except Exception as e:
+                print(f"[video] keep_look frame failed: {e!r}", flush=True)
+        spec["images"] = imgs
+    return await _start_job(request, spec, extra)
+
+
+@video_router.get("/video/src/{token}")
+async def video_src(token: str, request: Request):
+    # Deliberately no PIN check: the provider fetches this for video-to-video edits.
+    if not IMG_ID.match(token):
+        return _err("Not found", 404)
+    j = next((x for x in await _all_jobs() if x.get("src_token") == token), None)
+    data = await _get(j["clip_key"]) if j and j.get("clip_key") else None
+    if not data:
+        return _err("Not found", 404)
+    return Response(data, media_type="video/mp4", headers={"Cache-Control": "public, max-age=86400",
+                                                           "X-Robots-Tag": "noindex"})
