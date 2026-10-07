@@ -101,6 +101,9 @@ textarea{min-height:92px;resize:vertical}
 .edit-of{font-size:13px;color:var(--teal);margin:2px 0}
 .vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
 label.btn{display:inline-block;text-align:center}
+.acct .credit{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+#history{margin-top:8px;font-size:14px}
+#history div{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:6px 0}
 .thumbs{display:flex;gap:6px;margin:4px 0 6px}
 .thumbs img{width:56px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 </style>
@@ -111,13 +114,49 @@ label.btn{display:inline-block;text-align:center}
   <p class="lede">Describe a shot, set what you'll pay for it, and get a clip.</p>
 
   <section class="panel" id="login" hidden>
-    <label class="f" for="pin">PIN</label>
-    <input id="pin" type="password" inputmode="numeric" autocomplete="current-password">
-    <button class="btn go" id="loginBtn">Sign in</button>
+    <div id="emailStep">
+      <label class="f" for="email">Your email</label>
+      <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+      <button class="btn go" id="sendCode">Email me a sign-in code</button>
+    </div>
+    <div id="codeStep" hidden>
+      <label class="f" for="code">The 6-digit code we emailed you</label>
+      <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      <button class="btn go" id="verifyCode">Sign in</button>
+      <button class="btn ghost small" id="backEmail" style="margin-top:8px">Use a different email</button>
+    </div>
     <div class="err" id="loginErr" hidden></div>
+    <details style="margin-top:16px"><summary class="hint">Owner sign-in</summary>
+      <label class="f" for="pin">PIN</label>
+      <input id="pin" type="password" inputmode="numeric" autocomplete="current-password">
+      <button class="btn ghost" id="loginBtn" style="margin-top:8px;width:100%">Sign in with PIN</button>
+    </details>
   </section>
 
   <div id="app" hidden>
+    <section class="panel acct" id="acct">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="credit num" id="acctCredit"></div>
+          <div class="hint" style="margin:2px 0 0" id="acctLine"></div>
+        </div>
+        <button class="btn ghost small" id="logoutBtn">Sign out</button>
+      </div>
+      <div id="memberBox" hidden>
+        <p style="margin:12px 0 8px">Membership is $10 a month. Videos are then paid from your credit at what they actually cost.</p>
+        <button class="btn go" id="joinBtn">Start membership: $10/month</button>
+      </div>
+      <div id="topupBox" hidden>
+        <label class="f">Add credit</label>
+        <div class="chips" id="packs"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn ghost small" id="portalBtn" hidden>Manage membership</button>
+        <button class="btn ghost small" id="historyBtn" hidden>Credit history</button>
+      </div>
+      <div id="history" hidden></div>
+      <div class="err" id="acctErr" hidden></div>
+    </section>
     <section class="panel">
       <label class="f" for="idea">What should happen on screen?</label>
       <textarea id="idea" placeholder="A fox trotting through fresh snow at dawn, low camera following it"></textarea>
@@ -290,6 +329,8 @@ function render(){
   else if (budget <= 0){ st.textContent = 'Set a budget.'; ok = false; }
   else if (state.estimate > budget){ st.classList.add('over'); st.textContent = money(state.estimate - budget) + ' over budget'; ok = false; }
   else if (state.estimate > left){ st.classList.add('over'); st.textContent = 'Over today\'s limit'; ok = false; }
+  else if (state.account && !state.account.owner && !state.account.member){ st.textContent = 'Start a membership to make videos'; ok = false; }
+  else if (state.account && !state.account.owner && state.estimate > state.account.credit){ st.classList.add('over'); st.textContent = 'Not enough credit. Add some above.'; ok = false; }
   else st.textContent = money(budget - state.estimate) + ' under budget';
   $('today').textContent = money(state.spent) + (state.cap == null ? '' : ' of ' + money(state.cap)) + ' spent in the last 24 hours';
   $('goBtn').disabled = !ok || !checkPics();
@@ -690,6 +731,7 @@ async function loadJobs(){
   if (JSON.stringify(state.jobs.map(j => [j.id, j.status, j.has_scored, j.song_name])) !== before || state.stale){
     if (panelOpen) state.stale = true; else { state.stale = false; renderJobs(); } }
   render();
+  if (state.account && !state.account.owner) loadAccount();
   const busy = state.stale || state.jobs.some(j => ['pending','in_progress'].includes(j.status) || j.chain_remaining > 0);
   clearTimeout(state.timer); if (busy) state.timer = setTimeout(() => loadJobs().catch(() => {}), 10000);
 }
@@ -721,6 +763,50 @@ $('goBtn').onclick = async () => {
   b.textContent = 'Make video'; render();
 };
 function showLogin(){ $('login').hidden = false; $('app').hidden = true; }
+$('sendCode').onclick = async () => {
+  showErr($('loginErr'), ''); const b = $('sendCode'); b.disabled = true; b.textContent = 'Sending…';
+  try { await api('/video/auth/start', {method:'POST', body: JSON.stringify({email: $('email').value.trim()})});
+    $('emailStep').hidden = true; $('codeStep').hidden = false; $('code').focus(); }
+  catch(e){ showErr($('loginErr'), e.message); }
+  b.disabled = false; b.textContent = 'Email me a sign-in code';
+};
+$('email').onkeydown = e => { if (e.key === 'Enter') $('sendCode').click(); };
+$('verifyCode').onclick = async () => {
+  showErr($('loginErr'), '');
+  try { await api('/video/auth/verify', {method:'POST', body: JSON.stringify({email: $('email').value.trim(), code: $('code').value})});
+    await boot(); }
+  catch(e){ showErr($('loginErr'), e.message); }
+};
+$('code').oninput = () => { if ($('code').value.replace(/\D/g, '').length === 6) $('verifyCode').click(); };
+$('backEmail').onclick = () => { $('codeStep').hidden = true; $('emailStep').hidden = false; };
+$('logoutBtn').onclick = async () => { await api('/video/logout', {method:'POST'}).catch(() => {}); location.href = '/video'; };
+
+// ---------------- account & billing
+function renderAccount(a){
+  state.account = a;
+  const owner = a.owner;
+  $('acctCredit').textContent = owner ? 'Owner account' : money(a.credit) + ' credit';
+  const end = a.period_end ? new Date(a.period_end * 1000).toLocaleDateString() : '';
+  $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.'
+    : (a.member ? `Member${end ? ', renews ' + end : ''}` : (a.status === 'past_due' ? 'Your last payment failed. Update your card.' : 'Not a member yet')) + (a.email ? ' · ' + a.email : '');
+  $('memberBox').hidden = owner || a.member || !a.billing;
+  $('topupBox').hidden = owner || !a.billing || !a.packs.length;
+  $('portalBtn').hidden = owner || !a.has_customer || !a.billing;
+  $('historyBtn').hidden = owner || !a.ledger.length;
+  chips($('packs'), a.packs, null, v => checkout('/video/billing/topup', {pack: String(v)}), v => '$' + v);
+  $('history').innerHTML = a.ledger.map(l => `<div><span>${new Date(l.t * 1000).toLocaleDateString()} ${esc(l.note)}</span>
+    <span class="num">${l.amount >= 0 ? '+' : '−'}${money(Math.abs(l.amount))}</span></div>`).join('');
+  render();
+}
+async function checkout(path, body){
+  showErr($('acctErr'), '');
+  try { const out = await api(path, {method:'POST', body: JSON.stringify(body || {})}); location.href = out.url; }
+  catch(e){ showErr($('acctErr'), e.message); }
+}
+$('joinBtn').onclick = () => checkout('/video/billing/subscribe');
+$('portalBtn').onclick = () => checkout('/video/billing/portal');
+$('historyBtn').onclick = () => { $('history').hidden = !$('history').hidden; };
+async function loadAccount(){ try { renderAccount(await api('/video/account')); } catch(e){} }
 $('loginBtn').onclick = async () => {
   showErr($('loginErr'), '');
   try { await api('/video/login', {method:'POST', body: JSON.stringify({pin: $('pin').value})}); await boot(); }
@@ -730,10 +816,18 @@ $('pin').onkeydown = e => { if (e.key === 'Enter') $('loginBtn').click(); };
 
 async function boot(){
   const s = await api('/video/session');
-  if (!s.configured){ showLogin(); showErr($('loginErr'), 'Set VIDEO_PIN (or CART_PIN) on the server first.'); return; }
+  // Where email sign-up is off (the bridge), only the owner PIN is offered.
+  $('emailStep').hidden = !s.accounts; $('codeStep').hidden = true;
+  $('login').querySelector('details').open = !s.accounts;
   if (!s.authed){ showLogin(); return; }
   $('login').hidden = true; $('app').hidden = false;
   state.spent = s.spent_today; state.cap = s.daily_cap;
+  renderAccount(s.account);
+  // Back from Stripe: the payment lands by webhook a moment later, so check a few times.
+  const paid = new URLSearchParams(location.search).get('paid');
+  if (paid){ history.replaceState(null, '', '/video');
+    let n = 0; const t = setInterval(async () => { await loadAccount(); n++;
+      const a = state.account; if (n > 10 || (paid === 'member' ? a.member : true && n > 2)) clearInterval(t); }, 2000); }
   try {
     const [mo, so] = await Promise.all([api('/video/models'), api('/video/songs')]);
     state.songs = so.songs;

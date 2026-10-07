@@ -58,6 +58,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, Request
@@ -65,14 +66,17 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.4.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.0.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
 PROMPT_MODEL = os.getenv("VIDEO_PROMPT_MODEL") or "z-ai/glm-5.3-flash"
-JOBS_KEY = "video/jobs.json"
-SONGS_KEY = "video/songs.json"
-LOCAL_DIR = Path(os.getenv("VIDEO_DATA_DIR") or "/tmp") / "video"
+# Each deployment keeps its own data: the bridge uses video/, the Video Studio service studio/.
+PREFIX = (os.getenv("VIDEO_S3_PREFIX") or "video/").strip("/") + "/"
+JOBS_KEY = f"{PREFIX}jobs.json"
+SONGS_KEY = f"{PREFIX}songs.json"
+USERS_KEY = f"{PREFIX}users.json"
+LOCAL_DIR = Path(os.getenv("VIDEO_DATA_DIR") or "/tmp") / PREFIX.strip("/")
 MAX_SONG_BYTES = 15 * 1024 * 1024
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_REFS = 4
@@ -89,6 +93,8 @@ _fails: dict[str, list[float]] = {}
 _tasks: dict[str, asyncio.Task] = {}
 _jobs: list[dict] | None = None
 _songs: list[dict] | None = None
+_users: dict | None = None  # {"users": [...], "events": [stripe event ids already handled]}
+_codes: dict[str, dict] = {}  # email -> {"hash", "exp", "tries"}
 _lock = asyncio.Lock()
 _models_cache: dict = {"t": 0.0, "data": []}
 
@@ -126,12 +132,49 @@ def _authed(request: Request) -> bool:
     return hmac.compare_digest(_sign(int(exp_s)), tok)
 
 
-def _deny(request: Request):
-    if not _pin():
-        return JSONResponse({"detail": "VIDEO_PIN (or CART_PIN) is not set on the server"}, status_code=503)
-    if not _authed(request):
+USER_COOKIE = "studio_user"
+OWNER = {"id": "owner", "owner": True, "email": None}
+
+
+def _user_sign(uid: str, exp: int) -> str:
+    mac = hmac.new(_secret(), f"user|{uid}|{exp}".encode(), hashlib.sha256).hexdigest()
+    return f"{uid}.{exp}.{mac}"
+
+
+async def _current_user(request: Request) -> dict | None:
+    if _authed(request):
+        return OWNER
+    tok = request.cookies.get(USER_COOKIE) or ""
+    parts = tok.split(".")
+    if len(parts) != 3 or not parts[1].isdigit() or int(parts[1]) < time.time():
+        return None
+    if not hmac.compare_digest(_user_sign(parts[0], int(parts[1])), tok):
+        return None
+    u = await _user_by_id(parts[0])
+    return u if u and not u.get("blocked") else None
+
+
+async def _deny(request: Request):
+    """Resolve the signed-in person onto request.state.user, or return a 401."""
+    u = await _current_user(request)
+    if not u:
         return JSONResponse({"detail": "Sign in again"}, status_code=401)
+    request.state.user = u
     return None
+
+
+def _uid(request: Request) -> str:
+    return request.state.user["id"]
+
+
+def _owns(request_or_uid, obj: dict | None) -> bool:
+    uid = request_or_uid if isinstance(request_or_uid, str) else _uid(request_or_uid)
+    return bool(obj) and (obj.get("user") or "owner") == uid
+
+
+def _mine(request: Request, rows: list[dict], rid: str) -> dict | None:
+    o = _find(rows, rid)
+    return o if _owns(request, o) else None
 
 
 def _client_ip(request: Request) -> str:
@@ -583,7 +626,7 @@ async def _apply_song(job: dict, song_id: str, start: float) -> None:
     if not video or not audio:
         raise RuntimeError("clip or song file is missing from storage")
     out = await asyncio.to_thread(mux_song_sync, video, audio, song["ext"], start)
-    key = f"video/clips/{job['id']}-song.mp4"
+    key = f"{PREFIX}clips/{job['id']}-song.mp4"
     await _put(key, out, "video/mp4")
     job.update(scored_key=key, song_id=song_id, song_name=song["name"], song_start=start, song_error=None)
 
@@ -613,10 +656,10 @@ async def _poll(job: dict) -> None:
                     v = await c.get(url, headers=_or_headers(), timeout=180)
                     if v.status_code >= 400 or not v.content:
                         raise RuntimeError(f"download HTTP {v.status_code}")
-                    key = f"video/clips/{job['id']}.mp4"
+                    key = f"{PREFIX}clips/{job['id']}.mp4"
                     src = _find(await _all_jobs(), job["extend_of"]) if job.get("extend_of") else None
                     if src and src.get("clip_key"):
-                        await _put(f"video/clips/{job['id']}-part.mp4", v.content, "video/mp4")
+                        await _put(f"{PREFIX}clips/{job['id']}-part.mp4", v.content, "video/mp4")
                         before = await _get(src["clip_key"])
                         joined = await asyncio.to_thread(concat_sync, before or b"", v.content)
                         await _put(key, joined, "video/mp4")
@@ -631,6 +674,7 @@ async def _poll(job: dict) -> None:
                         except Exception as e:
                             job["song_error"] = str(e)[:300]
                     job.update(status="ready", finished=time.time())
+                    await _settle(job, job.get("actual_cost"))
                     await _save_jobs()
                     if job.get("chain_remaining"):
                         try:
@@ -643,11 +687,13 @@ async def _poll(job: dict) -> None:
                 if status in ("failed", "cancelled", "expired"):
                     job["error"] = str(st.get("error") or status)[:300]
                     job["finished"] = time.time()
+                    await _settle(job, 0.0)
                     await _unhide_parent(job)
                     await _save_jobs()
                     return
                 await asyncio.sleep(POLL_EVERY)
         job.update(status="failed", error="gave up waiting after 30 minutes", finished=time.time())
+        await _settle(job, 0.0)
         await _unhide_parent(job)
         await _save_jobs()
     except Exception as e:
@@ -680,7 +726,7 @@ def _public(job: dict) -> dict:
             "audio", "budget", "estimate", "actual_cost", "status", "error", "poll_error",
             "song_id", "song_name", "song_start", "song_error", "images", "image_note",
             "parent_id", "edit_mode", "change", "total_seconds", "parts_total", "part_no",
-            "chain_remaining", "chain_error", "chain_estimate")
+            "chain_remaining", "chain_error", "chain_estimate", "charged")
     out = {k: job.get(k) for k in keep}
     out["has_clip"] = bool(job.get("clip_key"))
     out["has_scored"] = bool(job.get("scored_key"))
@@ -699,10 +745,11 @@ async def video_page():
 
 @video_router.get("/video/session")
 async def video_session(request: Request):
-    authed = _authed(request)
-    out = {"authed": authed, "configured": bool(_pin()), "version": VIDEO_APP_VERSION}
-    if authed:
-        out.update(daily_cap=_daily_cap(), spent_today=await _spent_24h())
+    u = await _current_user(request)
+    out = {"authed": bool(u), "configured": True, "version": VIDEO_APP_VERSION,
+           "accounts": _accounts_on(), "billing": _billing_ready()}
+    if u:
+        out.update(daily_cap=_daily_cap(), spent_today=await _spent_24h(), account=_account(u))
     return out
 
 
@@ -729,7 +776,7 @@ async def video_login(request: Request):
 
 @video_router.get("/video/models")
 async def video_models(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     try:
         models = await _models(force=request.query_params.get("refresh") == "1")
@@ -740,7 +787,7 @@ async def video_models(request: Request):
 
 @video_router.post("/video/prompt")
 async def video_prompt(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     idea = str((await _body(request)).get("idea", "")).strip()[:1500]
     if not idea:
@@ -754,7 +801,7 @@ async def video_prompt(request: Request):
 
 @video_router.post("/video/estimate")
 async def video_estimate(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     b = await _body(request)
     m = await _model(str(b.get("model", "")))
@@ -768,7 +815,7 @@ async def video_estimate(request: Request):
 
 @video_router.post("/video/generate")
 async def video_generate(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     return await _start_job(request, await _body(request))
 
@@ -803,7 +850,8 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         return _err(f"{m['name']} supports {', '.join(m['aspect_ratios'])}")
     if budget <= 0:
         return _err("Set a budget for this video")
-    if song_id and not _find(await _all_songs(), song_id):
+    uid = extra.get("user") or (request.state.user["id"] if request is not None else "owner")
+    if song_id and not _owns(uid, _find(await _all_songs(), song_id)):
         return _err("That song is gone. Pick another.")
 
     images, frames, refs, image_note = [], [], [], None
@@ -847,6 +895,21 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         return _err(f"Daily cap reached: ${spent:.2f} of ${cap:.2f} used in the last 24 hours, "
                     f"this one is about ${est * parts:.2f}.")
 
+    # Customers pay from prepaid credit: hold this part's estimate now, settle to the real
+    # charge when it finishes, refund it if it fails. A long video must be covered in full up front.
+    hold = 0.0
+    if uid != "owner":
+        u = await _user_by_id(uid)
+        if not u or u.get("blocked"):
+            return _err("Sign in again", 401)
+        if not _is_member(u):
+            return _err("Start a membership to make videos.", 402)
+        need = est * parts if extra.get("part_no") in (None, 1) else est
+        if _credit(u) + 1e-9 < need:
+            return _err(f"This needs about ${need:.2f} of credit and you have ${_credit(u):.2f}. Add credit to continue.", 402)
+        hold = round(est, 4)
+        await _ledger(u, -hold, f"Hold for a {duration}s video")
+
     payload = {"model": m["id"], "prompt": prompt, "duration": duration}
     if resolution:
         payload["resolution"] = resolution
@@ -883,8 +946,17 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                     # so let the model make sound, but re-check the price with audio on.
                     est2, basis2 = estimate_cost(m, duration, resolution, True, mode, n_img)
                     if est2 is None or est2 * parts > budget + 1e-9:
+                        await _release(uid, hold, "Over budget")
                         return _err(f"{m['name']} always makes its own sound, which brings this to about "
                                     f"${(est2 or 0) * parts:.2f}, over your ${budget:.2f} budget.")
+                    if uid != "owner" and est2 > est:
+                        u2 = await _user_by_id(uid)
+                        extra_hold = round(est2 - est, 4)
+                        if _credit(u2) + 1e-9 < extra_hold:
+                            await _release(uid, hold, "Not enough credit")
+                            return _err("Not enough credit for this model's sound. Add credit to continue.", 402)
+                        await _ledger(u2, -extra_hold, "Hold for model sound")
+                        hold = round(hold + extra_hold, 4)
                     est, basis = est2, basis2
                     payload.pop("generate_audio")
                     audio = True
@@ -893,8 +965,10 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                 r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
                 data = r.json()
     except Exception as e:
+        await _release(uid, hold, "OpenRouter did not answer")
         return _err(f"OpenRouter did not answer: {e}", 502)
     if r.status_code >= 400 or not data.get("id"):
+        await _release(uid, hold, "Job refused")
         msg = str(_msg(data, r))
         if extra.get("video_ref_url") and any(w in msg.lower() for w in ("video", "reference", "input")):
             return _err(f"{m['name']} couldn't edit this video ({msg}). Try a model that takes video "
@@ -916,6 +990,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
            "chain_remaining": extra["chain_remaining"] if "chain_remaining" in extra else parts - 1,
            "chain_estimate": extra.get("chain_estimate") or (round(est * parts, 4) if parts > 1 else None),
            # what each later part may spend; the total was already checked against the budget above
+           "user": uid, "hold": hold,
            "part_budget": extra.get("part_budget") or (round(max(budget / parts, est) + 0.01, 2) if parts > 1 else None)}
     jobs = await _all_jobs()
     async with _lock:
@@ -927,20 +1002,21 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
 
 @video_router.get("/video/jobs")
 async def video_jobs(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     jobs = await _all_jobs()
     for j in jobs:
         _ensure_poller(j)
-    return {"jobs": [_public(j) for j in reversed(jobs[-80:]) if not j.get("superseded")][:60],
+    mine = [j for j in jobs if _owns(request, j)]
+    return {"jobs": [_public(j) for j in reversed(mine[-80:]) if not j.get("superseded")][:60],
             "spent_today": await _spent_24h(), "daily_cap": _daily_cap()}
 
 
 @video_router.get("/video/jobs/{jid}")
 async def video_job(jid: str, request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
-    j = _find(await _all_jobs(), jid)
+    j = _mine(request, await _all_jobs(), jid)
     if not j:
         return _err("No such video", 404)
     _ensure_poller(j)
@@ -949,12 +1025,14 @@ async def video_job(jid: str, request: Request):
 
 @video_router.post("/video/jobs/{jid}/song")
 async def video_job_song(jid: str, request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
-    j = _find(await _all_jobs(), jid)
+    j = _mine(request, await _all_jobs(), jid)
     if not j or not j.get("clip_key"):
         return _err("That video isn't ready yet", 404)
     b = await _body(request)
+    if not _owns(request, _find(await _all_songs(), str(b.get("song_id", "")))):
+        return _err("That song is gone. Pick another.", 404)
     try:
         await _apply_song(j, str(b.get("song_id", "")), float(b.get("song_start") or 0))
     except Exception as e:
@@ -967,9 +1045,9 @@ async def video_job_song(jid: str, request: Request):
 
 @video_router.get("/video/clip/{jid}")
 async def video_clip(jid: str, request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
-    j = _find(await _all_jobs(), jid)
+    j = _mine(request, await _all_jobs(), jid)
     scored = request.query_params.get("song") == "1"
     key = (j or {}).get("scored_key" if scored else "clip_key")
     if not key:
@@ -999,14 +1077,14 @@ async def video_clip(jid: str, request: Request):
 
 @video_router.get("/video/songs")
 async def video_songs(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
-    return {"songs": [{"id": s["id"], "name": s["name"]} for s in reversed(await _all_songs())]}
+    return {"songs": [{"id": s["id"], "name": s["name"]} for s in reversed(await _all_songs()) if _owns(request, s)]}
 
 
 @video_router.post("/video/songs")
 async def video_song_upload(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     b = await _body(request)
     name = str(b.get("name") or "song").strip()[:120]
@@ -1025,18 +1103,18 @@ async def video_song_upload(request: Request):
     if len(audio) > MAX_SONG_BYTES:
         return _err("Songs must be under 15 MB")
     sid = secrets.token_urlsafe(6)
-    key = f"video/songs/{sid}.{ext}"
+    key = f"{PREFIX}songs/{sid}.{ext}"
     await _put(key, audio, SONG_EXT[ext])
     songs = await _all_songs()
     async with _lock:
-        songs.append({"id": sid, "name": name, "ext": ext, "key": key, "created": time.time()})
+        songs.append({"id": sid, "name": name, "ext": ext, "key": key, "created": time.time(), "user": _uid(request)})
     await _save_songs()
     return {"id": sid, "name": name}
 
 
 @video_router.post("/video/images")
 async def video_image_upload(request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
     raw = str((await _body(request)).get("data") or "")
     if "," in raw[:100]:
@@ -1053,7 +1131,7 @@ async def video_image_upload(request: Request):
     if not kind:
         return _err("Use a JPEG, PNG or WebP picture")
     iid = secrets.token_urlsafe(24)
-    await _put(f"video/images/{iid}", img, kind[1])
+    await _put(f"{PREFIX}images/{iid}", img, kind[1])
     return {"id": iid, "url": f"/video/img/{iid}"}
 
 
@@ -1062,7 +1140,7 @@ async def video_image(iid: str):
     # Deliberately no PIN check: OpenRouter's provider fetches this URL.
     if not IMG_ID.match(iid):
         return _err("Not found", 404)
-    data = await _get(f"video/images/{iid}")
+    data = await _get(f"{PREFIX}images/{iid}")
     if not data:
         return _err("Not found", 404)
     kind = _sniff(data) or ("jpg", "image/jpeg")
@@ -1072,9 +1150,9 @@ async def video_image(iid: str):
 
 @video_router.post("/video/jobs/{jid}/edit")
 async def video_job_edit(jid: str, request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
-    orig = _find(await _all_jobs(), jid)
+    orig = _mine(request, await _all_jobs(), jid)
     if not orig or not orig.get("clip_key"):
         return _err("That video isn't ready yet", 404)
     b = await _body(request)
@@ -1114,7 +1192,7 @@ async def video_job_edit(jid: str, request: Request):
             try:
                 frame = await asyncio.to_thread(first_frame_sync, await _get(orig["clip_key"]) or b"")
                 fid = secrets.token_urlsafe(24)
-                await _put(f"video/images/{fid}", frame, "image/jpeg")
+                await _put(f"{PREFIX}images/{fid}", frame, "image/jpeg")
                 imgs = [i for i in imgs if i.get("role") != "first"] + [{"id": fid, "role": "first"}]
             except Exception as e:
                 print(f"[video] keep_look frame failed: {e!r}", flush=True)
@@ -1148,7 +1226,7 @@ async def _extend(src: dict, *, auto: bool, seconds: int | None = None, budget: 
         raise RuntimeError("the video file is missing")
     frame = await asyncio.to_thread(last_frame_sync, clip)
     fid = secrets.token_urlsafe(24)
-    await _put(f"video/images/{fid}", frame, "image/jpeg")
+    await _put(f"{PREFIX}images/{fid}", frame, "image/jpeg")
     base_prompt = src.get("base_prompt") or src.get("prompt") or ""
     prompt = (f"{change.strip()}." if change else base_prompt) + CONTINUE
     if auto:
@@ -1162,7 +1240,7 @@ async def _extend(src: dict, *, auto: bool, seconds: int | None = None, budget: 
             "audio": src.get("audio", True), "budget": seg_budget,
             "song_id": src.get("song_id"), "song_start": src.get("song_start") or 0,
             "images": [{"id": fid, "role": "first"}]}
-    extra = {"base": src.get("base"), "extend_of": src["id"], "parent_id": src["id"],
+    extra = {"user": src.get("user") or "owner", "base": src.get("base"), "extend_of": src["id"], "parent_id": src["id"],
              "edit_mode": "extend", "change": change or (None if auto else "continued"),
              "base_prompt": base_prompt, "chain_remaining": left,
              "parts_total": src.get("parts_total") if auto else 1,
@@ -1184,9 +1262,9 @@ async def _extend(src: dict, *, auto: bool, seconds: int | None = None, budget: 
 
 @video_router.post("/video/jobs/{jid}/extend")
 async def video_job_extend(jid: str, request: Request):
-    if (d := _deny(request)):
+    if (d := await _deny(request)):
         return d
-    src = _find(await _all_jobs(), jid)
+    src = _mine(request, await _all_jobs(), jid)
     if not src or not src.get("clip_key"):
         return _err("That video isn't ready yet", 404)
     b = await _body(request)
@@ -1202,3 +1280,373 @@ async def video_job_extend(jid: str, request: Request):
                              change=str(b.get("change") or "").strip()[:1500] or None)
     except Exception as e:
         return _err(f"Couldn't extend: {e}", 400)
+
+
+# =========================================================================== accounts & billing
+# Customers sign in with an emailed code, pay a monthly membership through Stripe, and
+# spend prepaid credit at cost. The owner (PIN) never pays here.
+STRIPE_API = "https://api.stripe.com/v1"
+CODE_TTL = 15 * 60
+LEDGER_KEEP = 200
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _packs() -> dict[str, str]:
+    """VIDEO_CREDIT_PRICES="10:price_a,25:price_b,50:price_c" -> {"10": "price_a", ...}"""
+    out = {}
+    for part in (os.getenv("VIDEO_CREDIT_PRICES") or "").split(","):
+        amt, _, pid = part.strip().partition(":")
+        if amt.strip().isdigit() and pid.strip():
+            out[amt.strip()] = pid.strip()
+    return out
+
+
+def _accounts_on() -> bool:
+    """Email sign-up only where VIDEO_ACCOUNTS=1 (the Video Studio service), never on the bridge."""
+    return os.getenv("VIDEO_ACCOUNTS") == "1" and bool(os.getenv("RESEND_API_KEY"))
+
+
+def _billing_ready() -> bool:
+    return bool(os.getenv("STRIPE_SECRET_KEY") and os.getenv("VIDEO_MEMBERSHIP_PRICE"))
+
+
+async def _users_doc() -> dict:
+    global _users
+    if _users is None:
+        async with _lock:
+            if _users is None:
+                raw = await _get(USERS_KEY)
+                try:
+                    doc = json.loads(raw) if raw else {}
+                except Exception:
+                    doc = {}
+                _users = {"users": doc.get("users") or [], "events": doc.get("events") or []}
+    return _users
+
+
+async def _save_users() -> None:
+    doc = await _users_doc()
+    async with _lock:
+        doc["events"] = doc["events"][-500:]
+        snapshot = json.dumps(doc, separators=(",", ":")).encode()
+    await _put(USERS_KEY, snapshot, "application/json")
+
+
+async def _user_by_id(uid: str) -> dict | None:
+    return next((u for u in (await _users_doc())["users"] if u["id"] == uid), None)
+
+
+async def _user_by_email(email: str) -> dict | None:
+    e = email.strip().lower()
+    return next((u for u in (await _users_doc())["users"] if u["email"] == e), None)
+
+
+async def _user_by_customer(cus: str) -> dict | None:
+    return next((u for u in (await _users_doc())["users"] if cus and u.get("stripe_customer") == cus), None)
+
+
+def _is_member(u: dict) -> bool:
+    if u.get("comp"):  # free membership granted by the owner
+        return True
+    if u.get("sub_status") not in ("active", "trialing"):
+        return False
+    end = u.get("period_end")
+    return not end or end + 3 * 86400 > time.time()  # small grace while a renewal settles
+
+
+def _credit(u: dict | None) -> float:
+    return round(float((u or {}).get("credit") or 0), 4)
+
+
+async def _ledger(u: dict, amount: float, note: str) -> None:
+    async with _lock:
+        u["credit"] = round(_credit(u) + amount, 4)
+        u.setdefault("ledger", []).append({"t": time.time(), "amount": round(amount, 4), "note": note,
+                                           "balance": u["credit"]})
+        u["ledger"] = u["ledger"][-LEDGER_KEEP:]
+    await _save_users()
+
+
+async def _release(uid: str, hold: float, why: str) -> None:
+    if uid == "owner" or not hold:
+        return
+    u = await _user_by_id(uid)
+    if u:
+        await _ledger(u, hold, f"Refund: {why}")
+
+
+async def _settle(job: dict, actual: float | None) -> None:
+    """Swap a job's hold for what it really cost. Runs once per job."""
+    if job.get("settled") or (job.get("user") or "owner") == "owner":
+        job["settled"] = True
+        return
+    job["settled"] = True
+    u = await _user_by_id(job["user"])
+    if not u:
+        return
+    hold = float(job.get("hold") or 0)
+    cost = float(actual) if actual is not None else hold
+    job["charged"] = round(cost, 4)
+    diff = round(hold - cost, 4)
+    if abs(diff) >= 0.0001:
+        await _ledger(u, diff, "Refund: failed video" if cost == 0 else
+                      ("Adjust to actual cost" if diff > 0 else "Actual cost was higher than the hold"))
+
+
+def _account(u: dict) -> dict:
+    return {"id": u["id"], "email": u.get("email"), "owner": bool(u.get("owner")),
+            "member": True if u.get("owner") else _is_member(u),
+            "status": "owner" if u.get("owner") else (u.get("sub_status") or "none"),
+            "period_end": u.get("period_end"), "credit": None if u.get("owner") else _credit(u),
+            "packs": sorted(int(k) for k in _packs()), "billing": _billing_ready(),
+            "has_customer": bool(u.get("stripe_customer")),
+            "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:]))}
+
+
+def _set_user_cookie(resp: Response, uid: str) -> None:
+    exp = int(time.time() + SESSION_DAYS * 86400)
+    resp.set_cookie(USER_COOKIE, _user_sign(uid, exp), max_age=SESSION_DAYS * 86400,
+                    httponly=True, secure=True, samesite="lax", path="/video")
+
+
+async def _send_code_email(email: str, code: str) -> None:
+    key, sender = os.getenv("RESEND_API_KEY"), os.getenv("VIDEO_EMAIL_FROM") or os.getenv("ALERT_EMAIL_FROM")
+    if not key or not sender:
+        raise RuntimeError("email isn't set up on the server")
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.post("https://api.resend.com/emails", headers={"Authorization": f"Bearer {key}"}, json={
+            "from": sender, "to": [email], "subject": f"Your Video Studio code: {code}",
+            "text": f"Your sign-in code is {code}\n\nIt works for 15 minutes. If you didn't ask for it, ignore this email."})
+    if r.status_code >= 400:
+        raise RuntimeError(f"email service said {r.status_code}: {r.text[:200]}")
+
+
+@video_router.post("/video/auth/start")
+async def video_auth_start(request: Request):
+    if not _accounts_on():
+        return _err("Sign-up isn't available here.", 404)
+    email = str((await _body(request)).get("email") or "").strip().lower()[:200]
+    if not EMAIL_RE.match(email):
+        return _err("Enter a real email address")
+    ip, now = _client_ip(request), time.time()
+    recent = [t for t in _fails.get("mail:" + ip, []) if now - t < 3600]
+    if len(recent) >= 10:
+        return _err("Too many codes asked for. Try again in an hour.", 429)
+    _fails["mail:" + ip] = recent + [now]
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    _codes[email] = {"hash": hashlib.sha256(f"{email}|{code}".encode()).hexdigest(), "exp": now + CODE_TTL, "tries": 0}
+    try:
+        await _send_code_email(email, code)
+    except Exception as e:
+        print(f"[video] code email failed: {e!r}", flush=True)
+        return _err("Couldn't send the email. Try again in a minute.", 502)
+    return {"ok": True}
+
+
+@video_router.post("/video/auth/verify")
+async def video_auth_verify(request: Request):
+    if not _accounts_on():
+        return _err("Sign-up isn't available here.", 404)
+    b = await _body(request)
+    email = str(b.get("email") or "").strip().lower()
+    code = re.sub(r"\D", "", str(b.get("code") or ""))
+    rec = _codes.get(email)
+    if not rec or rec["exp"] < time.time():
+        return _err("That code expired. Ask for a new one.", 401)
+    rec["tries"] += 1
+    if rec["tries"] > 6:
+        _codes.pop(email, None)
+        return _err("Too many wrong codes. Ask for a new one.", 429)
+    if not hmac.compare_digest(rec["hash"], hashlib.sha256(f"{email}|{code}".encode()).hexdigest()):
+        return _err("Wrong code", 401)
+    _codes.pop(email, None)
+    u = await _user_by_email(email)
+    if not u:
+        u = {"id": secrets.token_urlsafe(9).replace("-", "a").replace("_", "b"), "email": email,
+             "created": time.time(), "credit": 0.0, "ledger": []}
+        doc = await _users_doc()
+        async with _lock:
+            doc["users"].append(u)
+        await _save_users()
+    if u.get("blocked"):
+        return _err("This account is closed.", 403)
+    resp = JSONResponse({"ok": True})
+    _set_user_cookie(resp, u["id"])
+    return resp
+
+
+@video_router.post("/video/logout")
+async def video_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(USER_COOKIE, path="/video")
+    resp.delete_cookie(COOKIE, path="/video")
+    return resp
+
+
+@video_router.get("/video/account")
+async def video_account(request: Request):
+    if (d := await _deny(request)):
+        return d
+    return _account(request.state.user)
+
+
+# --------------------------------------------------------------------------- stripe
+def _form(params: dict, prefix: str = "") -> list[tuple[str, str]]:
+    out = []
+    for k, v in params.items():
+        key = f"{prefix}[{k}]" if prefix else str(k)
+        if isinstance(v, dict):
+            out += _form(v, key)
+        elif isinstance(v, list):
+            for i, item in enumerate(v):
+                out += _form(item, f"{key}[{i}]") if isinstance(item, dict) else [(f"{key}[{i}]", str(item))]
+        elif v is not None:
+            out.append((key, "true" if v is True else "false" if v is False else str(v)))
+    return out
+
+
+async def _stripe(method: str, path: str, params: dict | None = None) -> dict:
+    key = os.getenv("STRIPE_SECRET_KEY")
+    if not key:
+        raise RuntimeError("payments aren't set up yet")
+    async with httpx.AsyncClient(timeout=30) as c:
+        if method == "GET":
+            r = await c.get(f"{STRIPE_API}{path}", auth=(key, ""), params=_form(params or {}))
+        else:
+            r = await c.request(method, f"{STRIPE_API}{path}", auth=(key, ""),
+                                content=urlencode(_form(params or {})).encode(),
+                                headers={"Content-Type": "application/x-www-form-urlencoded"})
+    data = r.json()
+    if r.status_code >= 400:
+        raise RuntimeError((data.get("error") or {}).get("message") or f"Stripe {r.status_code}")
+    return data
+
+
+async def _ensure_customer(u: dict) -> str:
+    if u.get("stripe_customer"):
+        return u["stripe_customer"]
+    cus = await _stripe("POST", "/customers", {"email": u["email"], "metadata": {"app": "video_studio", "user_id": u["id"]}})
+    u["stripe_customer"] = cus["id"]
+    await _save_users()
+    return cus["id"]
+
+
+def _customer_only(request: Request):
+    u = request.state.user
+    if u.get("owner"):
+        return _err("The owner account doesn't pay. Sign in with an email account to test payments.")
+    if not _billing_ready():
+        return _err("Payments aren't set up yet.", 503)
+    return None
+
+
+@video_router.post("/video/billing/subscribe")
+async def video_subscribe(request: Request):
+    if (d := await _deny(request)) or (d := _customer_only(request)):
+        return d
+    u, base = request.state.user, _public_base(request)
+    if _is_member(u):
+        return _err("Your membership is already active.")
+    try:
+        cus = await _ensure_customer(u)
+        sess = await _stripe("POST", "/checkout/sessions", {
+            "mode": "subscription", "customer": cus, "client_reference_id": u["id"],
+            "line_items": [{"price": os.getenv("VIDEO_MEMBERSHIP_PRICE"), "quantity": 1}],
+            "success_url": f"{base}/video?paid=member", "cancel_url": f"{base}/video",
+            "metadata": {"app": "video_studio", "kind": "membership", "user_id": u["id"]},
+            "subscription_data": {"metadata": {"app": "video_studio", "user_id": u["id"]}}})
+    except Exception as e:
+        return _err(f"Couldn't start checkout: {e}", 502)
+    return {"url": sess["url"]}
+
+
+@video_router.post("/video/billing/topup")
+async def video_topup(request: Request):
+    if (d := await _deny(request)) or (d := _customer_only(request)):
+        return d
+    u, base = request.state.user, _public_base(request)
+    pack = str((await _body(request)).get("pack") or "")
+    price = _packs().get(pack)
+    if not price:
+        return _err("Pick a credit amount")
+    try:
+        cus = await _ensure_customer(u)
+        sess = await _stripe("POST", "/checkout/sessions", {
+            "mode": "payment", "customer": cus, "client_reference_id": u["id"],
+            "line_items": [{"price": price, "quantity": 1}],
+            "success_url": f"{base}/video?paid=credit", "cancel_url": f"{base}/video",
+            "metadata": {"app": "video_studio", "kind": "credit", "user_id": u["id"], "credit_cents": str(int(pack) * 100)}})
+    except Exception as e:
+        return _err(f"Couldn't start checkout: {e}", 502)
+    return {"url": sess["url"]}
+
+
+@video_router.post("/video/billing/portal")
+async def video_portal(request: Request):
+    if (d := await _deny(request)) or (d := _customer_only(request)):
+        return d
+    u = request.state.user
+    if not u.get("stripe_customer"):
+        return _err("You don't have a membership to manage yet.")
+    try:
+        sess = await _stripe("POST", "/billing_portal/sessions",
+                             {"customer": u["stripe_customer"], "return_url": f"{_public_base(request)}/video"})
+    except Exception as e:
+        return _err(f"Couldn't open billing: {e}", 502)
+    return {"url": sess["url"]}
+
+
+def _verify_stripe_sig(payload: bytes, header: str, secret: str, tolerance: int = 300) -> bool:
+    parts = dict(p.split("=", 1) for p in header.split(",") if "=" in p)
+    sigs = [p.split("=", 1)[1] for p in header.split(",") if p.startswith("v1=")]
+    t = parts.get("t", "")
+    if not t.isdigit() or abs(time.time() - int(t)) > tolerance or not sigs:
+        return False
+    expected = hmac.new(secret.encode(), f"{t}.".encode() + payload, hashlib.sha256).hexdigest()
+    return any(hmac.compare_digest(expected, s) for s in sigs)
+
+
+def _period_end(sub: dict) -> float | None:
+    end = sub.get("current_period_end")
+    if not end:  # newer API versions keep it on the subscription items
+        items = ((sub.get("items") or {}).get("data") or [])
+        end = max((i.get("current_period_end") or 0 for i in items), default=0) or None
+    return float(end) if end else None
+
+
+@video_router.post("/video/stripe/webhook")
+async def video_stripe_webhook(request: Request):
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    payload = await request.body()
+    if not secret or not _verify_stripe_sig(payload, request.headers.get("stripe-signature", ""), secret):
+        return _err("bad signature", 400)
+    ev = json.loads(payload)
+    doc = await _users_doc()
+    if ev.get("id") in doc["events"]:
+        return {"ok": True, "duplicate": True}
+    obj = (ev.get("data") or {}).get("object") or {}
+    meta = obj.get("metadata") or {}
+    kind = ev.get("type", "")
+    if kind == "checkout.session.completed" and meta.get("app") == "video_studio":
+        u = await _user_by_id(meta.get("user_id") or obj.get("client_reference_id") or "")
+        if u:
+            if obj.get("customer") and not u.get("stripe_customer"):
+                u["stripe_customer"] = obj["customer"]
+            if meta.get("kind") == "credit" and obj.get("payment_status") == "paid":
+                cents = int(meta.get("credit_cents") or obj.get("amount_total") or 0)
+                await _ledger(u, cents / 100, f"Added ${cents / 100:.2f} credit")
+            elif meta.get("kind") == "membership" and obj.get("subscription"):
+                u["subscription"] = obj["subscription"]
+                u["sub_status"] = u.get("sub_status") or "active"
+    elif kind.startswith("customer.subscription.") and (meta.get("app") == "video_studio"
+                                                        or await _user_by_customer(obj.get("customer"))):
+        u = await _user_by_id(meta.get("user_id") or "") or await _user_by_customer(obj.get("customer"))
+        if u:
+            u["subscription"] = obj.get("id")
+            u["sub_status"] = "canceled" if kind.endswith(".deleted") else obj.get("status")
+            u["period_end"] = _period_end(obj)
+            u["cancel_at_period_end"] = bool(obj.get("cancel_at_period_end"))
+    async with _lock:
+        doc["events"].append(ev.get("id"))
+    await _save_users()
+    return {"ok": True}
