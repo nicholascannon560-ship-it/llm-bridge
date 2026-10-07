@@ -708,6 +708,11 @@ function openUpscaler(j, el){
     q('[data-est]').textContent = qt && qt.cost != null ? money(qt.cost) : '…';
     q('[data-spec]').textContent = qt && qt.width ? `${qt.src_width}×${qt.src_height} → ${qt.width}×${qt.height}, ${qt.seconds}s${qt.note ? ' · ' + qt.note : ''}` : '';
     q('[data-submit]').disabled = !qt || qt.cost == null || qt.cost > budget;
+    // When OpenRouter doesn't let us choose, the upscaler runs its default (2x, creative): hide the choices.
+    const fixed = qt && qt.can_tune === false;
+    q('[data-factor]').hidden = fixed; q('[data-mode]').hidden = fixed;
+    el.querySelectorAll('label.f')[0].hidden = fixed; el.querySelectorAll('label.f')[1].hidden = fixed;
+    if (fixed) q('[data-modehint]').textContent = 'OpenRouter runs this upscaler at its standard setting: 2× sharper.';
   }
   async function quote(){
     up.quote = null; draw(); showErr(q('[data-err]'), '');
