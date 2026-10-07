@@ -99,6 +99,8 @@ textarea{min-height:92px;resize:vertical}
 .seg button{flex:1;border:0;background:transparent;padding:9px 6px;font-size:14px}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
 .edit-of{font-size:13px;color:var(--teal);margin:2px 0}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+label.btn{display:inline-block;text-align:center}
 .thumbs{display:flex;gap:6px;margin:4px 0 6px}
 .thumbs img{width:56px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 </style>
@@ -148,8 +150,13 @@ textarea{min-height:92px;resize:vertical}
       <label class="toggle"><input type="checkbox" id="audio" checked> Let the model make sound</label>
 
       <label class="f" for="song">Song</label>
-      <select id="song"></select>
-      <input type="file" id="songFile" accept=".mp3,.m4a,.aac,.wav,.ogg,audio/*" hidden>
+      <div class="row" style="flex-wrap:nowrap">
+        <select id="song" style="flex:1"></select>
+        <label class="btn ghost small" for="songFile" id="songUploadBtn" style="white-space:nowrap">Upload a song</label>
+      </div>
+      <!-- Not display:none: iOS only opens the file picker from a direct tap on a label/button. -->
+      <input type="file" id="songFile" class="vh" accept=".mp3,.m4a,.aac,.wav,.ogg,audio/*" tabindex="-1">
+      <div class="err" id="songErr" hidden></div>
       <div class="row" id="songStartRow" style="margin-top:8px" hidden>
         <label for="songStart" style="font-size:14px">Start the song at</label>
         <input id="songStart" type="number" min="0" step="1" value="0" style="width:90px"> <span class="hint" style="margin:0">seconds</span>
@@ -249,7 +256,7 @@ function render(){
   chips($('aspects'), m.aspect_ratios.length ? m.aspect_ratios : [''], state.aspect, v => { state.aspect = v; render(); },
     v => ({'9:16':'9:16 vertical','16:9':'16:9 wide','1:1':'1:1 square'}[v] || v || 'Default'));
   $('audio').disabled = !!$('song').value;
-  $('songStartRow').hidden = !$('song').value || $('song').value === '__upload';
+  $('songStartRow').hidden = !$('song').value;
   state.estimate = estimate(m, state.duration, state.resolution, audioOn());
   const budget = parseFloat($('budget').value) || 0;
   $('est').textContent = money(state.estimate);
@@ -349,31 +356,50 @@ $('picFile').onchange = async () => {
 function renderSongs(keep){
   const sel = $('song'); const cur = keep ?? sel.value;
   sel.innerHTML = '<option value="">No song</option>' +
-    state.songs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('') +
-    '<option value="__upload">Upload a song…</option>';
+    state.songs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   sel.value = state.songs.some(s => s.id === cur) ? cur : '';
 }
+const SONG_TYPES = {'audio/mpeg':'mp3','audio/mp3':'mp3','audio/mp4':'m4a','audio/x-m4a':'m4a','audio/m4a':'m4a',
+  'audio/aac':'aac','audio/wav':'wav','audio/x-wav':'wav','audio/wave':'wav','audio/ogg':'ogg'};
+function songName(file){
+  // Files from iPhone apps sometimes arrive without an extension; take it from the file type.
+  const name = file.name || 'song';
+  if (/\.(mp3|m4a|aac|wav|ogg)$/i.test(name)) return name;
+  const ext = SONG_TYPES[(file.type || '').toLowerCase()];
+  if (!ext) throw new Error(`"${name}" isn't a song file this app can use. Use an mp3, m4a, aac, wav or ogg.`);
+  return name.replace(/\.[^.]*$/, '') + '.' + ext;
+}
 async function uploadSong(file){
-  if (file.size > 15 * 1024 * 1024){ alert('Songs must be under 15 MB'); return null; }
+  if (file.size > 15 * 1024 * 1024) throw new Error('Songs must be under 15 MB');
+  const name = songName(file);
   const data = await new Promise((res, rej) => { const r = new FileReader();
-    r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
-  const out = await api('/video/songs', {method:'POST', body: JSON.stringify({name:file.name, data})});
+    r.onload = () => res(String(r.result).split(',')[1]); r.onerror = () => rej(new Error("Couldn't read that file"));
+    r.readAsDataURL(file); });
+  const out = await api('/video/songs', {method:'POST', body: JSON.stringify({name, data})});
   state.songs.unshift(out); return out.id;
 }
-let songUploadTarget = null; // null = composer, else job id
-$('song').onchange = () => {
-  if ($('song').value === '__upload'){ songUploadTarget = null; $('songFile').click(); }
-  render();
-};
+let songUploadTarget = null; // null = composer, else job id whose song panel is open
+$('songUploadBtn').addEventListener('click', () => { songUploadTarget = null; });
+$('song').onchange = render;
 $('songFile').onchange = async () => {
   const f = $('songFile').files[0]; $('songFile').value = '';
-  if (!f){ renderSongs(''); render(); return; }
-  try { const id = await uploadSong(f);
-    if (songUploadTarget){ renderSongs(); renderJobs(); const sel = document.querySelector(`[data-scorer="${songUploadTarget}"] select`); if (sel) sel.value = id; }
-    else { renderSongs(id); }
-  } catch(e){ alert(e.message); renderSongs(''); }
+  if (!f) return;
+  const target = songUploadTarget;
+  const sc = target ? document.querySelector(`[data-scorer="${target}"]`) : null;
+  const btn = sc ? sc.querySelector('[data-upfor]') : $('songUploadBtn');
+  const errEl = sc ? sc.querySelector('[data-songerr]') : $('songErr');
+  const label = btn ? btn.textContent : '';
+  if (btn) btn.textContent = 'Uploading…';
+  showErr(errEl, '');
+  try {
+    const id = await uploadSong(f);
+    if (sc){ const sel = sc.querySelector('select'); sel.innerHTML = songOptions(); sel.value = id; renderSongs(); }
+    else renderSongs(id);
+  } catch(e){ showErr(errEl, e.message); }
+  if (btn) btn.textContent = label;
   render();
 };
+const songOptions = () => state.songs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
 
 // ---------------- jobs
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -406,7 +432,9 @@ function renderJobs(){
           <button class="btn small" data-edit="${j.id}">Edit</button></div>
         <div class="editor" data-editor="${j.id}" hidden></div>
         <div class="scorer" data-scorer="${j.id}" hidden>
-          <select></select>
+          <div class="row" style="flex-wrap:nowrap"><select style="flex:1"></select>
+            <label class="btn ghost small" for="songFile" data-upfor="${j.id}" style="white-space:nowrap">Upload a song</label></div>
+          <div class="err" data-songerr hidden></div>
           <div class="row" style="margin-top:8px"><label style="font-size:14px">Start at</label>
             <input type="number" min="0" step="1" value="${j.song_start || 0}" style="width:90px"> <span class="hint" style="margin:0">seconds</span>
             <button class="btn small" data-apply="${j.id}">Add song</button></div>
@@ -417,8 +445,8 @@ function renderJobs(){
   box.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
     const sc = box.querySelector(`[data-scorer="${b.dataset.open}"]`); sc.hidden = !sc.hidden;
     const sel = sc.querySelector('select');
-    sel.innerHTML = state.songs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('') + '<option value="__upload">Upload a song…</option>';
-    sel.onchange = () => { if (sel.value === '__upload'){ songUploadTarget = b.dataset.open; $('songFile').click(); } };
+    sel.innerHTML = songOptions() || '<option value="">Upload a song first</option>';
+    sc.querySelector('[data-upfor]').addEventListener('click', () => { songUploadTarget = b.dataset.open; });
   });
   box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
     const j = state.jobs.find(x => x.id === b.dataset.edit);
@@ -426,7 +454,8 @@ function renderJobs(){
   });
   box.querySelectorAll('[data-apply]').forEach(b => b.onclick = async () => {
     const sc = box.querySelector(`[data-scorer="${b.dataset.apply}"]`);
-    const song_id = sc.querySelector('select').value; if (!song_id || song_id === '__upload') return;
+    const song_id = sc.querySelector('select').value;
+    if (!song_id){ showErr(sc.querySelector('[data-songerr]'), 'Upload a song first.'); return; }
     b.disabled = true; b.textContent = 'Adding…';
     try { await api('/video/jobs/' + b.dataset.apply + '/song', {method:'POST',
       body: JSON.stringify({song_id, song_start: parseFloat(sc.querySelector('input').value) || 0})});
@@ -532,7 +561,7 @@ $('goBtn').onclick = async () => {
   const body = {model: state.model.id, prompt: $('idea').value.trim(), duration: state.duration,
     resolution: state.resolution, aspect_ratio: state.aspect, audio: audioOn(),
     budget: parseFloat($('budget').value) || 0,
-    song_id: song && song !== '__upload' ? song : null, song_start: parseFloat($('songStart').value) || 0,
+    song_id: song || null, song_start: parseFloat($('songStart').value) || 0,
     images: state.pics.map(p => ({id: p.id, role: p.role}))};
   const b = $('goBtn'); b.disabled = true; b.textContent = 'Sending…';
   try { await api('/video/generate', {method:'POST', body: JSON.stringify(body)}); await loadJobs();
