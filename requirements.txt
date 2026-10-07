@@ -18,3 +18,6 @@ imageio-ffmpeg>=0.5.1
 
 # video_app.py: passkey (Face ID) sign-in for Video Studio customers.
 webauthn>=3.0.1,<4
+
+# video_app.py: caption text for the editor.
+pillow>=10.1

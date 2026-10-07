@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.1.1"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.2.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1812,3 +1812,329 @@ async def video_pk_login_finish(request: Request):
     resp = JSONResponse({"ok": True})
     _set_user_cookie(resp, u["id"])
     return resp
+
+
+# =========================================================================== editor
+# A simple timeline: pick finished clips, trim them, add captions, pick an output shape and
+# a song, and the server renders one video. Rendering is free (no AI involved), and the
+# result lands in the clip list like any other clip, so it can be saved, re-scored or
+# edited further.
+EDITS_KEY = f"{PREFIX}edits.json"
+SHAPES = {"9:16": (720, 1280), "16:9": (1280, 720), "1:1": (720, 720), "4:5": (720, 900)}
+_edits: list[dict] | None = None
+
+
+async def _all_edits() -> list[dict]:
+    global _edits
+    if _edits is None:
+        async with _lock:
+            if _edits is None:
+                _edits = await _load_list(EDITS_KEY)
+    return _edits
+
+
+async def _save_edits() -> None:
+    rows = await _all_edits()
+    async with _lock:
+        snapshot = json.dumps(rows[-300:], separators=(",", ":")).encode()
+    await _put(EDITS_KEY, snapshot, "application/json")
+
+
+def _caption_png(text: str, w: int, h: int, pos: str) -> bytes:
+    """Caption as a transparent PNG the size of the frame: white text, dark outline, wrapped."""
+    import io
+    from PIL import Image, ImageDraw, ImageFont
+    size = max(28, int(w * 0.065))
+    font = ImageFont.load_default(size=size)
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    words, lines, line = text.split(), [], ""
+    for wd in words:
+        trial = (line + " " + wd).strip()
+        if d.textlength(trial, font=font) > w * 0.86 and line:
+            lines.append(line)
+            line = wd
+        else:
+            line = trial
+    if line:
+        lines.append(line)
+    lines = lines[:4]
+    lh = int(size * 1.25)
+    block = lh * len(lines)
+    y = {"top": int(h * 0.08), "middle": (h - block) // 2}.get(pos, h - block - int(h * 0.1))
+    for ln in lines:
+        tw = d.textlength(ln, font=font)
+        d.text(((w - tw) / 2, y), ln, font=font, fill=(255, 255, 255, 255),
+               stroke_width=max(2, size // 12), stroke_fill=(0, 0, 0, 230))
+        y += lh
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def render_edit_sync(items: list[dict], clips: list[bytes], shape: str, fit: str, keep_sound: bool,
+                     song: bytes | None, song_ext: str, song_start: float, song_volume: float,
+                     fade: bool) -> bytes:
+    """items[i] = {"start","end","caption","caption_pos"}; clips[i] = the source mp4 bytes."""
+    w, h = SHAPES.get(shape, SHAPES["9:16"])
+    with tempfile.TemporaryDirectory() as d:
+        inputs, filt, labels, total = [], [], [], 0.0
+        idx = 0
+        for i, (it, data) in enumerate(zip(items, clips)):
+            vp = f"{d}/c{i}.mp4"
+            Path(vp).write_bytes(data)
+            dur_src = _probe_duration(vp) or 0
+            start = max(0.0, float(it.get("start") or 0))
+            end = float(it.get("end") or 0) or dur_src
+            end = min(end, dur_src) if dur_src else end
+            if end - start < 0.2:
+                raise RuntimeError(f"clip {i + 1} is trimmed to nothing")
+            seg = end - start
+            total += seg
+            _, _, has_snd = _probe(vp)
+            inputs += ["-i", vp]
+            vi = idx
+            idx += 1
+            if fit == "fill":
+                sc = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+            else:
+                sc = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black"
+            filt.append(f"[{vi}:v]trim={start:.3f}:{end:.3f},setpts=PTS-STARTPTS,{sc},setsar=1,fps=30,format=yuv420p[v{i}]")
+            vlabel = f"[v{i}]"
+            cap = str(it.get("caption") or "").strip()
+            if cap:
+                cp = f"{d}/cap{i}.png"
+                Path(cp).write_bytes(_caption_png(cap[:200], w, h, str(it.get("caption_pos") or "bottom")))
+                inputs += ["-loop", "1", "-t", f"{seg:.3f}", "-i", cp]
+                ci = idx
+                idx += 1
+                filt.append(f"{vlabel}[{ci}:v]overlay=0:0:shortest=1[vc{i}]")
+                vlabel = f"[vc{i}]"
+            labels.append(vlabel)
+            if keep_sound and has_snd:
+                filt.append(f"[{vi}:a]atrim={start:.3f}:{end:.3f},asetpts=PTS-STARTPTS,aresample=44100,"
+                            f"aformat=channel_layouts=stereo[a{i}]")
+            else:
+                filt.append(f"anullsrc=r=44100:cl=stereo,atrim=0:{seg:.3f}[a{i}]")
+            labels.append(f"[a{i}]")
+        n = len(items)
+        filt.append("".join(labels) + f"concat=n={n}:v=1:a=1[vcat][acat]")
+        vout = "[vcat]"
+        if fade and total > 2:
+            filt.append(f"[vcat]fade=t=in:st=0:d=0.5,fade=t=out:st={total - 0.6:.2f}:d=0.6[vf]")
+            vout = "[vf]"
+        aout = "[acat]"
+        if song:
+            sp = f"{d}/song.{song_ext}"
+            Path(sp).write_bytes(song)
+            inputs += ["-ss", f"{max(0.0, song_start):.2f}", "-i", sp]
+            si = idx
+            idx += 1
+            vol = max(0.0, min(1.5, song_volume))
+            under = 0.35 if keep_sound else 1.0
+            filt.append(f"[{si}:a]atrim=0:{total:.3f},asetpts=PTS-STARTPTS,aresample=44100,"
+                        f"aformat=channel_layouts=stereo,volume={vol:.2f},"
+                        f"afade=t=out:st={max(0.0, total - 1.5):.2f}:d=1.5[song]")
+            filt.append(f"[acat]volume={under}[base];[base][song]amix=inputs=2:duration=first:dropout_transition=0[amix]")
+            aout = "[amix]"
+        out = f"{d}/out.mp4"
+        cmd = [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", *inputs,
+               "-filter_complex", ";".join(filt), "-map", vout, "-map", aout,
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p",
+               "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.3f}", out]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        if p.returncode != 0 or not Path(out).exists():
+            raise RuntimeError(f"render failed: {(p.stderr or '').strip()[-500:]}")
+        return Path(out).read_bytes()
+
+
+def _edit_public(e: dict) -> dict:
+    return {k: e.get(k) for k in ("id", "title", "items", "shape", "fit", "keep_sound", "song_id",
+                                  "song_start", "song_volume", "fade", "status", "error", "job_id",
+                                  "created", "updated")}
+
+
+@video_router.get("/video/edits")
+async def video_edits(request: Request):
+    if (d := await _deny(request)):
+        return d
+    rows = [e for e in await _all_edits() if _owns(request, e)]
+    return {"edits": [_edit_public(e) for e in reversed(rows[-40:])]}
+
+
+@video_router.post("/video/edits")
+async def video_edit_save(request: Request):
+    """Create or update a timeline. Body: id?, title, items[{job,start,end,caption,caption_pos}],
+    shape, fit (fit|fill), keep_sound, song_id, song_start, song_volume, fade."""
+    if (d := await _deny(request)):
+        return d
+    b = await _body(request)
+    jobs = await _all_jobs()
+    items = []
+    for it in (b.get("items") or [])[:30]:
+        j = _mine(request, jobs, str((it or {}).get("job") or ""))
+        if not j or not j.get("clip_key"):
+            return _err("One of the clips is gone or not ready. Remove it and try again.")
+        try:
+            start = max(0.0, float(it.get("start") or 0))
+            end = float(it.get("end") or 0)
+        except (TypeError, ValueError):
+            return _err("Trim times must be numbers")
+        items.append({"job": j["id"], "start": start, "end": end,
+                      "caption": str(it.get("caption") or "")[:200],
+                      "caption_pos": it.get("caption_pos") if it.get("caption_pos") in ("top", "middle", "bottom") else "bottom",
+                      "scored": bool(it.get("scored")) and bool(j.get("scored_key"))})
+    song_id = str(b.get("song_id") or "") or None
+    if song_id and not _owns(request, _find(await _all_songs(), song_id)):
+        return _err("That song is gone. Pick another.")
+    rows = await _all_edits()
+    e = _mine(request, rows, str(b.get("id") or "")) if b.get("id") else None
+    if not e:
+        e = {"id": secrets.token_urlsafe(8), "user": _uid(request), "created": time.time(), "status": "draft"}
+        async with _lock:
+            rows.append(e)
+    e.update(title=str(b.get("title") or "Untitled edit")[:80], items=items,
+             shape=b.get("shape") if b.get("shape") in SHAPES else "9:16",
+             fit="fill" if b.get("fit") == "fill" else "fit", keep_sound=bool(b.get("keep_sound", True)),
+             song_id=song_id, song_start=float(b.get("song_start") or 0),
+             song_volume=float(b.get("song_volume") if b.get("song_volume") is not None else 1.0),
+             fade=bool(b.get("fade", True)), updated=time.time())
+    if e.get("status") in ("ready", "failed"):
+        e["status"] = "draft"
+    await _save_edits()
+    return _edit_public(e)
+
+
+async def _render(e: dict) -> None:
+    try:
+        jobs = await _all_jobs()
+        clips = []
+        for it in e["items"]:
+            j = _find(jobs, it["job"])
+            key = (j or {}).get("scored_key") if it.get("scored") else (j or {}).get("clip_key")
+            data = await _get(key) if key else None
+            if not data:
+                raise RuntimeError("a clip's file is missing")
+            clips.append(data)
+        song, ext = None, "mp3"
+        if e.get("song_id"):
+            s = _find(await _all_songs(), e["song_id"])
+            if s:
+                song, ext = await _get(s["key"]), s["ext"]
+        out = await asyncio.to_thread(render_edit_sync, e["items"], clips, e["shape"], e["fit"], e["keep_sound"],
+                                      song, ext, e.get("song_start") or 0, e.get("song_volume") or 1.0, e.get("fade", True))
+        jid = secrets.token_urlsafe(8)
+        key = f"{PREFIX}clips/{jid}.mp4"
+        await _put(key, out, "video/mp4")
+        total = sum((float(i["end"]) or 0) - float(i["start"]) for i in e["items"] if float(i["end"] or 0) > 0)
+        job = {"id": jid, "created": time.time(), "finished": time.time(), "model": "editor",
+               "prompt": f"Edit: {e['title']}", "duration": round(total, 1) or None, "total_seconds": round(total, 1) or None,
+               "resolution": "720p", "aspect_ratio": e["shape"], "audio": True, "budget": 0, "estimate": 0,
+               "actual_cost": 0, "status": "ready", "clip_key": key, "user": e.get("user") or "owner",
+               "settled": True, "edit_mode": "timeline", "change": e["title"], "parent_id": e["items"][0]["job"]}
+        all_jobs = await _all_jobs()
+        async with _lock:
+            all_jobs.append(job)
+        await _save_jobs()
+        e.update(status="ready", job_id=jid, error=None)
+    except Exception as ex:
+        print(f"[video] render {e.get('id')} failed: {ex!r}", flush=True)
+        e.update(status="failed", error=str(ex)[:400])
+    await _save_edits()
+
+
+@video_router.post("/video/edits/{eid}/render")
+async def video_edit_render(eid: str, request: Request):
+    if (d := await _deny(request)):
+        return d
+    e = _mine(request, await _all_edits(), eid)
+    if not e:
+        return _err("No such edit", 404)
+    if not e.get("items"):
+        return _err("Add at least one clip")
+    if e.get("status") == "rendering":
+        return _edit_public(e)
+    e["status"] = "rendering"
+    await _save_edits()
+    _tasks["edit:" + eid] = asyncio.create_task(_render(e))
+    return _edit_public(e)
+
+
+@video_router.post("/video/edits/{eid}/delete")
+async def video_edit_delete(eid: str, request: Request):
+    if (d := await _deny(request)):
+        return d
+    rows = await _all_edits()
+    e = _mine(request, rows, eid)
+    if e:
+        async with _lock:
+            rows.remove(e)
+        await _save_edits()
+    return {"ok": True}
+
+
+# =========================================================================== characters
+# A saved character = a name, a short description and up to 4 pictures. Tapping it in the
+# composer adds the pictures as references and the description to the prompt, so the same
+# person or product shows up across clips.
+CHARS_KEY = f"{PREFIX}characters.json"
+_chars: list[dict] | None = None
+
+
+async def _all_chars() -> list[dict]:
+    global _chars
+    if _chars is None:
+        async with _lock:
+            if _chars is None:
+                _chars = await _load_list(CHARS_KEY)
+    return _chars
+
+
+async def _save_chars() -> None:
+    rows = await _all_chars()
+    async with _lock:
+        snapshot = json.dumps(rows, separators=(",", ":")).encode()
+    await _put(CHARS_KEY, snapshot, "application/json")
+
+
+@video_router.get("/video/characters")
+async def video_chars(request: Request):
+    if (d := await _deny(request)):
+        return d
+    return {"characters": [{k: c.get(k) for k in ("id", "name", "desc", "images")}
+                           for c in await _all_chars() if _owns(request, c)]}
+
+
+@video_router.post("/video/characters")
+async def video_char_save(request: Request):
+    if (d := await _deny(request)):
+        return d
+    b = await _body(request)
+    name = str(b.get("name") or "").strip()[:60]
+    if not name:
+        return _err("Give the character a name")
+    imgs = [str(i) for i in (b.get("images") or []) if IMG_ID.match(str(i))][:4]
+    if not imgs:
+        return _err("Add at least one picture of them")
+    rows = await _all_chars()
+    c = _mine(request, rows, str(b.get("id") or "")) if b.get("id") else None
+    if not c:
+        c = {"id": secrets.token_urlsafe(6), "user": _uid(request), "created": time.time()}
+        async with _lock:
+            rows.append(c)
+    c.update(name=name, desc=str(b.get("desc") or "").strip()[:400], images=imgs)
+    await _save_chars()
+    return {k: c.get(k) for k in ("id", "name", "desc", "images")}
+
+
+@video_router.post("/video/characters/{cid}/delete")
+async def video_char_delete(cid: str, request: Request):
+    if (d := await _deny(request)):
+        return d
+    rows = await _all_chars()
+    c = _mine(request, rows, cid)
+    if c:
+        async with _lock:
+            rows.remove(c)
+        await _save_chars()
+    return {"ok": True}

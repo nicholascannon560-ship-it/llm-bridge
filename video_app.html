@@ -104,6 +104,12 @@ label.btn{display:inline-block;text-align:center}
 .acct .credit{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
 #history{margin-top:8px;font-size:14px}
 #history div{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:6px 0}
+.tl{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;background:var(--sheet)}
+.tl .top{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.tl .top span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl .ctl2{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:14px}
+.tl input[type=number]{width:70px;padding:7px 8px}
+.tl button{border:1px solid var(--line);background:transparent;border-radius:8px;padding:5px 9px;font-size:13px}
 .thumbs{display:flex;gap:6px;margin:4px 0 6px}
 .thumbs img{width:56px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 </style>
@@ -167,6 +173,30 @@ label.btn{display:inline-block;text-align:center}
         <span class="hint" id="improveHint">Rewrites your idea with camera, light and motion detail.</span>
       </div>
 
+      <label class="f">Camera</label>
+      <div class="chips" id="cams"></div>
+      <label class="f">Look</label>
+      <div class="chips" id="looks"></div>
+
+      <label class="f">Characters</label>
+      <div class="chips" id="chars"></div>
+      <div class="hint">Tap a character to put the same person or product in this clip.</div>
+      <div class="editor" id="charForm" hidden>
+        <label class="f" style="margin-top:0">Name</label>
+        <input type="text" id="charName" placeholder="Maya">
+        <label class="f">What they look like</label>
+        <textarea id="charDesc" placeholder="Woman in her 30s, short curly black hair, green bomber jacket, small gold hoop earrings"></textarea>
+        <label class="f">Pictures of them <span class="hint">(1–4, clear face or product)</span></label>
+        <div class="row"><button class="btn ghost small" type="button" id="charAddPic">Add a picture</button></div>
+        <input type="file" class="vh" accept="image/*" multiple tabindex="-1" id="charFile">
+        <div class="pics" id="charPics"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small" id="charSave">Save character</button>
+          <button class="btn ghost small" id="charCancel">Cancel</button>
+          <button class="btn ghost small" id="charDelete" hidden>Delete</button></div>
+        <div class="err" id="charErr" hidden></div>
+      </div>
+
       <label class="f">Pictures</label>
       <div class="row">
         <button class="btn ghost small" id="addPic" type="button">Add a picture</button>
@@ -225,6 +255,42 @@ label.btn{display:inline-block;text-align:center}
       <div class="today num" id="today"></div>
       <button class="btn go" id="goBtn">Make video</button>
       <div class="err" id="goErr" hidden></div>
+    </section>
+
+    <section class="panel" id="editorPanel">
+      <div class="row" style="justify-content:space-between">
+        <strong style="font-size:18px">Editor</strong>
+        <button class="btn ghost small" id="newEdit">New edit</button>
+      </div>
+      <div class="hint">Put finished clips in order, trim them, add captions and a song, then render one video.</div>
+      <div id="editList"></div>
+      <div class="editor" id="ed" hidden>
+        <label class="f" style="margin-top:0">Title</label>
+        <input type="text" id="edTitle" placeholder="My edit">
+        <label class="f">Timeline</label>
+        <div id="edItems"></div>
+        <div class="row" style="margin-top:8px;flex-wrap:nowrap">
+          <select id="edAddSel" style="flex:1"></select>
+          <button class="btn ghost small" id="edAdd">Add clip</button></div>
+        <label class="f">Shape</label>
+        <div class="chips" id="edShape"></div>
+        <label class="f">When a clip's shape doesn't match</label>
+        <div class="chips" id="edFit"></div>
+        <label class="toggle"><input type="checkbox" id="edSound" checked> Keep each clip's own sound</label>
+        <label class="toggle"><input type="checkbox" id="edFade" checked> Fade in and out</label>
+        <label class="f">Song</label>
+        <select id="edSong"></select>
+        <div class="row" style="margin-top:8px" id="edSongRow">
+          <label style="font-size:14px">Start at</label><input type="number" id="edSongStart" min="0" step="1" value="0" style="width:80px">
+          <label style="font-size:14px">Volume</label><input type="range" id="edSongVol" min="0" max="1.5" step="0.05" value="1" style="flex:1"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn small" id="edRender">Render video</button>
+          <button class="btn ghost small" id="edSave">Save</button>
+          <button class="btn ghost small" id="edClose">Close</button>
+          <button class="btn ghost small" id="edDelete">Delete</button></div>
+        <div class="hint" id="edStatus"></div>
+        <div class="err" id="edErr" hidden></div>
+      </div>
     </section>
 
     <section class="panel" id="clips">
@@ -483,7 +549,7 @@ function renderJobs(){
     d.innerHTML = `${stateLabel(j)} <span class="meta num">${esc(j.model)}, ${j.total_seconds || j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${j.chain_estimate ? 'about ' + money(j.chain_estimate) + ' total' : cost + ' of ' + money(j.budget)}</span>
       ${j.parts_total > 1 ? `<div class="edit-of">${j.chain_remaining > 0 || !['ready','failed','cancelled','expired'].includes(j.status)
           ? `Long video: making part ${j.part_no} of ${j.parts_total}` : `Long video, ${j.parts_total} parts`}</div>`
-        : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
+        : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended', timeline:'Made in the editor'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
       ${j.chain_error ? `<div class="err">${esc(j.chain_error)}</div>` : ''}
       <div class="prompt">${esc(j.prompt)}</div>
       ${(j.images || []).length ? `<div class="thumbs">${j.images.map(im => `<img alt="${im.role === 'ref' ? 'Reference' : im.role === 'first' ? 'Start' : 'End'} picture" src="/video/img/${esc(im.id)}">`).join('')}</div>` : ''}
@@ -749,11 +815,164 @@ $('improveBtn').onclick = async () => {
 $('model').onchange = () => pickModel($('model').value);
 $('audio').onchange = render;
 $('budget').oninput = render;
+// ---------------- camera & look presets (added to the prompt when the clip is made)
+const CAMS = {'Slow push in': 'slow dolly push-in toward the subject', 'Pull back reveal': 'camera pulls back to reveal the wider scene',
+  'Orbit': 'camera orbits 180 degrees around the subject', 'Crane up': 'crane shot rising up and over the scene',
+  'Drone flyover': 'aerial drone flyover, smooth and high', 'Handheld follow': 'handheld camera following close behind the subject, natural shake',
+  'Tracking': 'smooth side-on tracking shot moving with the subject', 'Crash zoom': 'sudden fast crash zoom onto the subject',
+  'Static': 'locked-off static tripod shot', 'FPV dive': 'FPV drone diving fast through the scene', 'Bullet time': 'bullet-time freeze with the camera sweeping around'};
+const LOOKS = {'Cinematic': 'cinematic film look, anamorphic lens, shallow depth of field, rich color grade',
+  'Documentary': 'natural documentary look, available light, realistic', 'Music video': 'stylized music video look, bold contrast, dramatic lighting',
+  'Golden hour': 'warm golden-hour sunlight, long soft shadows', 'Neon night': 'night scene, neon signs, wet reflective streets',
+  'Noir': 'black and white film noir, hard shadows', '90s VHS': '1990s VHS camcorder look, soft, slight tracking noise',
+  'Anime': 'Japanese anime style animation', 'Claymation': 'stop-motion claymation style', '3D cartoon': 'polished 3D animated feature film style'};
+state.cam = null; state.look = null; state.chars = []; state.charOn = new Set();
+function drawPresets(){
+  chips($('cams'), Object.keys(CAMS), state.cam, v => { state.cam = state.cam === v ? null : v; drawPresets(); });
+  chips($('looks'), Object.keys(LOOKS), state.look, v => { state.look = state.look === v ? null : v; drawPresets(); });
+}
+function fullPrompt(){
+  let p = $('idea').value.trim();
+  const descs = state.chars.filter(c => state.charOn.has(c.id)).map(c => `${c.name}: ${c.desc}`).filter(x => x.trim().length > 2);
+  if (descs.length) p += ' Characters: ' + descs.join('; ') + '.';
+  if (state.cam) p += ' Camera: ' + CAMS[state.cam] + '.';
+  if (state.look) p += ' Look: ' + LOOKS[state.look] + '.';
+  return p;
+}
+drawPresets();
+
+// ---------------- characters
+let charEdit = null;
+function drawChars(){
+  const box = $('chars'); box.innerHTML = '';
+  state.chars.forEach(c => { const b = document.createElement('button'); b.className = 'chip'; b.type = 'button';
+    b.textContent = c.name; b.setAttribute('aria-pressed', String(state.charOn.has(c.id)));
+    b.onclick = () => toggleChar(c); let t; b.oncontextmenu = e => { e.preventDefault(); openCharForm(c); };
+    box.appendChild(b); });
+  if (state.chars.length){ const e = document.createElement('button'); e.className = 'chip'; e.type = 'button';
+    e.textContent = 'Edit…'; e.onclick = () => { const c = state.chars.find(x => state.charOn.has(x.id)) || state.chars[0]; openCharForm(c); }; box.appendChild(e); }
+  const n = document.createElement('button'); n.className = 'chip'; n.type = 'button'; n.textContent = '+ New character';
+  n.onclick = () => openCharForm(null); box.appendChild(n);
+}
+function toggleChar(c){
+  if (state.charOn.has(c.id)){ state.charOn.delete(c.id); state.pics = state.pics.filter(p => p.char !== c.id); }
+  else { state.charOn.add(c.id);
+    c.images.forEach(id => state.pics.push({id, role: 'ref', thumb: '/video/img/' + id, char: c.id})); }
+  drawChars(); renderPics();
+}
+function openCharForm(c){
+  charEdit = c ? {...c, pics: c.images.map(id => ({id, thumb: '/video/img/' + id}))} : {pics: []};
+  $('charForm').hidden = false; $('charName').value = c ? c.name : ''; $('charDesc').value = c ? c.desc : '';
+  $('charDelete').hidden = !c; drawCharPics(); showErr($('charErr'), '');
+}
+function drawCharPics(){
+  const box = $('charPics'); box.innerHTML = '';
+  charEdit.pics.forEach((p, i) => { const d = document.createElement('div'); d.className = 'pic';
+    d.innerHTML = `<img alt="" src="${p.thumb}"><div class="ctl"><button type="button" aria-label="Remove picture">✕</button></div>`;
+    d.querySelector('button').onclick = () => { charEdit.pics.splice(i, 1); drawCharPics(); }; box.appendChild(d); });
+}
+$('charAddPic').onclick = () => $('charFile').click();
+$('charFile').onchange = async () => {
+  const files = [...$('charFile').files]; $('charFile').value = '';
+  for (const f of files.slice(0, 4 - charEdit.pics.length)){
+    try { const sm = await shrink(f); const out = await api('/video/images', {method:'POST', body: JSON.stringify({data: sm.data})});
+      charEdit.pics.push({id: out.id, thumb: sm.data}); } catch(e){ showErr($('charErr'), e.message); }
+  }
+  drawCharPics();
+};
+$('charSave').onclick = async () => {
+  try { const out = await api('/video/characters', {method:'POST', body: JSON.stringify({id: charEdit.id,
+      name: $('charName').value, desc: $('charDesc').value, images: charEdit.pics.map(p => p.id)})});
+    $('charForm').hidden = true; await loadChars(); }
+  catch(e){ showErr($('charErr'), e.message); }
+};
+$('charCancel').onclick = () => { $('charForm').hidden = true; };
+$('charDelete').onclick = async () => { if (!charEdit.id || !confirm('Delete this character?')) return;
+  await api('/video/characters/' + charEdit.id + '/delete', {method:'POST'}).catch(() => {});
+  state.charOn.delete(charEdit.id); state.pics = state.pics.filter(p => p.char !== charEdit.id);
+  $('charForm').hidden = true; await loadChars(); renderPics(); };
+async function loadChars(){ try { state.chars = (await api('/video/characters')).characters; } catch(e){ state.chars = []; } drawChars(); }
+
+// ---------------- editor
+const SHAPE_NAMES = {'9:16': '9:16 vertical', '16:9': '16:9 wide', '1:1': '1:1 square', '4:5': '4:5 portrait'};
+let ed = null; state.edits = [];
+function readyClips(){ return state.jobs.filter(j => j.status === 'ready' && j.has_clip); }
+function clipLabel(id){ const j = state.jobs.find(x => x.id === id); if (!j) return 'Clip (no longer listed)';
+  return `${j.total_seconds || j.duration || '?'}s · ${(j.change && j.model === 'editor') ? j.change : (j.prompt || '').slice(0, 60)}`; }
+function drawEditList(){
+  $('editList').innerHTML = state.edits.map(e => `<div class="tl"><div class="top"><span>${esc(e.title)}</span>
+    <span class="hint" style="margin:0">${e.status === 'rendering' ? 'Rendering…' : e.status === 'ready' ? 'Rendered' : e.status === 'failed' ? 'Failed' : 'Draft'}</span></div>
+    <div class="ctl2"><button data-open-edit="${e.id}">Open</button></div></div>`).join('');
+  $('editList').querySelectorAll('[data-open-edit]').forEach(b => b.onclick = () => openEdit(state.edits.find(e => e.id === b.dataset.openEdit)));
+}
+function openEdit(e){
+  ed = e ? JSON.parse(JSON.stringify(e)) : {title: '', items: [], shape: '9:16', fit: 'fill', keep_sound: true, fade: true,
+    song_id: null, song_start: 0, song_volume: 1};
+  $('ed').hidden = false; $('edTitle').value = ed.title || ''; $('edSound').checked = ed.keep_sound !== false; $('edFade').checked = ed.fade !== false;
+  $('edSongStart').value = ed.song_start || 0; $('edSongVol').value = ed.song_volume ?? 1; showErr($('edErr'), '');
+  $('edDelete').hidden = !ed.id; drawEd(); $('ed').scrollIntoView({block: 'start'});
+}
+function drawEd(){
+  $('edItems').innerHTML = ed.items.length ? '' : '<div class="hint">No clips yet. Add one below.</div>';
+  ed.items.forEach((it, i) => {
+    const d = document.createElement('div'); d.className = 'tl';
+    const j = state.jobs.find(x => x.id === it.job);
+    d.innerHTML = `<div class="top"><span>${i + 1}. ${esc(clipLabel(it.job))}</span></div>
+      <div class="ctl2">From <input type="number" min="0" step="0.5" value="${it.start || 0}" data-k="start"> s
+        to <input type="number" min="0" step="0.5" value="${it.end || ''}" placeholder="end" data-k="end"> s
+        ${j && j.has_scored ? `<label><input type="checkbox" data-k="scored" ${it.scored ? 'checked' : ''}> with its song</label>` : ''}</div>
+      <div class="ctl2"><input type="text" placeholder="Caption (optional)" value="${esc(it.caption || '')}" data-k="caption" style="flex:1;min-width:160px">
+        <select data-k="caption_pos"><option value="bottom">Bottom</option><option value="middle">Middle</option><option value="top">Top</option></select></div>
+      <div class="ctl2"><button data-a="up" aria-label="Move up">↑</button><button data-a="down" aria-label="Move down">↓</button><button data-a="rm">Remove</button></div>`;
+    d.querySelector('[data-k=caption_pos]').value = it.caption_pos || 'bottom';
+    d.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => {
+      const k = inp.dataset.k; it[k] = inp.type === 'checkbox' ? inp.checked : inp.type === 'number' ? parseFloat(inp.value) || 0 : inp.value; });
+    d.querySelector('[data-a=up]').onclick = () => { if (i > 0){ [ed.items[i - 1], ed.items[i]] = [ed.items[i], ed.items[i - 1]]; drawEd(); } };
+    d.querySelector('[data-a=down]').onclick = () => { if (i < ed.items.length - 1){ [ed.items[i + 1], ed.items[i]] = [ed.items[i], ed.items[i + 1]]; drawEd(); } };
+    d.querySelector('[data-a=rm]').onclick = () => { ed.items.splice(i, 1); drawEd(); };
+    $('edItems').appendChild(d);
+  });
+  $('edAddSel').innerHTML = readyClips().map(j => `<option value="${j.id}">${esc(clipLabel(j.id))}</option>`).join('') || '<option value="">Make a clip first</option>';
+  chips($('edShape'), Object.keys(SHAPE_NAMES), ed.shape, v => { ed.shape = v; drawEd(); }, v => SHAPE_NAMES[v]);
+  chips($('edFit'), ['fill', 'fit'], ed.fit, v => { ed.fit = v; drawEd(); }, v => v === 'fill' ? 'Fill and crop' : 'Fit with bars');
+  $('edSong').innerHTML = '<option value="">No song</option>' + songOptions(); $('edSong').value = ed.song_id || '';
+  $('edSongRow').hidden = !ed.song_id;
+  const e = state.edits.find(x => x.id === ed.id);
+  $('edStatus').textContent = !e ? '' : e.status === 'rendering' ? 'Rendering… this takes about a minute.'
+    : e.status === 'ready' ? 'Rendered. The video is in your clips below.' : e.status === 'failed' ? '' : '';
+  if (e && e.status === 'failed') showErr($('edErr'), e.error || 'Render failed');
+}
+function edBody(){
+  return {id: ed.id, title: $('edTitle').value.trim() || 'Untitled edit', items: ed.items, shape: ed.shape, fit: ed.fit,
+    keep_sound: $('edSound').checked, fade: $('edFade').checked, song_id: $('edSong').value || null,
+    song_start: parseFloat($('edSongStart').value) || 0, song_volume: parseFloat($('edSongVol').value)};
+}
+async function saveEd(){ const out = await api('/video/edits', {method:'POST', body: JSON.stringify(edBody())}); ed.id = out.id; await loadEdits(); return out; }
+$('newEdit').onclick = () => openEdit(null);
+$('edAdd').onclick = () => { const id = $('edAddSel').value; if (!id) return; ed.items.push({job: id, start: 0, end: 0, caption: '', caption_pos: 'bottom'}); drawEd(); };
+$('edSong').onchange = () => { ed.song_id = $('edSong').value || null; $('edSongRow').hidden = !ed.song_id; };
+$('edSave').onclick = async () => { showErr($('edErr'), ''); try { await saveEd(); $('edStatus').textContent = 'Saved.'; } catch(e){ showErr($('edErr'), e.message); } };
+$('edRender').onclick = async () => {
+  showErr($('edErr'), ''); const b = $('edRender'); b.disabled = true;
+  try { await saveEd(); await api('/video/edits/' + ed.id + '/render', {method:'POST'}); await loadEdits(); drawEd(); pollEdits(); }
+  catch(e){ showErr($('edErr'), e.message); }
+  b.disabled = false;
+};
+$('edClose').onclick = () => { $('ed').hidden = true; ed = null; };
+$('edDelete').onclick = async () => { if (!ed.id || !confirm('Delete this edit? Rendered videos stay in your clips.')) return;
+  await api('/video/edits/' + ed.id + '/delete', {method:'POST'}).catch(() => {}); $('ed').hidden = true; ed = null; await loadEdits(); };
+async function loadEdits(){ try { state.edits = (await api('/video/edits')).edits; } catch(e){ state.edits = []; } drawEditList(); }
+function pollEdits(){
+  clearTimeout(state.edTimer);
+  if (!state.edits.some(e => e.status === 'rendering')){ state.stale = true; loadJobs(); return; }
+  state.edTimer = setTimeout(async () => { await loadEdits(); if (ed && !$('ed').hidden) drawEd(); pollEdits(); }, 4000);
+}
+
 $('fitBtn').onclick = () => { showErr($('goErr'), ''); fitToBudget(); };
 $('goBtn').onclick = async () => {
   showErr($('goErr'), '');
   const song = $('song').value;
-  const body = {model: state.model.id, prompt: $('idea').value.trim(), duration: curLen().seg, parts: curLen().parts,
+  const body = {model: state.model.id, prompt: fullPrompt(), duration: curLen().seg, parts: curLen().parts,
     resolution: state.resolution, aspect_ratio: state.aspect, audio: audioOn(),
     budget: parseFloat($('budget').value) || 0,
     song_id: song || null, song_start: parseFloat($('songStart').value) || 0,
@@ -886,6 +1105,8 @@ async function boot(){
     if (state.models.length) pickModel(state.models[0].id);
   } catch(e){ showErr($('goErr'), e.message); }
   await loadJobs();
+  await Promise.all([loadChars(), loadEdits()]);
+  if (state.edits.some(e => e.status === 'rendering')) pollEdits();
 }
 boot().catch(e => { showLogin(); showErr($('loginErr'), e.message); });
 </script>
