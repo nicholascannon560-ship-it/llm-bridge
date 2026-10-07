@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.2.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.3.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -840,7 +840,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
     aspect = str(b.get("aspect_ratio") or "")
     song_id = str(b.get("song_id") or "") or None
     audio = bool(b.get("audio", True)) and not song_id
-    if m["durations"] and duration not in m["durations"]:
+    if m["durations"] and duration not in m["durations"] and not extra.get("no_duration"):
         return _err(f"{m['name']} supports {m['durations']} seconds")
     if duration <= 0:
         return _err("Pick a duration")
@@ -910,14 +910,20 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         hold = round(est, 4)
         await _ledger(u, -hold, f"Hold for a {duration}s video")
 
-    payload = {"model": m["id"], "prompt": prompt, "duration": duration}
+    payload = {"model": m["id"], "prompt": prompt}
+    if not extra.get("no_duration"):  # talking videos run as long as the speech
+        payload["duration"] = duration
     if resolution:
         payload["resolution"] = resolution
     if aspect:
         payload["aspect_ratio"] = aspect
     if not audio:
         payload["generate_audio"] = False
-    if extra.get("video_ref_url"):
+    if extra.get("audio_url"):  # talking video: lip-sync the picture to this voice track
+        payload["input_references"] = [{"type": "audio_url", "audio_url": {"url": extra["audio_url"]}}]
+        if frames:
+            payload["frame_images"] = frames
+    elif extra.get("video_ref_url"):
         payload["input_references"] = [{"type": "video_url", "video_url": {"url": extra["video_ref_url"]}}] + refs
     elif frames:
         payload["frame_images"] = frames
@@ -982,7 +988,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
            "status": data.get("status") or "pending", "song_id": song_id,
            "song_start": float(b.get("song_start") or 0), "images": images, "image_note": image_note,
            "parent_id": extra.get("parent_id"), "edit_mode": extra.get("edit_mode"),
-           "change": extra.get("change"), "base": base,
+           "change": extra.get("change"), "base": base, "talk": extra.get("talk"),
            "base_prompt": extra.get("base_prompt") or prompt,
            "extend_of": extra.get("extend_of"),
            "parts_total": extra.get("parts_total") or parts,
@@ -2138,3 +2144,153 @@ async def video_char_delete(cid: str, request: Request):
             rows.remove(c)
         await _save_chars()
     return {"ok": True}
+
+
+# =========================================================================== picture maker
+# Make or change a picture with an image model, to use as a Start picture, a reference, or
+# a character photo. Customers pay what OpenRouter charges (held, then settled).
+IMAGE_MODEL = os.getenv("VIDEO_IMAGE_MODEL") or "google/gemini-3.1-flash-image-preview"
+IMAGE_HOLD = 0.15
+
+
+async def _charge_small(uid: str, hold: float, actual: float | None, what: str) -> None:
+    if uid == "owner":
+        return
+    u = await _user_by_id(uid)
+    if u and actual is not None and abs(hold - actual) >= 0.0001:
+        await _ledger(u, round(hold - actual, 4), f"Adjust {what} to actual cost")
+
+
+@video_router.post("/video/images/generate")
+async def video_image_generate(request: Request):
+    """{"prompt", "aspect"?, "from_image"?} -> {"id","url"}. from_image edits an existing picture."""
+    if (d := await _deny(request)):
+        return d
+    u = request.state.user
+    b = await _body(request)
+    prompt = str(b.get("prompt") or "").strip()[:1500]
+    if not prompt:
+        return _err("Describe the picture")
+    if not u.get("owner"):
+        if not _is_member(u):
+            return _err("Start a membership to make pictures.", 402)
+        if _credit(u) < IMAGE_HOLD:
+            return _err(f"Making a picture needs about ${IMAGE_HOLD:.2f} of credit. Add credit to continue.", 402)
+        await _ledger(u, -IMAGE_HOLD, "Hold for a picture")
+    content = [{"type": "text", "text": prompt}]
+    src = str(b.get("from_image") or "")
+    if IMG_ID.match(src):
+        data = await _get(f"{PREFIX}images/{src}")
+        if data:
+            kind = _sniff(data) or ("jpg", "image/jpeg")
+            content.append({"type": "image_url", "image_url": {
+                "url": f"data:{kind[1]};base64,{base64.b64encode(data).decode()}"}})
+    payload = {"model": IMAGE_MODEL, "modalities": ["image", "text"],
+               "messages": [{"role": "user", "content": content}]}
+    aspect = str(b.get("aspect") or "")
+    if aspect in ("9:16", "16:9", "1:1", "4:5", "3:4", "4:3"):
+        payload["image_config"] = {"aspect_ratio": aspect}
+    try:
+        async with httpx.AsyncClient(timeout=180) as c:
+            r = await c.post(f"{OR_BASE}/chat/completions", json=payload, headers=_or_headers())
+        data = r.json()
+        if r.status_code >= 400 or data.get("error"):
+            raise RuntimeError((data.get("error") or {}).get("message") or f"HTTP {r.status_code}")
+        msg = ((data.get("choices") or [{}])[0].get("message") or {})
+        url = (((msg.get("images") or [{}])[0].get("image_url") or {}).get("url")) or ""
+        if not url.startswith("data:"):
+            raise RuntimeError("the model didn't return a picture; try rewording")
+        img = base64.b64decode(url.split(",", 1)[1])
+        cost = (data.get("usage") or {}).get("cost")
+    except Exception as e:
+        if not u.get("owner"):
+            await _ledger(await _user_by_id(u["id"]), IMAGE_HOLD, "Refund: picture failed")
+        return _err(f"Couldn't make the picture: {e}", 502)
+    kind = _sniff(img) or ("png", "image/png")
+    iid = secrets.token_urlsafe(24)
+    await _put(f"{PREFIX}images/{iid}", img, kind[1])
+    await _charge_small(u["id"], IMAGE_HOLD, float(cost) if cost is not None else None, "picture")
+    return {"id": iid, "url": f"/video/img/{iid}", "cost": cost}
+
+
+# =========================================================================== talking video
+# A photo that talks: lip-synced to a typed script (the model's own voice) or to an uploaded
+# voice recording. Runs on HeyGen Avatar IV through the same job, budget and credit path.
+TALK_MODEL = os.getenv("VIDEO_TALK_MODEL") or "heygen/avatar-iv"
+
+
+@video_router.get("/video/aud/{token}")
+async def video_audio_public(token: str):
+    # Deliberately no PIN check: the talking-video model downloads the voice track from here.
+    if not IMG_ID.match(token):
+        return _err("Not found", 404)
+    s = next((x for x in await _all_songs() if x.get("pub") == token), None)
+    data = await _get(s["key"]) if s else None
+    if not data:
+        return _err("Not found", 404)
+    return Response(data, media_type=SONG_EXT.get(s["ext"], "audio/mpeg"),
+                    headers={"Cache-Control": "public, max-age=86400", "X-Robots-Tag": "noindex"})
+
+
+def _audio_seconds_sync(data: bytes, ext: str) -> float | None:
+    with tempfile.TemporaryDirectory() as d:
+        pth = f"{d}/a.{ext}"
+        Path(pth).write_bytes(data)
+        return _probe_duration(pth)
+
+
+@video_router.post("/video/talk")
+async def video_talk(request: Request):
+    """{"image", "script"? | "voice_id"?, "aspect_ratio", "resolution", "budget"}"""
+    if (d := await _deny(request)):
+        return d
+    b = await _body(request)
+    image = str(b.get("image") or "")
+    if not IMG_ID.match(image):
+        return _err("Add a photo of the face that should talk")
+    script = str(b.get("script") or "").strip()[:3000]
+    voice_id = str(b.get("voice_id") or "")
+    extra = {"no_duration": True}
+    if voice_id:
+        s = _find(await _all_songs(), voice_id)
+        if not _owns(request, s):
+            return _err("That recording is gone. Upload it again.")
+        audio = await _get(s["key"])
+        secs = await asyncio.to_thread(_audio_seconds_sync, audio or b"", s["ext"]) if audio else None
+        if not secs:
+            return _err("Couldn't read that recording")
+        if not s.get("pub"):
+            s["pub"] = secrets.token_urlsafe(24)
+            await _save_songs()
+        extra["audio_url"] = f"{_public_base(request)}/video/aud/{s['pub']}"
+        prompt = script or "Speak naturally to the camera with matching expressions."
+        duration = int(secs + 0.999)
+        extra["talk"] = {"voice": s["name"]}
+    elif script:
+        words = len(script.split())
+        duration = max(3, int(words / 2.4 + 1.5))  # about 2.4 spoken words per second
+        prompt = script
+        extra["talk"] = {"script": True}
+    else:
+        return _err("Type what they should say, or pick a voice recording")
+    if duration > 120:
+        return _err("Keep it under 2 minutes")
+    spec = {"model": TALK_MODEL, "prompt": prompt, "duration": duration,
+            "resolution": b.get("resolution") or "720p", "aspect_ratio": b.get("aspect_ratio") or "9:16",
+            "audio": True, "budget": b.get("budget"), "images": [{"id": image, "role": "first"}]}
+    extra["change"] = "Talking video"
+    extra["edit_mode"] = "talk"
+    return await _start_job(request, spec, extra)
+
+
+@video_router.get("/video/song/{sid}")
+async def video_song_file(sid: str, request: Request):
+    """The person's own uploaded song or recording, so the page can play it and read its length."""
+    if (d := await _deny(request)):
+        return d
+    s = _mine(request, await _all_songs(), sid)
+    data = await _get(s["key"]) if s else None
+    if not data:
+        return _err("Not found", 404)
+    return Response(data, media_type=SONG_EXT.get(s["ext"], "audio/mpeg"),
+                    headers={"Cache-Control": "private, max-age=3600", "Accept-Ranges": "none"})

@@ -200,7 +200,18 @@ label.btn{display:inline-block;text-align:center}
       <label class="f">Pictures</label>
       <div class="row">
         <button class="btn ghost small" id="addPic" type="button">Add a picture</button>
+        <button class="btn ghost small" id="makePicBtn" type="button">Make a picture</button>
         <span class="hint" style="margin:0">Optional</span>
+      </div>
+      <div class="editor" id="makePic" hidden>
+        <label class="f" style="margin-top:0">Describe the picture</label>
+        <textarea id="mpPrompt" placeholder="A red vintage pickup truck parked at a misty lake at sunrise"></textarea>
+        <label class="toggle" id="mpFromRow" hidden><input type="checkbox" id="mpFrom"> Change my first picture instead of starting fresh</label>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small" id="mpGo">Make it</button>
+          <button class="btn ghost small" id="mpCancel">Cancel</button>
+          <span class="hint" style="margin:0">About 5–15¢</span></div>
+        <div class="err" id="mpErr" hidden></div>
       </div>
       <input type="file" id="picFile" accept="image/*" multiple hidden>
       <div class="pics" id="pics"></div>
@@ -255,6 +266,38 @@ label.btn{display:inline-block;text-align:center}
       <div class="today num" id="today"></div>
       <button class="btn go" id="goBtn">Make video</button>
       <div class="err" id="goErr" hidden></div>
+    </section>
+
+    <section class="panel" id="talkPanel">
+      <div class="row" style="justify-content:space-between">
+        <strong style="font-size:18px">Talking video</strong>
+        <button class="btn ghost small" id="talkToggle">Open</button>
+      </div>
+      <div class="hint">Make a photo talk: lip-synced to words you type or to a voice recording.</div>
+      <div id="talkBody" hidden>
+        <label class="f">Face</label>
+        <div class="row"><button class="btn ghost small" type="button" id="talkPicBtn">Choose a photo</button>
+          <span class="hint" style="margin:0">A clear, front-facing face works best</span></div>
+        <input type="file" class="vh" accept="image/*" tabindex="-1" id="talkPicFile">
+        <div class="pics" id="talkPic"></div>
+        <label class="f">What they say</label>
+        <div class="chips" id="talkMode"></div>
+        <textarea id="talkScript" placeholder="Hey, it's Maya. Our new menu drops Friday, come try it."></textarea>
+        <div id="talkVoiceRow" hidden>
+          <div class="row" style="flex-wrap:nowrap"><select id="talkVoice" style="flex:1"></select>
+            <label class="btn ghost small" for="songFile" id="talkVoiceUp" style="white-space:nowrap">Upload a recording</label></div>
+          <div class="hint">A voice memo works. Mp3, m4a or wav.</div>
+        </div>
+        <label class="f">Shape</label>
+        <div class="chips" id="talkShape"></div>
+        <div class="row" style="margin-top:12px;justify-content:space-between">
+          <div><div class="num" style="font-size:24px;font-weight:700" id="talkEst">$—</div><div class="hint" style="margin:0" id="talkSpec"></div></div>
+          <div><label class="f" style="margin:0 0 6px">Budget</label>
+            <div class="money"><span>$</span><input class="num" type="number" min="0.05" step="0.05" value="1" id="talkBudget"></div></div>
+        </div>
+        <button class="btn go" id="talkGo">Make talking video</button>
+        <div class="err" id="talkErr" hidden></div>
+      </div>
     </section>
 
     <section class="panel" id="editorPanel">
@@ -515,15 +558,16 @@ $('songFile').onchange = async () => {
   const f = $('songFile').files[0]; $('songFile').value = '';
   if (!f) return;
   const target = songUploadTarget;
-  const sc = target ? document.querySelector(`[data-scorer="${target}"]`) : null;
-  const btn = sc ? sc.querySelector('[data-upfor]') : $('songUploadBtn');
-  const errEl = sc ? sc.querySelector('[data-songerr]') : $('songErr');
+  const sc = target && target !== 'talk' ? document.querySelector(`[data-scorer="${target}"]`) : null;
+  const btn = target === 'talk' ? $('talkVoiceUp') : sc ? sc.querySelector('[data-upfor]') : $('songUploadBtn');
+  const errEl = target === 'talk' ? $('talkErr') : sc ? sc.querySelector('[data-songerr]') : $('songErr');
   const label = btn ? btn.textContent : '';
   if (btn) btn.textContent = 'Uploading…';
   showErr(errEl, '');
   try {
     const id = await uploadSong(f);
-    if (sc){ const sel = sc.querySelector('select'); sel.innerHTML = songOptions(); sel.value = id; renderSongs(); }
+    if (target === 'talk'){ renderSongs(); talk.voice = id; talk.voiceSecs = await audioSeconds(id); drawTalk(); }
+    else if (sc){ const sel = sc.querySelector('select'); sel.innerHTML = songOptions(); sel.value = id; renderSongs(); }
     else renderSongs(id);
   } catch(e){ showErr(errEl, e.message); }
   if (btn) btn.textContent = label;
@@ -549,7 +593,7 @@ function renderJobs(){
     d.innerHTML = `${stateLabel(j)} <span class="meta num">${esc(j.model)}, ${j.total_seconds || j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${j.chain_estimate ? 'about ' + money(j.chain_estimate) + ' total' : cost + ' of ' + money(j.budget)}</span>
       ${j.parts_total > 1 ? `<div class="edit-of">${j.chain_remaining > 0 || !['ready','failed','cancelled','expired'].includes(j.status)
           ? `Long video: making part ${j.part_no} of ${j.parts_total}` : `Long video, ${j.parts_total} parts`}</div>`
-        : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended', timeline:'Made in the editor'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
+        : j.parent_id ? `<div class="edit-of">${{edit:'Edited', remake:'Remade', extend:'Extended', timeline:'Made in the editor', talk:'Talking video'}[j.edit_mode] || 'Changed'} from an earlier clip${j.change && j.change !== 'continued' ? ': ' + esc(j.change) : ''}</div>` : ''}
       ${j.chain_error ? `<div class="err">${esc(j.chain_error)}</div>` : ''}
       <div class="prompt">${esc(j.prompt)}</div>
       ${(j.images || []).length ? `<div class="thumbs">${j.images.map(im => `<img alt="${im.role === 'ref' ? 'Reference' : im.role === 'first' ? 'Start' : 'End'} picture" src="/video/img/${esc(im.id)}">`).join('')}</div>` : ''}
@@ -967,6 +1011,69 @@ function pollEdits(){
   if (!state.edits.some(e => e.status === 'rendering')){ state.stale = true; loadJobs(); return; }
   state.edTimer = setTimeout(async () => { await loadEdits(); if (ed && !$('ed').hidden) drawEd(); pollEdits(); }, 4000);
 }
+
+// ---------------- picture maker
+$('makePicBtn').onclick = () => { $('makePic').hidden = !$('makePic').hidden; $('mpFromRow').hidden = !state.pics.length; showErr($('mpErr'), ''); };
+$('mpCancel').onclick = () => { $('makePic').hidden = true; };
+$('mpGo').onclick = async () => {
+  const b = $('mpGo'); b.disabled = true; b.textContent = 'Making…'; showErr($('mpErr'), '');
+  try {
+    const from = $('mpFrom').checked && state.pics.length ? state.pics[0].id : null;
+    const out = await api('/video/images/generate', {method:'POST', body: JSON.stringify({prompt: $('mpPrompt').value, aspect: state.aspect, from_image: from})});
+    const role = state.pics.some(p => p.role === 'first') ? 'ref' : 'first';
+    state.pics.push({id: out.id, role, thumb: out.url, w: 0, h: 0});
+    $('makePic').hidden = true; $('mpPrompt').value = ''; renderPics(); loadAccount();
+  } catch(e){ showErr($('mpErr'), e.message); }
+  b.disabled = false; b.textContent = 'Make it';
+};
+
+// ---------------- talking video
+const talk = {img: null, mode: 'script', shape: '9:16'};
+function talkModel(){ return state.models.find(m => m.id === 'heygen/avatar-iv'); }
+function talkSeconds(){
+  if (talk.mode === 'script'){ const w = $('talkScript').value.trim().split(/\s+/).filter(Boolean).length; return w ? Math.max(3, Math.floor(w / 2.4 + 1.5)) : 0; }
+  return talk.voiceSecs || 0;
+}
+function drawTalk(){
+  chips($('talkMode'), ['script', 'voice'], talk.mode, v => { talk.mode = v; drawTalk(); }, v => v === 'script' ? 'Type the words' : 'Use a recording');
+  $('talkScript').placeholder = talk.mode === 'script' ? "Hey, it's Maya. Our new menu drops Friday, come try it." : 'Optional: how they should act (smiling, serious, excited)';
+  $('talkVoiceRow').hidden = talk.mode !== 'voice';
+  $('talkVoice').innerHTML = songOptions() || '<option value="">Upload a recording first</option>';
+  if (talk.voice) $('talkVoice').value = talk.voice;
+  chips($('talkShape'), ['9:16', '16:9', '1:1'], talk.shape, v => { talk.shape = v; drawTalk(); }, v => SHAPE_NAMES[v]);
+  $('talkPic').innerHTML = talk.img ? `<div class="pic"><img alt="" src="${talk.img.thumb}"></div>` : '';
+  const m = talkModel(), secs = talkSeconds();
+  const e = m && secs ? estimate(m, secs, '720p', true, 'image', 1) : null, budget = parseFloat($('talkBudget').value) || 0;
+  $('talkEst').textContent = m ? money(e) : 'Not available';
+  $('talkSpec').textContent = !m ? 'The talking model is not on OpenRouter right now' : secs ? `about ${secs}s` + (talk.mode === 'voice' ? '' : ' of speech') : '';
+  $('talkGo').disabled = !m || !talk.img || !secs || e == null || e > budget;
+}
+$('talkToggle').onclick = () => { $('talkBody').hidden = !$('talkBody').hidden; $('talkToggle').textContent = $('talkBody').hidden ? 'Open' : 'Close'; drawTalk(); };
+$('talkPicBtn').onclick = () => $('talkPicFile').click();
+$('talkPicFile').onchange = async () => {
+  const f = $('talkPicFile').files[0]; $('talkPicFile').value = ''; if (!f) return;
+  try { const sm = await shrink(f); const out = await api('/video/images', {method:'POST', body: JSON.stringify({data: sm.data})});
+    talk.img = {id: out.id, thumb: sm.data}; } catch(e){ showErr($('talkErr'), e.message); }
+  drawTalk();
+};
+$('talkScript').oninput = drawTalk; $('talkBudget').oninput = drawTalk;
+$('talkVoiceUp').addEventListener('click', () => { songUploadTarget = 'talk'; });
+$('talkVoice').onchange = async () => { talk.voice = $('talkVoice').value; talk.voiceSecs = await audioSeconds(talk.voice); drawTalk(); };
+async function audioSeconds(id){
+  // The browser measures the recording so the price shows before sending.
+  return new Promise(res => { const a = new Audio(); a.preload = 'metadata';
+    a.onloadedmetadata = () => res(Math.ceil(a.duration || 0)); a.onerror = () => res(0);
+    a.src = '/video/song/' + id; });
+}
+$('talkGo').onclick = async () => {
+  const b = $('talkGo'); b.disabled = true; b.textContent = 'Sending…'; showErr($('talkErr'), '');
+  try { await api('/video/talk', {method:'POST', body: JSON.stringify({image: talk.img.id,
+      script: $('talkScript').value.trim(), voice_id: talk.mode === 'voice' ? $('talkVoice').value : null,
+      aspect_ratio: talk.shape, resolution: '720p', budget: parseFloat($('talkBudget').value) || 0})});
+    state.stale = true; await loadJobs(); $('clips').scrollIntoView(); }
+  catch(e){ showErr($('talkErr'), e.message); }
+  b.textContent = 'Make talking video'; drawTalk();
+};
 
 $('fitBtn').onclick = () => { showErr($('goErr'), ''); fitToBudget(); };
 $('goBtn').onclick = async () => {
