@@ -426,8 +426,8 @@ function renderJobs(){
       ${j.song_error ? `<div class="err">Song: ${esc(j.song_error)}</div>` : ''}
       ${j.has_scored ? `<div class="meta">With ${esc(j.song_name)} from ${j.song_start || 0}s</div>` : ''}
       ${j.has_clip ? `<div class="row" style="margin-top:6px">
-          <a class="btn ghost small" href="/video/clip/${j.id}?dl=1">Download</a>
-          ${j.has_scored ? `<a class="btn ghost small" href="/video/clip/${j.id}?song=1&dl=1">Download with song</a>` : ''}
+          <button class="btn ghost small" data-save="${j.id}" data-song="0">Save video</button>
+          ${j.has_scored ? `<button class="btn ghost small" data-save="${j.id}" data-song="1">Save with song</button>` : ''}
           <button class="btn ghost small" data-open="${j.id}">${j.has_scored ? 'Change song' : 'Add song'}</button>
           <button class="btn small" data-edit="${j.id}">Edit</button></div>
         <div class="editor" data-editor="${j.id}" hidden></div>
@@ -448,6 +448,7 @@ function renderJobs(){
     sel.innerHTML = songOptions() || '<option value="">Upload a song first</option>';
     sc.querySelector('[data-upfor]').addEventListener('click', () => { songUploadTarget = b.dataset.open; });
   });
+  box.querySelectorAll('[data-save]').forEach(b => b.onclick = () => saveClip(b));
   box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
     const j = state.jobs.find(x => x.id === b.dataset.edit);
     if (j) openEditor(j, box.querySelector(`[data-editor="${j.id}"]`));
@@ -462,6 +463,34 @@ function renderJobs(){
       sc.hidden = true; state.stale = true; await loadJobs(); }
     catch(e){ alert(e.message); b.disabled = false; b.textContent = 'Add song'; }
   });
+}
+// Saving without leaving the page. Tapping a plain download link on iPhone opens a
+// full-screen file page with no way back, so: tap 1 fetches the file, tap 2 opens the
+// share sheet (Save Video puts it in Photos). Two taps because iOS only allows the share
+// sheet straight from a tap, and the fetch in between would use that tap up.
+const ready = {};
+async function saveClip(b){
+  const key = b.dataset.save + ':' + b.dataset.song;
+  const name = `video-${b.dataset.save}${b.dataset.song === '1' ? '-song' : ''}.mp4`;
+  const label = b.dataset.song === '1' ? 'Save with song' : 'Save video';
+  const file = ready[key];
+  if (file){
+    try {
+      if (navigator.canShare && navigator.canShare({files: [file]})){ await navigator.share({files: [file]}); }
+      else { const url = URL.createObjectURL(file); const a = document.createElement('a');
+        a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000); }
+    } catch(e){ if (e.name !== 'AbortError') alert("Couldn't save: " + e.message); }
+    b.textContent = label; delete ready[key]; return;
+  }
+  b.disabled = true; b.textContent = 'Getting video…';
+  try {
+    const r = await fetch(`/video/clip/${b.dataset.save}${b.dataset.song === '1' ? '?song=1' : ''}`, {credentials: 'same-origin'});
+    if (!r.ok) throw new Error('Error ' + r.status);
+    ready[key] = new File([await r.blob()], name, {type: 'video/mp4'});
+    b.textContent = 'Tap to save';
+  } catch(e){ b.textContent = label; alert("Couldn't get the video: " + e.message); }
+  b.disabled = false;
 }
 function nearest(list, want){
   if (!list || !list.length) return want;

@@ -61,7 +61,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "1.2.2"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "1.2.3"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
