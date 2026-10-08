@@ -236,6 +236,7 @@ label.btn{display:inline-block;text-align:center}
       <div class="row" style="flex-wrap:nowrap">
         <select id="song" style="flex:1"></select>
         <label class="btn ghost small" for="songFile" id="songUploadBtn" style="white-space:nowrap">Upload a song</label>
+        <button class="btn ghost small" type="button" id="songDel" hidden aria-label="Delete this song">Delete</button>
       </div>
       <!-- Not display:none: iOS only opens the file picker from a direct tap on a label/button. -->
       <input type="file" id="songFile" class="vh" accept=".mp3,.m4a,.aac,.wav,.ogg,audio/*" tabindex="-1">
@@ -437,6 +438,7 @@ function render(){
     v => ({'9:16':'9:16 vertical','16:9':'16:9 wide','1:1':'1:1 square'}[v] || v || 'Default'));
   $('audio').disabled = !!$('song').value;
   $('songStartRow').hidden = !$('song').value;
+  $('songDel').hidden = !$('song').value;
   { const e1 = estimate(m, L.seg, state.resolution, audioOn(), picMode(state.pics), picCount(state.pics));
     const en = L.parts > 1 ? estimate(m, L.seg, state.resolution, audioOn(), 'image', 1) : 0;
     state.estimate = (e1 == null || en == null) ? null : e1 + en * (L.parts - 1); }
@@ -568,6 +570,11 @@ async function uploadSong(file){
 let songUploadTarget = null; // null = composer, else job id whose song panel is open
 $('songUploadBtn').addEventListener('click', () => { songUploadTarget = null; });
 $('song').onchange = render;
+$('songDel').onclick = async () => {
+  const id = $('song').value; if (!id || !confirm('Delete this song from your library? Videos it is already on keep it.')) return;
+  await api('/video/songs/' + id + '/delete', {method:'POST'}).catch(e => alert(e.message));
+  state.songs = state.songs.filter(x => x.id !== id); renderSongs(''); render();
+};
 $('songFile').onchange = async () => {
   const f = $('songFile').files[0]; $('songFile').value = '';
   if (!f) return;
@@ -615,6 +622,7 @@ function renderJobs(){
       ${j.image_note ? `<div class="meta">${esc(j.image_note)}</div>` : ''}
       ${j.has_clip ? `<video controls playsinline preload="metadata" src="${src}"></video>` : ''}
       ${j.error ? `<div class="err">${esc(j.error)}</div>` : ''}
+      ${!j.has_clip && ['failed','cancelled','expired'].includes(j.status) ? `<div class="row" style="margin-top:6px"><button class="btn ghost small" data-del="${j.id}">Remove</button></div>` : ''}
       ${j.song_error ? `<div class="err">Song: ${esc(j.song_error)}</div>` : ''}
       ${j.has_scored ? `<div class="meta">With ${esc(j.song_name)} from ${j.song_start || 0}s</div>` : ''}
       ${j.has_clip ? `<div class="row" style="margin-top:6px">
@@ -623,7 +631,8 @@ function renderJobs(){
           <button class="btn ghost small" data-open="${j.id}">${j.has_scored ? 'Change song' : 'Add song'}</button>
           <button class="btn small" data-edit="${j.id}">Edit</button>
           <button class="btn ghost small" data-extend="${j.id}">Make longer</button>
-          <button class="btn ghost small" data-upscale="${j.id}">Sharpen (upscale)</button></div>
+          <button class="btn ghost small" data-upscale="${j.id}">Sharpen (upscale)</button>
+          <button class="btn ghost small" data-del="${j.id}" style="color:var(--red)">Delete</button></div>
         <div class="editor" data-upscaler="${j.id}" hidden></div>
         <div class="editor" data-editor="${j.id}" hidden></div>
         <div class="editor" data-extender="${j.id}" hidden></div>
@@ -643,6 +652,12 @@ function renderJobs(){
     const sel = sc.querySelector('select');
     sel.innerHTML = songOptions() || '<option value="">Upload a song first</option>';
     sc.querySelector('[data-upfor]').addEventListener('click', () => { songUploadTarget = b.dataset.open; });
+  });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this video for good? This can\'t be undone.')) return;
+    b.disabled = true;
+    try { await api('/video/jobs/' + b.dataset.del + '/delete', {method:'POST'}); state.stale = true; await loadJobs(); }
+    catch(e){ alert(e.message); b.disabled = false; }
   });
   box.querySelectorAll('[data-upscale]').forEach(b => b.onclick = () => {
     const j = state.jobs.find(x => x.id === b.dataset.upscale);
@@ -1262,6 +1277,8 @@ function renderAccount(a){
   $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.'
     : (a.member ? `Member${end ? ', renews ' + end : ''}` : (a.status === 'past_due' ? 'Your last payment failed. Update your card.' : 'Not a member yet')) + (a.email ? ' · ' + a.email : '');
   $('memberBox').hidden = owner || a.member || !a.billing;
+  $('acctLine').title = '';
+  if (!owner && state.retainDays) $('acctLine').textContent += ` · If your membership ends, your videos are deleted ${state.retainDays} days later.`;
   $('topupBox').hidden = owner || !a.billing || !a.packs.length;
   $('portalBtn').hidden = owner || !a.has_customer || !a.billing;
   $('historyBtn').hidden = owner || !a.ledger.length;
@@ -1298,7 +1315,7 @@ async function boot(){
   $('login').querySelector('details').open = !s.accounts;
   if (!s.authed){ showLogin(); return; }
   $('login').hidden = true; $('app').hidden = false;
-  state.spent = s.spent_today; state.cap = s.daily_cap;
+  state.spent = s.spent_today; state.cap = s.daily_cap; state.retainDays = s.retain_days;
   renderAccount(s.account);
   // Back from Stripe: the payment lands by webhook a moment later, so check a few times.
   const paid = new URLSearchParams(location.search).get('paid');

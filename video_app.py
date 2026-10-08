@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.5.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.6.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -246,6 +246,29 @@ def _get_sync(key: str) -> bytes | None:
             if "NoSuchKey" not in repr(e):
                 print(f"[video] s3 load failed {key}: {e!r}", flush=True)
     return None
+
+
+def _delete_sync(key: str) -> bool:
+    """Remove a stored file everywhere. True if S3 accepted the delete (or there's no S3)."""
+    try:
+        _local(key).unlink(missing_ok=True)
+    except Exception:
+        pass
+    bucket, s3 = _s3()
+    if not s3:
+        return True
+    try:
+        s3.delete_object(Bucket=bucket, Key=key)
+        return True
+    except Exception as e:
+        print(f"[video] s3 delete failed {key}: {e!r}", flush=True)
+        return False
+
+
+async def _delete(*keys: str | None) -> None:
+    for k in keys:
+        if k:
+            await asyncio.to_thread(_delete_sync, k)
 
 
 async def _put(key: str, data: bytes, ctype: str) -> None:
@@ -677,6 +700,8 @@ async def _poll(job: dict) -> None:
                     job.update(status="ready", finished=time.time())
                     await _settle(job, job.get("actual_cost"))
                     await _save_jobs()
+                    if (job.get("parts_total") or 1) > 1 and not job.get("chain_remaining"):
+                        await _drop_chain_parts(job)
                     if job.get("chain_remaining"):
                         try:
                             await _extend(job, auto=True)
@@ -746,8 +771,9 @@ async def video_page():
 
 @video_router.get("/video/session")
 async def video_session(request: Request):
+    _ensure_sweeper()
     u = await _current_user(request)
-    out = {"authed": bool(u), "configured": True, "version": VIDEO_APP_VERSION,
+    out = {"authed": bool(u), "configured": True, "version": VIDEO_APP_VERSION, "retain_days": RETAIN_DAYS,
            "accounts": _accounts_on(), "email_codes": _email_codes_on(), "billing": _billing_ready()}
     if u:
         out.update(daily_cap=_daily_cap(), spent_today=await _spent_24h(), account=_account(u))
@@ -1672,6 +1698,8 @@ async def video_stripe_webhook(request: Request):
         if u:
             u["subscription"] = obj.get("id")
             u["sub_status"] = "canceled" if kind.endswith(".deleted") else obj.get("status")
+            if u["sub_status"] in ("active", "trialing"):
+                u.pop("files_purged_at", None)
             u["period_end"] = _period_end(obj)
             u["cancel_at_period_end"] = bool(obj.get("cancel_at_period_end"))
     async with _lock:
@@ -2484,3 +2512,122 @@ async def video_upload(request: Request):
         jobs.append(job)
     await _save_jobs()
     return _public(job)
+
+
+# =========================================================================== deleting & cleanup
+RETAIN_DAYS = int(os.getenv("VIDEO_RETAIN_DAYS") or "30")
+_sweeper: dict = {"task": None, "last": 0.0}
+
+
+def _job_files(j: dict) -> list[str]:
+    return [k for k in (j.get("clip_key"), j.get("scored_key"),
+                        f"{PREFIX}clips/{j['id']}-part.mp4" if j.get("extend_of") else None) if k]
+
+
+async def _forget_jobs(doomed: list[dict]) -> int:
+    for j in doomed:
+        await _delete(*_job_files(j))
+    jobs = await _all_jobs()
+    ids = {j["id"] for j in doomed}
+    async with _lock:
+        jobs[:] = [j for j in jobs if j["id"] not in ids]
+    if doomed:
+        await _save_jobs()
+    return len(doomed)
+
+
+async def _drop_chain_parts(final: dict) -> None:
+    """A long video is joined into its last part, so the earlier, hidden parts are dead weight."""
+    jobs, doomed, cur = await _all_jobs(), [], final
+    while cur.get("extend_of"):
+        prev = _find(jobs, cur["extend_of"])
+        if not prev or not prev.get("superseded"):
+            break
+        doomed.append(prev)
+        cur = prev
+    await _delete(f"{PREFIX}clips/{final['id']}-part.mp4")
+    await _forget_jobs(doomed)
+
+
+@video_router.post("/video/jobs/{jid}/delete")
+async def video_job_delete(jid: str, request: Request):
+    if (d := await _deny(request)):
+        return d
+    j = _mine(request, await _all_jobs(), jid)
+    if not j:
+        return {"ok": True}
+    if j.get("status") in ("pending", "in_progress") or j.get("chain_remaining"):
+        return _err("Wait until it finishes, then delete it.")
+    await _forget_jobs([j])
+    return {"ok": True}
+
+
+@video_router.post("/video/songs/{sid}/delete")
+async def video_song_delete(sid: str, request: Request):
+    if (d := await _deny(request)):
+        return d
+    songs = await _all_songs()
+    s_ = _mine(request, songs, sid)
+    if s_:
+        await _delete(s_["key"])
+        async with _lock:
+            songs.remove(s_)
+        await _save_songs()
+    return {"ok": True}
+
+
+async def _purge_user_files(uid: str) -> int:
+    """Delete everything a person made (clips, songs, edits, characters). Their account and
+    credit record stay, so they can come back to an empty studio with their balance."""
+    n = await _forget_jobs([j for j in await _all_jobs() if j.get("user") == uid])
+    songs = await _all_songs()
+    mine = [x for x in songs if x.get("user") == uid]
+    for x in mine:
+        await _delete(x["key"])
+    if mine:
+        async with _lock:
+            songs[:] = [x for x in songs if x.get("user") != uid]
+        await _save_songs()
+    for rows_fn, save_fn in ((_all_edits, _save_edits), (_all_chars, _save_chars)):
+        rows = await rows_fn()
+        if any(r.get("user") == uid for r in rows):
+            async with _lock:
+                rows[:] = [r for r in rows if r.get("user") != uid]
+            await save_fn()
+    return n + len(mine)
+
+
+async def sweep_once() -> dict:
+    """Customers whose membership ended more than RETAIN_DAYS ago, or who signed up and never
+    joined within RETAIN_DAYS, lose their files. Owner files are never touched."""
+    now, out = time.time(), {"users": 0, "files": 0}
+    for u in list((await _users_doc())["users"]):
+        if u.get("comp") or _is_member(u) or u.get("files_purged_at"):
+            continue
+        ended = u.get("period_end") if u.get("sub_status") else None
+        since = ended or u.get("created") or now
+        if now - since < RETAIN_DAYS * 86400:
+            continue
+        n = await _purge_user_files(u["id"])
+        u["files_purged_at"] = now
+        out["users"] += 1
+        out["files"] += n
+    if out["users"]:
+        await _save_users()
+        print(f"[video] cleanup removed {out['files']} items for {out['users']} people", flush=True)
+    return out
+
+
+async def _sweep_loop() -> None:
+    while True:
+        try:
+            await sweep_once()
+        except Exception as e:
+            print(f"[video] cleanup error: {e!r}", flush=True)
+        _sweeper["last"] = time.time()
+        await asyncio.sleep(6 * 3600)
+
+
+def _ensure_sweeper() -> None:
+    if _accounts_on() and (_sweeper["task"] is None or _sweeper["task"].done()):
+        _sweeper["task"] = asyncio.create_task(_sweep_loop())
