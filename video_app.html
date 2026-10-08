@@ -157,6 +157,14 @@ label.btn{display:inline-block;text-align:center}
       <div id="topupBox" hidden>
         <label class="f">Add credit</label>
         <div class="chips" id="packs"></div>
+        <div class="hint" id="cardLine"></div>
+        <div id="reloadBox" hidden>
+          <label class="toggle"><input type="checkbox" id="arOn"> Refill automatically when credit runs low</label>
+          <div class="row" id="arRow" style="margin-top:6px;font-size:14px" hidden>
+            When below <select id="arBelow" style="width:auto"><option>1</option><option selected>2</option><option>5</option><option>10</option></select>
+            add <select id="arAmt" style="width:auto"></select></div>
+        </div>
+        <div class="err" id="reloadErr" hidden></div>
       </div>
       <div class="row" style="margin-top:10px">
         <button class="btn ghost small" id="portalBtn" hidden>Manage membership</button>
@@ -1289,7 +1297,16 @@ function renderAccount(a){
   $('topupBox').hidden = owner || !a.billing || !a.packs.length;
   $('portalBtn').hidden = owner || !a.has_customer || !a.billing;
   $('historyBtn').hidden = owner || !a.ledger.length;
-  chips($('packs'), a.packs, null, v => checkout('/video/billing/topup', {pack: String(v)}), v => '$' + v);
+  chips($('packs'), a.packs, null, v => addCredit(v), v => '$' + v);
+  $('cardLine').innerHTML = a.card ? `Charged to your ${esc(a.card.brand)} ending ${esc(a.card.last4)}. <a href="#" id="useCheckout">Use a different card</a>`
+    : 'Your card is saved after your first purchase, so next time it\'s one tap.';
+  const uc = document.getElementById('useCheckout'); if (uc) uc.onclick = e => { e.preventDefault(); state.forceCheckout = true;
+    $('cardLine').textContent = 'Tap an amount to pay with a different card.'; };
+  $('reloadBox').hidden = !a.card;
+  $('arOn').checked = !!a.auto_reload; $('arRow').hidden = !a.auto_reload;
+  $('arAmt').innerHTML = a.packs.map(p => `<option value="${p}">$${p}</option>`).join('');
+  if (a.auto_reload){ $('arBelow').value = String(a.auto_reload.below); $('arAmt').value = String(a.auto_reload.amount); }
+  showErr($('reloadErr'), a.reload_error || '');
   $('history').innerHTML = a.ledger.map(l => `<div><span>${new Date(l.t * 1000).toLocaleDateString()} ${esc(l.note)}</span>
     <span class="num">${l.amount >= 0 ? '+' : '−'}${money(Math.abs(l.amount))}</span></div>`).join('');
   render();
@@ -1300,6 +1317,23 @@ async function checkout(path, body){
   catch(e){ showErr($('acctErr'), e.message); }
 }
 $('joinBtn').onclick = () => checkout('/video/billing/subscribe');
+async function addCredit(v){
+  const a = state.account || {};
+  if (!a.card || state.forceCheckout){ state.forceCheckout = false; return checkout('/video/billing/topup', {pack: String(v)}); }
+  if (!confirm(`Add $${v} credit to your ${a.card.brand} ending ${a.card.last4}?`)) return;
+  showErr($('acctErr'), '');
+  try { renderAccount(await api('/video/billing/charge', {method:'POST', body: JSON.stringify({pack: String(v),
+      nonce: Date.now().toString(36) + Math.random().toString(36).slice(2, 8)})})); }
+  catch(e){ showErr($('acctErr'), e.message); }
+}
+async function saveReload(){
+  showErr($('reloadErr'), '');
+  try { renderAccount(await api('/video/billing/autoreload', {method:'POST', body: JSON.stringify({enabled: $('arOn').checked,
+      below: parseFloat($('arBelow').value), amount: $('arAmt').value})})); }
+  catch(e){ showErr($('reloadErr'), e.message); $('arOn').checked = false; $('arRow').hidden = true; }
+}
+$('arOn').onchange = () => { $('arRow').hidden = !$('arOn').checked; saveReload(); };
+$('arBelow').onchange = saveReload; $('arAmt').onchange = saveReload;
 $('portalBtn').onclick = () => checkout('/video/billing/portal');
 $('historyBtn').onclick = () => { $('history').hidden = !$('history').hidden; };
 async function loadAccount(){ try { renderAccount(await api('/video/account')); } catch(e){} }

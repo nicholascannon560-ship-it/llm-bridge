@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.9.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.10.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -947,6 +947,9 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
             return _err("Start a membership to make videos.", 402)
         need = est * parts if extra.get("part_no") in (None, 1) else est
         if _credit(u) + 1e-9 < need:
+            if u.get("auto_reload") and u["id"] not in _reloading:
+                _kick_autoreload(u)
+                return _err("Topping up your credit from your card. Try again in a few seconds.", 402)
             return _err(f"This needs about ${need:.2f} of credit and you have ${_credit(u):.2f}. Add credit to continue.", 402)
         hold = round(est, 4)
         await _ledger(u, -hold, f"Hold for a {duration}s video")
@@ -1443,6 +1446,8 @@ async def _ledger(u: dict, amount: float, note: str) -> None:
                                            "balance": u["credit"]})
         u["ledger"] = u["ledger"][-LEDGER_KEEP:]
     await _save_users()
+    if amount < 0:
+        _kick_autoreload(u)
 
 
 async def _release(uid: str, hold: float, why: str) -> None:
@@ -1479,6 +1484,8 @@ def _account(u: dict) -> dict:
             "packs": sorted(int(k) for k in _packs()), "billing": _billing_ready(),
             "has_customer": bool(u.get("stripe_customer")), "passkeys": len(u.get("passkeys") or []),
             "trial_offer": TRIAL_DAYS if (not u.get("owner") and _trial_ok(u)) else 0,
+            "card": u.get("card") if isinstance(u.get("card"), dict) else None,
+            "auto_reload": u.get("auto_reload"), "reload_error": u.get("reload_error"),
             "trial_end": u.get("trial_end") if u.get("sub_status") == "trialing" else None,
             "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:])),
             "funding": _funding_summary() if u.get("owner") else None}
@@ -1568,7 +1575,13 @@ async def video_logout():
 async def video_account(request: Request):
     if (d := await _deny(request)):
         return d
-    return _account(request.state.user)
+    u = request.state.user
+    if not u.get("owner") and u.get("stripe_customer") and "card" not in u:
+        try:
+            await _saved_card(u)
+        except Exception as e:
+            print(f"[video] card lookup failed: {e!r}", flush=True)
+    return _account(u)
 
 
 # --------------------------------------------------------------------------- stripe
@@ -1658,6 +1671,8 @@ async def video_topup(request: Request):
             "mode": "payment", "customer": cus, "client_reference_id": u["id"],
             "line_items": [{"price": price, "quantity": 1}],
             "success_url": f"{base}/video?paid=credit", "cancel_url": f"{base}/video",
+            "payment_intent_data": {"setup_future_usage": "off_session",
+                                    "metadata": {"app": "video_studio", "kind": "credit_checkout", "user_id": u["id"]}},
             "metadata": {"app": "video_studio", "kind": "credit", "user_id": u["id"], "credit_cents": str(int(pack) * 100)}})
     except Exception as e:
         return _err(f"Couldn't start checkout: {e}", 502)
@@ -1715,6 +1730,7 @@ async def video_stripe_webhook(request: Request):
         if u:
             if obj.get("customer") and not u.get("stripe_customer"):
                 u["stripe_customer"] = obj["customer"]
+            u.pop("card", None)
             if meta.get("kind") == "credit" and obj.get("payment_status") == "paid":
                 cents = int(meta.get("credit_cents") or obj.get("amount_total") or 0)
                 await _ledger(u, cents / 100, f"Added ${cents / 100:.2f} credit")
@@ -2761,3 +2777,128 @@ async def _funding_loop() -> None:
             _funding_state.update(last=time.time(), error=str(e)[:200])
             print(f"[video] card funding error: {e!r}", flush=True)
         await asyncio.sleep(FUND_EVERY)
+
+
+# =========================================================================== saved card: one-tap credit & auto-reload
+# The card from the membership or a credit checkout stays on the customer in Stripe. Credit
+# can then be charged to it from inside the app, either on a tap or automatically when the
+# balance runs low. Each charge is credited once (PaymentIntent id recorded as handled).
+RELOAD_MIN_GAP = 10 * 60
+RELOAD_MAX_PER_DAY = 5
+_reloading: set[str] = set()
+
+
+async def _saved_card(u: dict, refresh: bool = False) -> dict | None:
+    if not u.get("stripe_customer") or not _billing_ready():
+        return None
+    if isinstance(u.get("card"), dict) and not refresh:
+        return u["card"]
+    pms = await _stripe("GET", f"/customers/{u['stripe_customer']}/payment_methods", {"type": "card", "limit": 1})
+    pm = (pms.get("data") or [None])[0]
+    card = {"id": pm["id"], "brand": (pm.get("card") or {}).get("brand", "card").title(),
+            "last4": (pm.get("card") or {}).get("last4", "")} if pm else None
+    u["card"] = card or False
+    await _save_users()
+    return card
+
+
+async def _charge_card(u: dict, cents: int, why: str, key: str) -> tuple[bool, str]:
+    card = await _saved_card(u)
+    if not card:
+        return False, "No saved card yet. Use Add credit once with checkout and it will be saved."
+    try:
+        pi = await _stripe("POST", "/payment_intents", {
+            "amount": cents, "currency": "usd", "customer": u["stripe_customer"], "payment_method": card["id"],
+            "off_session": True, "confirm": True, "description": f"Video Studio credit ({why})",
+            "metadata": {"app": "video_studio", "kind": "credit", "user_id": u["id"], "credit_cents": str(cents)}},
+            idem=key)
+    except Exception as e:
+        msg = str(e)
+        if "authentication" in msg.lower():
+            return False, "Your bank wants to confirm this one. Use Add credit with checkout this time."
+        return False, f"The card was declined: {msg[:150]}"
+    if pi.get("status") != "succeeded":
+        return False, "Your bank wants to confirm this one. Use Add credit with checkout this time."
+    doc = await _users_doc()
+    if pi["id"] in doc["events"]:
+        return True, "already added"
+    async with _lock:
+        doc["events"].append(pi["id"])
+        if _funding_fa():
+            doc.setdefault("funding", []).append({"id": pi["id"], "cents": cents, "user": u["id"],
+                                                  "t": time.time(), "status": "waiting"})
+    await _ledger(u, cents / 100, f"Added ${cents / 100:.2f} credit ({why}, {card['brand']} {card['last4']})")
+    return True, "ok"
+
+
+@video_router.post("/video/billing/charge")
+async def video_charge_saved(request: Request):
+    """One tap: {"pack": "10", "nonce"} charges the saved card. The nonce makes double taps safe."""
+    if (d := await _deny(request)) or (d := _customer_only(request)):
+        return d
+    u = request.state.user
+    b = await _body(request)
+    pack = str(b.get("pack") or "")
+    if pack not in _packs():
+        return _err("Pick a credit amount")
+    nonce = re.sub(r"[^A-Za-z0-9_-]", "", str(b.get("nonce") or ""))[:40] or secrets.token_urlsafe(8)
+    ok, msg = await _charge_card(u, int(pack) * 100, "one tap", f"vs-tap-{u['id']}-{nonce}")
+    if not ok:
+        return _err(msg, 402)
+    return _account(u)
+
+
+@video_router.post("/video/billing/autoreload")
+async def video_autoreload(request: Request):
+    """{"enabled", "below", "amount"}: refill credit with the saved card when it runs low."""
+    if (d := await _deny(request)) or (d := _customer_only(request)):
+        return d
+    u = request.state.user
+    b = await _body(request)
+    if not b.get("enabled"):
+        u["auto_reload"] = None
+    else:
+        amount = str(b.get("amount") or "10")
+        try:
+            below = max(0.5, min(50.0, float(b.get("below") or 2)))
+        except (TypeError, ValueError):
+            return _err("Pick a number")
+        if amount not in _packs():
+            return _err("Pick a refill amount")
+        if not await _saved_card(u, refresh=True):
+            return _err("Add credit once with checkout first so there's a card to refill from.")
+        u["auto_reload"] = {"below": below, "amount": int(amount)}
+        u.pop("reload_error", None)
+    await _save_users()
+    return _account(u)
+
+
+def _kick_autoreload(u: dict) -> None:
+    ar = u.get("auto_reload")
+    if not ar or u.get("owner") or u["id"] in _reloading or _credit(u) >= ar["below"]:
+        return
+    now = time.time()
+    recent = [t for t in u.get("reload_times") or [] if now - t < 86400]
+    if recent and now - recent[-1] < RELOAD_MIN_GAP or len(recent) >= RELOAD_MAX_PER_DAY:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _reloading.add(u["id"])
+
+    async def run():
+        try:
+            u["reload_times"] = recent + [time.time()]
+            ok, msg = await _charge_card(u, int(ar["amount"]) * 100, "auto-reload",
+                                         f"vs-auto-{u['id']}-{int(time.time() // RELOAD_MIN_GAP)}")
+            if not ok:
+                u["auto_reload"] = None  # stop retrying a failing card; the customer turns it back on
+                u["reload_error"] = f"Auto-reload is off: {msg}"
+                await _save_users()
+        except Exception as e:
+            print(f"[video] auto-reload error for {u['id']}: {e!r}", flush=True)
+        finally:
+            _reloading.discard(u["id"])
+
+    loop.create_task(run())
