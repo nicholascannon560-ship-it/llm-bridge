@@ -379,7 +379,7 @@ function showErr(el, msg){ el.textContent = msg; el.hidden = !msg; }
 function estimate(m, duration, resolution, audio, mode = 'text', nimg = 0){
   const t = (m.prices || {})[`${resolution || ''}|${audio ? 1 : 0}|${mode}`];
   if (!t) return null;
-  return Math.max(t.ps * duration + t.flat, t.min) + t.img * nimg;
+  return (Math.max(t.ps * duration + t.flat, t.min) + t.img * nimg) * (1 + (state.markup || 0));
 }
 function picMode(list){
   if (list.some(p => p.role === 'first' || p.role === 'last')) return 'image';
@@ -609,7 +609,7 @@ function renderJobs(){
   $('noClips').hidden = state.jobs.length > 0;
   for (const j of state.jobs){
     const d = document.createElement('div'); d.className = 'clip';
-    const cost = j.actual_cost != null ? money(j.actual_cost) : 'about ' + money(j.estimate);
+    const cost = j.charged != null ? money(j.charged) : (j.actual_cost != null && state.account && state.account.owner) ? money(j.actual_cost) : 'about ' + money(j.estimate);
     const src = '/video/clip/' + j.id + (j.has_scored ? '?song=1' : '');
     d.innerHTML = `${stateLabel(j)} <span class="meta num">${j.uploaded ? 'Your video' : esc(j.model)}, ${j.total_seconds || j.duration}s, ${esc(j.resolution || '')} ${esc(j.aspect_ratio || '')}, ${j.chain_estimate ? 'about ' + money(j.chain_estimate) + ' total' : cost + ' of ' + money(j.budget)}</span>
       ${j.parts_total > 1 ? `<div class="edit-of">${j.chain_remaining > 0 || !['ready','failed','cancelled','expired'].includes(j.status)
@@ -1317,7 +1317,7 @@ async function boot(){
   $('login').querySelector('details').open = !s.accounts;
   if (!s.authed){ showLogin(); return; }
   $('login').hidden = true; $('app').hidden = false;
-  state.spent = s.spent_today; state.cap = s.daily_cap; state.retainDays = s.retain_days;
+  state.spent = s.spent_today; state.cap = s.daily_cap; state.retainDays = s.retain_days; state.markup = s.markup || 0;
   renderAccount(s.account);
   // Back from Stripe: the payment lands by webhook a moment later, so check a few times.
   const paid = new URLSearchParams(location.search).get('paid');

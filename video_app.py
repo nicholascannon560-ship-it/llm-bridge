@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.7.1"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.8.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -464,6 +464,15 @@ def _sniff(data: bytes) -> tuple[str, str] | None:
     return None
 
 
+USAGE_MARKUP = max(0.0, float(os.getenv("VIDEO_USAGE_MARKUP") or "0.015"))
+
+
+def _bill(uid: str, cost: float) -> float:
+    """What a customer pays for usage: OpenRouter's cost plus the margin (covers the 1.5%
+    instant-payout fee). The owner always pays plain cost."""
+    return round(float(cost), 4) if uid == "owner" else round(float(cost) * (1 + USAGE_MARKUP), 4)
+
+
 def _job_cost(j: dict) -> float:
     if j.get("actual_cost") is not None:
         return float(j["actual_cost"])
@@ -774,6 +783,7 @@ async def video_session(request: Request):
     _ensure_sweeper()
     u = await _current_user(request)
     out = {"authed": bool(u), "configured": True, "version": VIDEO_APP_VERSION, "retain_days": RETAIN_DAYS,
+           "markup": 0 if (not u or u.get("owner")) else USAGE_MARKUP,
            "accounts": _accounts_on(), "email_codes": _email_codes_on(), "billing": _billing_ready()}
     if u:
         out.update(daily_cap=_daily_cap(), spent_today=await _spent_24h(), account=_account(u))
@@ -916,6 +926,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
         est, basis = estimate_cost(m, duration, resolution, audio, mode, n_img)
     if est is None:
         return _err(f"Can't price {m['name']} ({basis}), so it won't run. Pick another model.")
+    est = _bill(uid, est)  # customers pay usage plus the margin; the owner pays cost
     if est * parts > budget + 1e-9:
         what = f"This {duration * parts}s video ({parts} parts)" if parts > 1 else "This video"
         return _err(f"{what} would cost about ${est * parts:.2f}, over your ${budget:.2f} budget. "
@@ -991,6 +1002,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                     # Some models (HeyGen) always render sound. A song replaces it anyway,
                     # so let the model make sound, but re-check the price with audio on.
                     est2, basis2 = estimate_cost(m, duration, resolution, True, mode, n_img)
+                    est2 = _bill(uid, est2) if est2 is not None else None
                     if est2 is None or est2 * parts > budget + 1e-9:
                         await _release(uid, hold, "Over budget")
                         return _err(f"{m['name']} always makes its own sound, which brings this to about "
@@ -1443,7 +1455,7 @@ async def _settle(job: dict, actual: float | None) -> None:
     if not u:
         return
     hold = float(job.get("hold") or 0)
-    cost = float(actual) if actual is not None else hold
+    cost = _bill(job["user"], float(actual)) if actual is not None else hold
     job["charged"] = round(cost, 4)
     diff = round(hold - cost, 4)
     if abs(diff) >= 0.0001:
@@ -2264,7 +2276,7 @@ async def video_image_generate(request: Request):
     kind = _sniff(img) or ("png", "image/png")
     iid = secrets.token_urlsafe(24)
     await _put(f"{PREFIX}images/{iid}", img, kind[1])
-    await _charge_small(u["id"], IMAGE_HOLD, float(cost) if cost is not None else None, "picture")
+    await _charge_small(u["id"], IMAGE_HOLD, _bill(u["id"], float(cost)) if cost is not None else None, "picture")
     return {"id": iid, "url": f"/video/img/{iid}", "cost": cost}
 
 
@@ -2428,6 +2440,8 @@ async def video_upscale_quote(jid: str, request: Request):
         return d
     b = await _body(request)
     _, plan, err = await _upscale_quote(request, jid, b.get("factor"), str(b.get("mode") or "precise"))
+    if not err and not request.state.user.get("owner"):
+        plan = {**plan, "cost": _bill(request.state.user["id"], plan["cost"])}
     return err or plan
 
 
