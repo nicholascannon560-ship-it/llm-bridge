@@ -151,7 +151,7 @@ label.btn{display:inline-block;text-align:center}
         <button class="btn ghost small" id="logoutBtn">Sign out</button>
       </div>
       <div id="memberBox" hidden>
-        <p style="margin:12px 0 8px">Membership is $10 a month. Videos are then paid from your credit at what they actually cost.</p>
+        <p style="margin:12px 0 8px" id="joinText">Membership is $10 a month. Videos are then paid from your credit at what they actually cost.</p>
         <button class="btn go" id="joinBtn">Start membership: $10/month</button>
       </div>
       <div id="topupBox" hidden>
@@ -1277,8 +1277,13 @@ function renderAccount(a){
   const fund = owner && a.funding && a.funding.enabled
     ? ` Card funding: ${money(a.funding.waiting_cents / 100)} waiting to clear, ${money(a.funding.moved_cents / 100)} moved so far.` : '';
   $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.' + fund
-    : (a.member ? `Member${end ? ', renews ' + end : ''}` : (a.status === 'past_due' ? 'Your last payment failed. Update your card.' : 'Not a member yet')) + (a.email ? ' · ' + a.email : '');
+    : (a.member ? (a.trial_end ? `Free trial until ${new Date(a.trial_end * 1000).toLocaleDateString()}, then $10/month` : `Member${end ? ', renews ' + end : ''}`) : (a.status === 'past_due' ? 'Your last payment failed. Update your card.' : 'Not a member yet')) + (a.email ? ' · ' + a.email : '');
   $('memberBox').hidden = owner || a.member || !a.billing;
+  if (a.trial_offer){
+    $('joinText').textContent = `Your first ${a.trial_offer} days are free: you only pay for the credit your videos use. After that it's $10 a month. Cancel anytime before then and you won't be charged.`;
+    $('joinBtn').textContent = 'Start your free month';
+  } else { $('joinText').textContent = 'Membership is $10 a month. Videos are then paid from your credit at what they actually cost.';
+    $('joinBtn').textContent = 'Start membership: $10/month'; }
   $('acctLine').title = '';
   if (!owner && state.retainDays) $('acctLine').textContent += ` · If your membership ends, your videos are deleted ${state.retainDays} days later.`;
   $('topupBox').hidden = owner || !a.billing || !a.packs.length;

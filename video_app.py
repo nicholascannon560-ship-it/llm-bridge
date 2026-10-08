@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.8.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.9.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1372,6 +1372,14 @@ def _email_codes_on() -> bool:
     return _accounts_on() and os.getenv("VIDEO_EMAIL_CODES") == "1" and bool(os.getenv("RESEND_API_KEY"))
 
 
+TRIAL_DAYS = int(os.getenv("VIDEO_TRIAL_DAYS") or "30")
+
+
+def _trial_ok(u: dict) -> bool:
+    """One free month per person: never had a membership before."""
+    return TRIAL_DAYS > 0 and not u.get("subscription") and not u.get("had_trial")
+
+
 def _billing_ready() -> bool:
     return bool(os.getenv("STRIPE_SECRET_KEY") and os.getenv("VIDEO_MEMBERSHIP_PRICE"))
 
@@ -1470,6 +1478,8 @@ def _account(u: dict) -> dict:
             "period_end": u.get("period_end"), "credit": None if u.get("owner") else _credit(u),
             "packs": sorted(int(k) for k in _packs()), "billing": _billing_ready(),
             "has_customer": bool(u.get("stripe_customer")), "passkeys": len(u.get("passkeys") or []),
+            "trial_offer": TRIAL_DAYS if (not u.get("owner") and _trial_ok(u)) else 0,
+            "trial_end": u.get("trial_end") if u.get("sub_status") == "trialing" else None,
             "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:])),
             "funding": _funding_summary() if u.get("owner") else None}
 
@@ -1626,7 +1636,8 @@ async def video_subscribe(request: Request):
             "line_items": [{"price": os.getenv("VIDEO_MEMBERSHIP_PRICE"), "quantity": 1}],
             "success_url": f"{base}/video?paid=member", "cancel_url": f"{base}/video",
             "metadata": {"app": "video_studio", "kind": "membership", "user_id": u["id"]},
-            "subscription_data": {"metadata": {"app": "video_studio", "user_id": u["id"]}}})
+            "subscription_data": {"metadata": {"app": "video_studio", "user_id": u["id"]},
+                                  **({"trial_period_days": TRIAL_DAYS} if _trial_ok(u) else {})}})
     except Exception as e:
         return _err(f"Couldn't start checkout: {e}", 502)
     return {"url": sess["url"]}
@@ -1720,6 +1731,9 @@ async def video_stripe_webhook(request: Request):
         if u:
             u["subscription"] = obj.get("id")
             u["sub_status"] = "canceled" if kind.endswith(".deleted") else obj.get("status")
+            if obj.get("trial_end"):
+                u["had_trial"] = True
+                u["trial_end"] = obj.get("trial_end")
             if u["sub_status"] in ("active", "trialing"):
                 u.pop("files_purged_at", None)
             u["period_end"] = _period_end(obj)
