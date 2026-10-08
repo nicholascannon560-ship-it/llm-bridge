@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.6.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.7.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1374,7 +1374,8 @@ async def _users_doc() -> dict:
                     doc = json.loads(raw) if raw else {}
                 except Exception:
                     doc = {}
-                _users = {"users": doc.get("users") or [], "events": doc.get("events") or []}
+                _users = {"users": doc.get("users") or [], "events": doc.get("events") or [],
+                          "funding": doc.get("funding") or []}
     return _users
 
 
@@ -1382,6 +1383,9 @@ async def _save_users() -> None:
     doc = await _users_doc()
     async with _lock:
         doc["events"] = doc["events"][-500:]
+        if doc.get("funding"):
+            done = [f for f in doc["funding"] if f["status"] != "waiting"]
+            doc["funding"] = [f for f in doc["funding"] if f["status"] == "waiting"] + done[-200:]
         snapshot = json.dumps(doc, separators=(",", ":")).encode()
     await _put(USERS_KEY, snapshot, "application/json")
 
@@ -1454,7 +1458,8 @@ def _account(u: dict) -> dict:
             "period_end": u.get("period_end"), "credit": None if u.get("owner") else _credit(u),
             "packs": sorted(int(k) for k in _packs()), "billing": _billing_ready(),
             "has_customer": bool(u.get("stripe_customer")), "passkeys": len(u.get("passkeys") or []),
-            "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:]))}
+            "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:])),
+            "funding": _funding_summary() if u.get("owner") else None}
 
 
 def _set_user_cookie(resp: Response, uid: str) -> None:
@@ -1559,7 +1564,7 @@ def _form(params: dict, prefix: str = "") -> list[tuple[str, str]]:
     return out
 
 
-async def _stripe(method: str, path: str, params: dict | None = None) -> dict:
+async def _stripe(method: str, path: str, params: dict | None = None, idem: str | None = None) -> dict:
     key = os.getenv("STRIPE_SECRET_KEY")
     if not key:
         raise RuntimeError("payments aren't set up yet")
@@ -1569,7 +1574,8 @@ async def _stripe(method: str, path: str, params: dict | None = None) -> dict:
         else:
             r = await c.request(method, f"{STRIPE_API}{path}", auth=(key, ""),
                                 content=urlencode(_form(params or {})).encode(),
-                                headers={"Content-Type": "application/x-www-form-urlencoded"})
+                                headers={"Content-Type": "application/x-www-form-urlencoded",
+                                         **({"Idempotency-Key": idem} if idem else {})})
     data = r.json()
     if r.status_code >= 400:
         raise RuntimeError((data.get("error") or {}).get("message") or f"Stripe {r.status_code}")
@@ -1689,6 +1695,10 @@ async def video_stripe_webhook(request: Request):
             if meta.get("kind") == "credit" and obj.get("payment_status") == "paid":
                 cents = int(meta.get("credit_cents") or obj.get("amount_total") or 0)
                 await _ledger(u, cents / 100, f"Added ${cents / 100:.2f} credit")
+                if _funding_fa():
+                    async with _lock:
+                        doc.setdefault("funding", []).append({"id": obj.get("id"), "cents": cents,
+                                                              "user": u["id"], "t": time.time(), "status": "waiting"})
             elif meta.get("kind") == "membership" and obj.get("subscription"):
                 u["subscription"] = obj["subscription"]
                 u["sub_status"] = u.get("sub_status") or "active"
@@ -2631,3 +2641,71 @@ async def _sweep_loop() -> None:
 def _ensure_sweeper() -> None:
     if _accounts_on() and (_sweeper["task"] is None or _sweeper["task"].done()):
         _sweeper["task"] = asyncio.create_task(_sweep_loop())
+    if _accounts_on() and _funding_fa() and (_sweeper.get("fund") is None or _sweeper["fund"].done()):
+        _sweeper["fund"] = asyncio.create_task(_funding_loop())
+
+
+# =========================================================================== card funding
+# Credit purchases pay for OpenRouter, which is billed to a Stripe-issued card that spends
+# from a Stripe financial account. Each paid credit purchase is queued here and, once Stripe
+# makes the money available (card payments settle after a couple of business days), moved
+# from the payments balance into that financial account with a payout. Idempotent per purchase.
+FUND_EVERY = 30 * 60
+_funding_state: dict = {"last": None, "error": None}
+
+
+def _funding_fa() -> str | None:
+    fa = (os.getenv("VIDEO_FUNDING_FA") or "").strip()
+    return fa if fa.startswith("fa_") and os.getenv("STRIPE_SECRET_KEY") else None
+
+
+def _funding_summary() -> dict:
+    q = (_users or {}).get("funding") or []
+    return {"enabled": bool(_funding_fa()),
+            "waiting_cents": sum(f["cents"] for f in q if f["status"] == "waiting"),
+            "moved_cents": sum(f.get("moved_cents") or 0 for f in q if f["status"] == "moved"),
+            "last_check": _funding_state["last"], "last_error": _funding_state["error"]}
+
+
+async def fund_once() -> dict:
+    """Move queued credit purchases into the card's financial account as money becomes available."""
+    fa = _funding_fa()
+    doc = await _users_doc()
+    waiting = [f for f in doc.get("funding") or [] if f["status"] == "waiting"]
+    out = {"moved": 0, "waiting": len(waiting)}
+    if not fa or not waiting:
+        return out
+    bal = await _stripe("GET", "/balance")
+    available = sum(int(x.get("amount") or 0) for x in bal.get("available") or [] if x.get("currency") == "usd")
+    changed = False
+    for f in sorted(waiting, key=lambda x: x["t"]):
+        amount = f["cents"]
+        if available < amount:
+            # After 5 days, send what's there (fees can leave the balance a little short).
+            if time.time() - f["t"] > 5 * 86400 and available >= 100:
+                amount = available
+            else:
+                break
+        po = await _stripe("POST", "/payouts", {"amount": amount, "currency": "usd", "payout_method": fa,
+                                                "description": "Video Studio credit to OpenRouter card",
+                                                "metadata": {"app": "video_studio", "checkout": f["id"] or ""}},
+                           idem=f"vs-fund-{f['id']}")
+        f.update(status="moved", moved_cents=amount, payout=po.get("id"), moved_at=time.time())
+        available -= amount
+        out["moved"] += amount
+        changed = True
+    if changed:
+        await _save_users()
+        print(f"[video] moved ${out['moved'] / 100:.2f} of credit purchases to the card account", flush=True)
+    return out
+
+
+async def _funding_loop() -> None:
+    while True:
+        try:
+            await fund_once()
+            _funding_state.update(last=time.time(), error=None)
+        except Exception as e:
+            _funding_state.update(last=time.time(), error=str(e)[:200])
+            print(f"[video] card funding error: {e!r}", flush=True)
+        await asyncio.sleep(FUND_EVERY)

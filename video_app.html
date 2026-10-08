@@ -1274,7 +1274,9 @@ function renderAccount(a){
   const owner = a.owner;
   $('acctCredit').textContent = owner ? 'Owner account' : money(a.credit) + ' credit';
   const end = a.period_end ? new Date(a.period_end * 1000).toLocaleDateString() : '';
-  $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.'
+  const fund = owner && a.funding && a.funding.enabled
+    ? ` Card funding: ${money(a.funding.waiting_cents / 100)} waiting to clear, ${money(a.funding.moved_cents / 100)} moved so far.` : '';
+  $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.' + fund
     : (a.member ? `Member${end ? ', renews ' + end : ''}` : (a.status === 'past_due' ? 'Your last payment failed. Update your card.' : 'Not a member yet')) + (a.email ? ' · ' + a.email : '');
   $('memberBox').hidden = owner || a.member || !a.billing;
   $('acctLine').title = '';
