@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.7.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.7.1"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -2650,8 +2650,8 @@ def _ensure_sweeper() -> None:
 # from a Stripe financial account. Each paid credit purchase is queued here and, once Stripe
 # makes the money available (card payments settle after a couple of business days), moved
 # from the payments balance into that financial account with a payout. Idempotent per purchase.
-FUND_EVERY = 30 * 60
-_funding_state: dict = {"last": None, "error": None}
+FUND_EVERY = 5 * 60
+_funding_state: dict = {"last": None, "error": None, "instant_off_until": 0.0}
 
 
 def _funding_fa() -> str | None:
@@ -2677,7 +2677,31 @@ async def fund_once() -> dict:
         return out
     bal = await _stripe("GET", "/balance")
     available = sum(int(x.get("amount") or 0) for x in bal.get("available") or [] if x.get("currency") == "usd")
+    # Instant Payouts: card money is usable minutes after the sale instead of ~2 days later,
+    # for a 1.5% fee. Stripe only shows instant_available once the account is approved for it.
+    instant = sum(int(x.get("amount") or 0) for x in bal.get("instant_available") or [] if x.get("currency") == "usd")
     changed = False
+    if instant and time.time() > _funding_state["instant_off_until"]:
+        for f in sorted(waiting, key=lambda x: x["t"]):
+            amount = min(f["cents"], instant)
+            if amount < 50 or amount < f["cents"]:
+                break
+            try:
+                po = await _stripe("POST", "/payouts", {"amount": amount, "currency": "usd", "method": "instant",
+                                                        "payout_method": fa,
+                                                        "description": "Video Studio credit to OpenRouter card (instant)",
+                                                        "metadata": {"app": "video_studio", "checkout": f["id"] or ""}},
+                                   idem=f"vs-fund-instant-{f['id']}")
+            except Exception as e:
+                # Not allowed to this destination or not eligible: use standard moves for a day.
+                _funding_state["instant_off_until"] = time.time() + 86400
+                print(f"[video] instant card funding unavailable, using standard: {e!r}", flush=True)
+                break
+            f.update(status="moved", moved_cents=amount, payout=po.get("id"), moved_at=time.time(), instant=True)
+            instant -= amount
+            out["moved"] += amount
+            changed = True
+        waiting = [f for f in waiting if f["status"] == "waiting"]
     for f in sorted(waiting, key=lambda x: x["t"]):
         amount = f["cents"]
         if available < amount:
