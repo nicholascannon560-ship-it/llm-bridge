@@ -9,9 +9,11 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from video_app import VIDEO_APP_VERSION, video_router
+from video_mcp import mcp_router
 
 app = FastAPI(title="Video Studio", docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(video_router)
+app.include_router(mcp_router)  # Claude connector at /mcp/{VIDEO_MCP_SECRET}
 
 
 @app.get("/")
