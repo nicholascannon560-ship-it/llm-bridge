@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.11.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.11.1"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -706,7 +706,8 @@ def render_stitch_sync(clips: list[bytes], shape: str, crossfade: float, mask: b
                "-movflags", "+faststart", "-t", f"{total:.3f}", out]
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
         if p.returncode != 0 or not Path(out).exists():
-            raise RuntimeError(f"stitch failed: {(p.stderr or '').strip()[-500:]}")
+            err = (p.stderr or "").strip()
+            raise RuntimeError(f"stitch failed: {err[:700]} ... {err[-200:]}" if len(err) > 900 else f"stitch failed: {err}")
         return Path(out).read_bytes(), round(total, 2)
 
 
