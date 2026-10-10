@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.11.1"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.11.2"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -673,7 +673,7 @@ def render_stitch_sync(clips: list[bytes], shape: str, crossfade: float, mask: b
                 raise RuntimeError(f"clip {i + 1} has no usable length")
             durs.append(dur)
             inputs += ["-i", vp]
-            filt.append(f"[{i}:v]{sc},setsar=1,fps=30,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v{i}]")
+            filt.append(f"[{i}:v]{sc},setsar=1,setpts=PTS-STARTPTS,fps=30,format=yuv420p[v{i}]")
         n = len(clips)
         cf = max(0.0, min(float(crossfade or 0), 2.0, min(durs) / 2 - 0.05)) if n > 1 else 0.0
         if n == 1:
