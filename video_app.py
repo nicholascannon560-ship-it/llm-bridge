@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.11.2"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.11.3"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1395,11 +1395,45 @@ async def video_src(token: str, request: Request):
     j = next((x for x in await _all_jobs() if x.get("src_token") == token), None)
     key = (j or {}).get("scored_key") if request.query_params.get("song") == "1" else None
     key = key or (j or {}).get("clip_key")
-    data = await _get(key) if key else None
+    data = await _src_bytes(key) if key else None
     if not data:
         return _err("Not found", 404)
-    return Response(data, media_type="video/mp4", headers={"Cache-Control": "public, max-age=86400",
-                                                           "X-Robots-Tag": "noindex"})
+    size = len(data)
+    hdrs = {"Cache-Control": "public, max-age=86400", "X-Robots-Tag": "noindex", "Accept-Ranges": "bytes"}
+    rng = request.headers.get("range") or ""
+    m = re.match(r"bytes=(\d*)-(\d*)$", rng.strip())
+    if m and (m.group(1) or m.group(2)):
+        if m.group(1):
+            start = int(m.group(1))
+            end = int(m.group(2)) if m.group(2) else size - 1
+        else:  # suffix range: last N bytes
+            start, end = max(0, size - int(m.group(2))), size - 1
+        end = min(end, size - 1)
+        if start >= size or start > end:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{size}", **hdrs})
+        hdrs["Content-Range"] = f"bytes {start}-{end}/{size}"
+        return Response(data[start:end + 1], status_code=206, media_type="video/mp4", headers=hdrs)
+    return Response(data, media_type="video/mp4", headers=hdrs)
+
+
+_src_cache: dict[str, bytes] = {}
+
+
+async def _src_bytes(key: str) -> bytes | None:
+    """Phones fetch a video in many small range requests; keep the last few files in memory
+    so each request doesn't re-read the whole clip from storage."""
+    if key in _src_cache:
+        data = _src_cache.pop(key)
+        _src_cache[key] = data
+        return data
+    data = await _get(key)
+    if data:
+        _src_cache[key] = data
+        while len(_src_cache) > 4 or sum(len(v) for v in _src_cache.values()) > 400 * 1024 * 1024:
+            if len(_src_cache) == 1:
+                break
+            _src_cache.pop(next(iter(_src_cache)))
+    return data
 
 
 CONTINUE = " Continue the same scene smoothly from the opening frame: same characters, look, lighting and camera style."
