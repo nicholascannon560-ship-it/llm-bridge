@@ -56,6 +56,7 @@ import re
 import secrets
 import subprocess
 import tempfile
+import zipfile
 import time
 from pathlib import Path
 from urllib.parse import urlencode
@@ -66,7 +67,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.12.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.13.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -863,6 +864,61 @@ async def start_loop(job_id: str, *, shape: str, start: float, length: float, mo
     return job
 
 
+async def start_bundle(job_ids: list[str], names: list[str], *, title: str, user: str = "owner") -> dict:
+    """Pack finished clips into one zip (stored, no recompression) you can download with a single link."""
+    jobs = await _all_jobs()
+    srcs = []
+    for jid in job_ids[:60]:
+        j = _find(jobs, str(jid))
+        if not j or (j.get("user") or "owner") != user or not j.get("clip_key"):
+            raise RuntimeError(f"clip {jid} isn't found or isn't ready")
+        srcs.append(j)
+    if not srcs:
+        raise RuntimeError("list at least one finished job id")
+    bid = secrets.token_urlsafe(8)
+    while not bid[-1].isalnum() or bid[0] == "-":
+        bid = secrets.token_urlsafe(8)
+    job = {"id": bid, "created": time.time(), "model": "editor", "prompt": f"Zip: {title}",
+           "resolution": "720p", "aspect_ratio": "3:4", "audio": False, "budget": 0, "estimate": 0,
+           "actual_cost": 0, "status": "in_progress", "user": user, "settled": True,
+           "edit_mode": "bundle", "change": title, "parent_id": srcs[0]["id"]}
+    async with _lock:
+        jobs.append(job)
+    await _save_jobs()
+
+    async def run() -> None:
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                zp = f"{d}/b.zip"
+                used: set[str] = set()
+                with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as zf:
+                    for i, j in enumerate(srcs):
+                        data = await _get(j["clip_key"])
+                        if not data:
+                            raise RuntimeError(f"clip {j['id']} file is missing from storage")
+                        nm = re.sub(r"[^A-Za-z0-9._ -]+", "_", (names[i] if i < len(names) and names[i] else j["id"])).strip() or j["id"]
+                        if not nm.lower().endswith(".mp4"):
+                            nm += ".mp4"
+                        base, n = nm, 2
+                        while nm in used:
+                            nm = base[:-4] + f"_{n}.mp4"
+                            n += 1
+                        used.add(nm)
+                        zf.writestr(nm, data)
+                        del data
+                blob = Path(zp).read_bytes()
+            key = f"{PREFIX}clips/{bid}.zip"
+            await _put(key, blob, "application/zip")
+            job.update(status="ready", clip_key=key, finished=time.time(), duration=0, total_seconds=0)
+        except Exception as ex:
+            print(f"[video] bundle {bid} failed: {ex!r}", flush=True)
+            job.update(status="failed", error=str(ex)[:400], finished=time.time())
+        await _save_jobs()
+
+    _tasks["bundle:" + bid] = asyncio.create_task(run())
+    return job
+
+
 async def save_last_frame(job_id: str, user: str = "owner") -> str:
     """Grab a finished job's final frame and store it as an image. Returns the image id."""
     j = _find(await _all_jobs(), str(job_id))
@@ -1503,7 +1559,12 @@ async def video_src(token: str, request: Request):
     if not data:
         return _err("Not found", 404)
     size = len(data)
+    is_zip = str(key).endswith(".zip")
+    ctype = "application/zip" if is_zip else "video/mp4"
     hdrs = {"Cache-Control": "public, max-age=86400", "X-Robots-Tag": "noindex", "Accept-Ranges": "bytes"}
+    if is_zip:
+        fn = re.sub(r"[^A-Za-z0-9._-]+", "_", str((j or {}).get("change") or "clips"))[:60].strip("_") or "clips"
+        hdrs["Content-Disposition"] = f'attachment; filename="{fn}.zip"'
     rng = request.headers.get("range") or ""
     m = re.match(r"bytes=(\d*)-(\d*)$", rng.strip())
     if m and (m.group(1) or m.group(2)):
@@ -1516,8 +1577,8 @@ async def video_src(token: str, request: Request):
         if start >= size or start > end:
             return Response(status_code=416, headers={"Content-Range": f"bytes */{size}", **hdrs})
         hdrs["Content-Range"] = f"bytes {start}-{end}/{size}"
-        return Response(data[start:end + 1], status_code=206, media_type="video/mp4", headers=hdrs)
-    return Response(data, media_type="video/mp4", headers=hdrs)
+        return Response(data[start:end + 1], status_code=206, media_type=ctype, headers=hdrs)
+    return Response(data, media_type=ctype, headers=hdrs)
 
 
 _src_cache: dict[str, bytes] = {}

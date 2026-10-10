@@ -175,6 +175,13 @@ TOOLS = [
          "shape": {"type": "string", "enum": ["3:4", "9:16", "16:9", "1:1", "4:5"]},
          "mask_image": {"type": "string"}, "fit": {"type": "string", "enum": ["fit", "fill"]},
          "title": {"type": "string"}}}},
+    {"name": "bundle",
+     "description": "Pack finished videos into one zip file you can download with a single link (free). names = file names "
+                    "inside the zip, in the same order as jobs (optional). Keep each zip to about 20 clips. Returns a job; "
+                    "poll job_status, then give the person the video_url: it downloads as a .zip.",
+     "inputSchema": {"type": "object", "required": ["jobs"], "properties": {
+         "jobs": {"type": "array", "items": {"type": "string"}}, "names": {"type": "array", "items": {"type": "string"}},
+         "title": {"type": "string"}}}},
     {"name": "last_frame",
      "description": "Save a finished video's final frame as an image id (free). Use it as the next video's start_image "
                     "so chained clips join exactly where the last one really ended.",
@@ -381,6 +388,15 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         except RuntimeError as e:
             raise ValueError(str(e))
         return {"job": await _job_view(req, job), "next": "Poll job_status with this id."}
+
+    if name == "bundle":
+        try:
+            job = await va.start_bundle([str(x) for x in (a.get("jobs") or []) if x],
+                                        [str(x) for x in (a.get("names") or [])],
+                                        title=str(a.get("title") or "clips")[:60])
+        except RuntimeError as e:
+            raise ValueError(str(e))
+        return {"job": await _job_view(req, job), "next": "Poll job_status; when ready, video_url downloads the zip."}
 
     if name == "last_frame":
         try:
