@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.11.3"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.11.4"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -771,6 +771,8 @@ async def save_last_frame(job_id: str, user: str = "owner") -> str:
         raise RuntimeError("the video file is missing")
     frame = await asyncio.to_thread(last_frame_sync, clip)
     iid = secrets.token_urlsafe(24)
+    while not iid[-1].isalnum():
+        iid = secrets.token_urlsafe(24)
     await _put(f"{PREFIX}images/{iid}", frame, "image/jpeg")
     return iid
 

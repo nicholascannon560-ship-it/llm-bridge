@@ -58,6 +58,14 @@ def _guard(cost: float) -> str | None:
     return None
 
 
+def _tok(n: int = 24) -> str:
+    """URL-safe id that never ends in - or _ (chat apps trim those off tapped links)."""
+    while True:
+        t = secrets.token_urlsafe(n)
+        if t[-1].isalnum():
+            return t
+
+
 def _secret_ok(s: str) -> bool:
     want = (os.getenv("VIDEO_MCP_SECRET") or "").strip()
     return len(want) >= 24 and hmac.compare_digest(s.encode(), want.encode())
@@ -80,7 +88,7 @@ async def _view_url(request: Request, j: dict) -> str | None:
     if not j.get("clip_key"):
         return None
     if not j.get("src_token"):
-        j["src_token"] = secrets.token_urlsafe(24)
+        j["src_token"] = _tok(24)
         await va._save_jobs()
     return f"{va._public_base(request)}/video/src/{j['src_token']}"
 
@@ -206,7 +214,7 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         kind = va._sniff(raw)
         if not kind:
             raise ValueError("Use a PNG, JPEG or WebP picture")
-        iid = secrets.token_urlsafe(24)
+        iid = _tok(24)
         await va._put(f"{va.PREFIX}images/{iid}", raw, kind[1])
         return {"image_id": iid, "url": f"{base}/video/img/{iid}"}
 
@@ -242,7 +250,7 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         cost = float((data.get("usage") or {}).get("cost") or va.IMAGE_HOLD)
         _spend.append((time.time(), cost))
         kind = va._sniff(img) or ("png", "image/png")
-        iid = secrets.token_urlsafe(24)
+        iid = _tok(24)
         await va._put(f"{va.PREFIX}images/{iid}", img, kind[1])
         return {"image_id": iid, "url": f"{base}/video/img/{iid}", "cost_usd": round(cost, 4)}
 
