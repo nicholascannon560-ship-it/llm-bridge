@@ -147,6 +147,20 @@ TOOLS = [
     {"name": "balance",
      "description": "OpenRouter credit left, plus what the connector has spent in the last 24 hours and its limits.",
      "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "stitch",
+     "description": "Join finished videos, in the order given, into one clip on the server (free, no AI cost). "
+                    "crossfade blends each join over that many seconds (0 = hard cut, ~0.15 hides small jumps). "
+                    "mask_image (an image id: white = keep, black = drop) makes everything outside the shape pure black, "
+                    "e.g. for projection mapping. Video only, no sound. Returns a job; poll job_status for video_url.",
+     "inputSchema": {"type": "object", "required": ["jobs"], "properties": {
+         "jobs": {"type": "array", "items": {"type": "string"}, "description": "Job ids in play order"},
+         "shape": {"type": "string", "enum": ["3:4", "9:16", "16:9", "1:1", "4:5"]},
+         "crossfade": {"type": "number"}, "mask_image": {"type": "string"},
+         "fit": {"type": "string", "enum": ["fit", "fill"]}, "title": {"type": "string"}}}},
+    {"name": "last_frame",
+     "description": "Save a finished video's final frame as an image id (free). Use it as the next video's start_image "
+                    "so chained clips join exactly where the last one really ended.",
+     "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
 ]
 
 
@@ -324,6 +338,25 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         except Exception as e:
             info["openrouter_credit_error"] = str(e)[:120]
         return info
+
+    if name == "stitch":
+        ids = [str(x) for x in (a.get("jobs") or []) if x]
+        shape = a.get("shape") if a.get("shape") in va.SHAPES else "3:4"
+        try:
+            job = await va.start_stitch(ids, shape=shape, crossfade=float(a.get("crossfade") or 0),
+                                        mask_image=str(a.get("mask_image") or "") or None,
+                                        fit="fill" if a.get("fit") == "fill" else "fit",
+                                        title=str(a.get("title") or "Stitch")[:80])
+        except RuntimeError as e:
+            raise ValueError(str(e))
+        return {"job": await _job_view(req, job), "next": "Poll job_status with this id; stitching takes about 1-4 minutes."}
+
+    if name == "last_frame":
+        try:
+            iid = await va.save_last_frame(str(a.get("id") or ""))
+        except RuntimeError as e:
+            raise ValueError(str(e))
+        return {"image_id": iid, "url": f"{base}/video/img/{iid}"}
 
     raise ValueError(f"Unknown tool {name}")
 

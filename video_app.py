@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.10.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.11.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -648,6 +648,130 @@ def concat_sync(first: bytes, second: bytes) -> bytes:
         if p.returncode != 0 or not Path(o).exists():
             raise RuntimeError(f"couldn't join the clips: {(p.stderr or '').strip()[-400:]}")
         return Path(o).read_bytes()
+
+
+def render_stitch_sync(clips: list[bytes], shape: str, crossfade: float, mask: bytes | None,
+                       fit: str = "fit") -> tuple[bytes, float]:
+    """Join clips in order for projection/VJ use. Video only (no sound).
+    crossfade > 0 blends each join over that many seconds (xfade) instead of a hard cut.
+    mask = a picture (white = keep, black = drop), scaled like the clips; everything outside
+    the white area becomes pure black. Returns (mp4 bytes, total seconds)."""
+    if not clips:
+        raise RuntimeError("no clips")
+    w, h = SHAPES.get(shape, SHAPES["9:16"])
+    if fit == "fill":
+        sc = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+    else:
+        sc = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black"
+    with tempfile.TemporaryDirectory() as d:
+        inputs, filt, durs = [], [], []
+        for i, data in enumerate(clips):
+            vp = f"{d}/c{i}.mp4"
+            Path(vp).write_bytes(data)
+            dur = _probe_duration(vp) or 0
+            if dur < 0.3:
+                raise RuntimeError(f"clip {i + 1} has no usable length")
+            durs.append(dur)
+            inputs += ["-i", vp]
+            filt.append(f"[{i}:v]{sc},setsar=1,fps=30,format=yuv420p,settb=AVTB,setpts=PTS-STARTPTS[v{i}]")
+        n = len(clips)
+        cf = max(0.0, min(float(crossfade or 0), 2.0, min(durs) / 2 - 0.05)) if n > 1 else 0.0
+        if n == 1:
+            last, total = "[v0]", durs[0]
+        elif cf > 0:
+            last, acc = "[v0]", durs[0]
+            for i in range(1, n):
+                off = acc - cf
+                filt.append(f"{last}[v{i}]xfade=transition=fade:duration={cf:.3f}:offset={off:.3f}[x{i}]")
+                last = f"[x{i}]"
+                acc = acc + durs[i] - cf
+            total = acc
+        else:
+            filt.append("".join(f"[v{i}]" for i in range(n)) + f"concat=n={n}:v=1:a=0[cat]")
+            last, total = "[cat]", sum(durs)
+        if mask:
+            mp = f"{d}/mask.img"
+            Path(mp).write_bytes(mask)
+            mi = n
+            inputs += ["-loop", "1", "-t", f"{total:.3f}", "-i", mp]
+            filt.append(f"[{mi}:v]{sc},setsar=1,fps=30,format=gray[mk]")
+            filt.append(f"{last}format=yuva420p[vA];[vA][mk]alphamerge[va]")
+            filt.append(f"color=c=black:s={w}x{h}:r=30:d={total:.3f}[bg]")
+            filt.append("[bg][va]overlay=0:0:shortest=1,format=yuv420p[out]")
+            last = "[out]"
+        out = f"{d}/out.mp4"
+        cmd = [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", *inputs,
+               "-filter_complex", ";".join(filt), "-map", last, "-an",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+               "-movflags", "+faststart", "-t", f"{total:.3f}", out]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+        if p.returncode != 0 or not Path(out).exists():
+            raise RuntimeError(f"stitch failed: {(p.stderr or '').strip()[-500:]}")
+        return Path(out).read_bytes(), round(total, 2)
+
+
+async def start_stitch(job_ids: list[str], *, shape: str, crossfade: float, mask_image: str | None,
+                       fit: str, title: str, user: str = "owner") -> dict:
+    """Queue a stitch of finished jobs. Returns the new job (status in_progress) right away;
+    it turns ready with a clip, or failed with an error."""
+    jobs = await _all_jobs()
+    srcs = []
+    for jid in job_ids[:40]:
+        j = _find(jobs, str(jid))
+        if not j or (j.get("user") or "owner") != user or not j.get("clip_key"):
+            raise RuntimeError(f"clip {jid} isn't found or isn't ready")
+        srcs.append(j)
+    if not srcs:
+        raise RuntimeError("list at least one finished job id")
+    mask = None
+    if mask_image:
+        if not IMG_ID.match(mask_image):
+            raise RuntimeError("mask_image must be an image id")
+        mask = await _get(f"{PREFIX}images/{mask_image}")
+        if not mask:
+            raise RuntimeError("mask image not found")
+    jid = secrets.token_urlsafe(8)
+    job = {"id": jid, "created": time.time(), "model": "editor", "prompt": f"Stitch: {title}",
+           "resolution": "720p", "aspect_ratio": shape, "audio": False, "budget": 0, "estimate": 0,
+           "actual_cost": 0, "status": "in_progress", "user": user, "settled": True,
+           "edit_mode": "stitch", "change": title, "parent_id": srcs[0]["id"]}
+    async with _lock:
+        jobs.append(job)
+    await _save_jobs()
+
+    async def run() -> None:
+        try:
+            clips = []
+            for j in srcs:
+                data = await _get(j["clip_key"])
+                if not data:
+                    raise RuntimeError(f"clip {j['id']} file is missing from storage")
+                clips.append(data)
+            out, total = await asyncio.to_thread(render_stitch_sync, clips, shape, crossfade, mask, fit)
+            key = f"{PREFIX}clips/{jid}.mp4"
+            await _put(key, out, "video/mp4")
+            job.update(status="ready", clip_key=key, finished=time.time(), duration=total, total_seconds=total)
+        except Exception as ex:
+            print(f"[video] stitch {jid} failed: {ex!r}", flush=True)
+            job.update(status="failed", error=str(ex)[:400], finished=time.time())
+        await _save_jobs()
+
+    _tasks["stitch:" + jid] = asyncio.create_task(run())
+    return job
+
+
+async def save_last_frame(job_id: str, user: str = "owner") -> str:
+    """Grab a finished job's final frame and store it as an image. Returns the image id."""
+    j = _find(await _all_jobs(), str(job_id))
+    if not j or (j.get("user") or "owner") != user or not j.get("clip_key"):
+        raise RuntimeError("that video isn't found or isn't ready")
+    clip = await _get(j["clip_key"])
+    if not clip:
+        raise RuntimeError("the video file is missing")
+    frame = await asyncio.to_thread(last_frame_sync, clip)
+    iid = secrets.token_urlsafe(24)
+    await _put(f"{PREFIX}images/{iid}", frame, "image/jpeg")
+    return iid
 
 
 async def _apply_song(job: dict, song_id: str, start: float) -> None:
@@ -1923,7 +2047,7 @@ async def video_pk_login_finish(request: Request):
 # result lands in the clip list like any other clip, so it can be saved, re-scored or
 # edited further.
 EDITS_KEY = f"{PREFIX}edits.json"
-SHAPES = {"9:16": (720, 1280), "16:9": (1280, 720), "1:1": (720, 720), "4:5": (720, 900)}
+SHAPES = {"9:16": (720, 1280), "16:9": (1280, 720), "1:1": (720, 720), "4:5": (720, 900), "3:4": (720, 960)}
 _edits: list[dict] | None = None
 
 
