@@ -165,6 +165,16 @@ TOOLS = [
          "shape": {"type": "string", "enum": ["3:4", "9:16", "16:9", "1:1", "4:5"]},
          "crossfade": {"type": "number"}, "mask_image": {"type": "string"},
          "fit": {"type": "string", "enum": ["fit", "fill"]}, "title": {"type": "string"}}}},
+    {"name": "loop",
+     "description": "Cut one finished video for a VJ deck (free, no AI cost). mode pingpong plays the cut forward then "
+                    "backward, so it loops seamlessly; mode trim just cuts it. start = seconds in, length = seconds "
+                    "(0 = to the end). mask_image burns in a shape (white = keep) like stitch. Returns a job; poll job_status.",
+     "inputSchema": {"type": "object", "required": ["id"], "properties": {
+         "id": {"type": "string"}, "mode": {"type": "string", "enum": ["pingpong", "trim"]},
+         "start": {"type": "number"}, "length": {"type": "number"},
+         "shape": {"type": "string", "enum": ["3:4", "9:16", "16:9", "1:1", "4:5"]},
+         "mask_image": {"type": "string"}, "fit": {"type": "string", "enum": ["fit", "fill"]},
+         "title": {"type": "string"}}}},
     {"name": "last_frame",
      "description": "Save a finished video's final frame as an image id (free). Use it as the next video's start_image "
                     "so chained clips join exactly where the last one really ended.",
@@ -358,6 +368,19 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         except RuntimeError as e:
             raise ValueError(str(e))
         return {"job": await _job_view(req, job), "next": "Poll job_status with this id; stitching takes about 1-4 minutes."}
+
+    if name == "loop":
+        shape = a.get("shape") if a.get("shape") in va.SHAPES else "3:4"
+        try:
+            job = await va.start_loop(str(a.get("id") or ""), shape=shape, start=float(a.get("start") or 0),
+                                      length=float(a.get("length") or 0),
+                                      mode="pingpong" if a.get("mode") != "trim" else "trim",
+                                      mask_image=str(a.get("mask_image") or "") or None,
+                                      fit="fill" if a.get("fit") == "fill" else "fit",
+                                      title=str(a.get("title") or "Loop")[:80])
+        except RuntimeError as e:
+            raise ValueError(str(e))
+        return {"job": await _job_view(req, job), "next": "Poll job_status with this id."}
 
     if name == "last_frame":
         try:

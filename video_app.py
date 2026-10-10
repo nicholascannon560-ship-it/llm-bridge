@@ -66,7 +66,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.11.4"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.12.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -650,6 +650,9 @@ def concat_sync(first: bytes, second: bytes) -> bytes:
         return Path(o).read_bytes()
 
 
+_ff_sem = asyncio.Semaphore(1)  # one heavy ffmpeg render at a time (parallel ones ran the box out of memory)
+
+
 def render_stitch_sync(clips: list[bytes], shape: str, crossfade: float, mask: bytes | None,
                        fit: str = "fit") -> tuple[bytes, float]:
     """Join clips in order for projection/VJ use. Video only (no sound).
@@ -748,7 +751,8 @@ async def start_stitch(job_ids: list[str], *, shape: str, crossfade: float, mask
                 if not data:
                     raise RuntimeError(f"clip {j['id']} file is missing from storage")
                 clips.append(data)
-            out, total = await asyncio.to_thread(render_stitch_sync, clips, shape, crossfade, mask, fit)
+            async with _ff_sem:
+                out, total = await asyncio.to_thread(render_stitch_sync, clips, shape, crossfade, mask, fit)
             key = f"{PREFIX}clips/{jid}.mp4"
             await _put(key, out, "video/mp4")
             job.update(status="ready", clip_key=key, finished=time.time(), duration=total, total_seconds=total)
@@ -758,6 +762,104 @@ async def start_stitch(job_ids: list[str], *, shape: str, crossfade: float, mask
         await _save_jobs()
 
     _tasks["stitch:" + jid] = asyncio.create_task(run())
+    return job
+
+
+def render_loop_sync(clip: bytes, shape: str, start: float, length: float, mode: str,
+                     mask: bytes | None, fit: str = "fit") -> tuple[bytes, float]:
+    """Cut one clip for a VJ deck. mode 'pingpong' plays the cut forward then backward so the
+    last frame leads straight back into the first (a seamless loop); 'trim' just cuts it.
+    length 0 = to the end of the clip. mask = same white-keeps picture as stitch."""
+    w, h = SHAPES.get(shape, SHAPES["9:16"])
+    if fit == "fill":
+        sc = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+    else:
+        sc = f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black"
+    with tempfile.TemporaryDirectory() as d:
+        vp = f"{d}/in.mp4"
+        Path(vp).write_bytes(clip)
+        dur = _probe_duration(vp) or 0
+        st = max(0.0, min(float(start or 0), max(0.0, dur - 0.5)))
+        ln = float(length or 0)
+        if ln <= 0 or st + ln > dur:
+            ln = dur - st
+        if ln < 0.4:
+            raise RuntimeError("that cut is too short")
+        n = max(4, int(round(ln * 30)))
+        filt = [f"[0:v]trim=start={st:.3f}:duration={ln:.3f},setpts=PTS-STARTPTS,{sc},setsar=1,fps=30,format=yuv420p,trim=end_frame={n},setpts=N/30/TB[f]"]
+        if mode == "pingpong":
+            filt.append("[f]split[a][b]")
+            filt.append(f"[b]reverse,trim=start_frame=1:end_frame={n - 1},setpts=N/30/TB[r]")
+            filt.append("[a][r]concat=n=2:v=1:a=0[cat]")
+            last, total = "[cat]", (n + n - 2) / 30
+        else:
+            filt.append("[f]null[cat]")
+            last, total = "[cat]", n / 30
+        if mask:
+            mp = f"{d}/mask.img"
+            Path(mp).write_bytes(mask)
+            mi = 1
+            inputs_mask = ["-loop", "1", "-t", f"{total:.3f}", "-i", mp]
+            filt.append(f"[{mi}:v]{sc},setsar=1,fps=30,format=gray[mk]")
+            filt.append(f"{last}format=yuva420p[vA];[vA][mk]alphamerge[va]")
+            filt.append(f"color=c=black:s={w}x{h}:r=30:d={total:.3f}[bg]")
+            filt.append("[bg][va]overlay=0:0:shortest=1,format=yuv420p[out]")
+            last = "[out]"
+        else:
+            inputs_mask = []
+        out = f"{d}/out.mp4"
+        cmd = [_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", vp, *inputs_mask,
+               "-filter_complex", ";".join(filt), "-map", last, "-an",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+               "-movflags", "+faststart", "-t", f"{total:.3f}", out]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        if p.returncode != 0 or not Path(out).exists():
+            err = (p.stderr or "").strip()
+            raise RuntimeError(f"loop failed: {err[:600]}")
+        return Path(out).read_bytes(), round(total, 2)
+
+
+async def start_loop(job_id: str, *, shape: str, start: float, length: float, mode: str,
+                     mask_image: str | None, fit: str, title: str, user: str = "owner") -> dict:
+    """Queue a loop/trim of one finished job. Returns the new job right away (in_progress)."""
+    jobs = await _all_jobs()
+    src = _find(jobs, str(job_id))
+    if not src or (src.get("user") or "owner") != user or not src.get("clip_key"):
+        raise RuntimeError(f"clip {job_id} isn't found or isn't ready")
+    mask = None
+    if mask_image:
+        if not IMG_ID.match(mask_image):
+            raise RuntimeError("mask_image must be an image id")
+        mask = await _get(f"{PREFIX}images/{mask_image}")
+        if not mask:
+            raise RuntimeError("mask image not found")
+    jid = secrets.token_urlsafe(8)
+    while not jid[-1].isalnum() or jid[0] == "-":
+        jid = secrets.token_urlsafe(8)
+    job = {"id": jid, "created": time.time(), "model": "editor", "prompt": f"{mode}: {title}",
+           "resolution": "720p", "aspect_ratio": shape, "audio": False, "budget": 0, "estimate": 0,
+           "actual_cost": 0, "status": "in_progress", "user": user, "settled": True,
+           "edit_mode": "loop", "change": title, "parent_id": src["id"]}
+    async with _lock:
+        jobs.append(job)
+    await _save_jobs()
+
+    async def run() -> None:
+        try:
+            data = await _get(src["clip_key"])
+            if not data:
+                raise RuntimeError("the source clip file is missing from storage")
+            async with _ff_sem:
+                out, total = await asyncio.to_thread(render_loop_sync, data, shape, start, length, mode, mask, fit)
+            key = f"{PREFIX}clips/{jid}.mp4"
+            await _put(key, out, "video/mp4")
+            job.update(status="ready", clip_key=key, finished=time.time(), duration=total, total_seconds=total)
+        except Exception as ex:
+            print(f"[video] loop {jid} failed: {ex!r}", flush=True)
+            job.update(status="failed", error=str(ex)[:400], finished=time.time())
+        await _save_jobs()
+
+    _tasks["loop:" + jid] = asyncio.create_task(run())
     return job
 
 
