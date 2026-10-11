@@ -67,7 +67,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.13.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.14.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1224,7 +1224,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
     # Customers pay from prepaid credit: hold this part's estimate now, settle to the real
     # charge when it finishes, refund it if it fails. A long video must be covered in full up front.
     hold = 0.0
-    if uid != "owner":
+    if uid not in ("owner", "demo"):  # "demo" = public site demo, capped in video_demo.py
         u = await _user_by_id(uid)
         if not u or u.get("blocked"):
             return _err("Sign in again", 401)
