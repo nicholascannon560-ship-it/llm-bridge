@@ -67,7 +67,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.14.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.15.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1671,8 +1671,8 @@ async def video_job_extend(jid: str, request: Request):
 
 
 # =========================================================================== accounts & billing
-# Customers sign in with an emailed code, pay a monthly membership through Stripe, and
-# spend prepaid credit at cost. The owner (PIN) never pays here.
+# Customers sign in with a passkey and buy prepaid credit packs through Square (pay as you go,
+# no membership). Usage is billed from credit at AI cost + VIDEO_USAGE_MARKUP. The owner never pays.
 STRIPE_API = "https://api.stripe.com/v1"
 CODE_TTL = 15 * 60
 LEDGER_KEEP = 200
@@ -1680,12 +1680,12 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _packs() -> dict[str, str]:
-    """VIDEO_CREDIT_PRICES="10:price_a,25:price_b,50:price_c" -> {"10": "price_a", ...}"""
+    """VIDEO_CREDIT_PACKS="10,20,50" (dollars) -> {"10": "10", ...}. Each pack adds that many dollars of credit."""
     out = {}
-    for part in (os.getenv("VIDEO_CREDIT_PRICES") or "").split(","):
-        amt, _, pid = part.strip().partition(":")
-        if amt.strip().isdigit() and pid.strip():
-            out[amt.strip()] = pid.strip()
+    for part in (os.getenv("VIDEO_CREDIT_PACKS") or "10,20,50").split(","):
+        amt = part.strip()
+        if amt.isdigit() and 1 <= int(amt) <= 500:
+            out[amt] = amt
     return out
 
 
@@ -1708,7 +1708,7 @@ def _trial_ok(u: dict) -> bool:
 
 
 def _billing_ready() -> bool:
-    return bool(os.getenv("STRIPE_SECRET_KEY") and os.getenv("VIDEO_MEMBERSHIP_PRICE"))
+    return bool(os.getenv("SQUARE_ACCESS_TOKEN"))
 
 
 async def _users_doc() -> dict:
@@ -1722,7 +1722,7 @@ async def _users_doc() -> dict:
                 except Exception:
                     doc = {}
                 _users = {"users": doc.get("users") or [], "events": doc.get("events") or [],
-                          "funding": doc.get("funding") or []}
+                          "funding": doc.get("funding") or [], "square_orders": doc.get("square_orders") or {}}
     return _users
 
 
@@ -1751,12 +1751,8 @@ async def _user_by_customer(cus: str) -> dict | None:
 
 
 def _is_member(u: dict) -> bool:
-    if u.get("comp"):  # free membership granted by the owner
-        return True
-    if u.get("sub_status") not in ("active", "trialing"):
-        return False
-    end = u.get("period_end")
-    return not end or end + 3 * 86400 > time.time()  # small grace while a renewal settles
+    """Pay as you go: there is no membership any more. Anyone signed in may create; credit is the only gate."""
+    return True
 
 
 def _credit(u: dict | None) -> float:
@@ -1806,7 +1802,7 @@ def _account(u: dict) -> dict:
             "status": "owner" if u.get("owner") else (u.get("sub_status") or "none"),
             "period_end": u.get("period_end"), "credit": None if u.get("owner") else _credit(u),
             "packs": sorted(int(k) for k in _packs()), "billing": _billing_ready(),
-            "has_customer": bool(u.get("stripe_customer")), "passkeys": len(u.get("passkeys") or []),
+            "has_customer": False, "passkeys": len(u.get("passkeys") or []),
             "trial_offer": TRIAL_DAYS if (not u.get("owner") and _trial_ok(u)) else 0,
             "card": u.get("card") if isinstance(u.get("card"), dict) else None,
             "auto_reload": u.get("auto_reload"), "reload_error": u.get("reload_error"),
@@ -1900,11 +1896,16 @@ async def video_account(request: Request):
     if (d := await _deny(request)):
         return d
     u = request.state.user
-    if not u.get("owner") and u.get("stripe_customer") and "card" not in u:
+    if not u.get("owner") and u.get("stripe_customer") and "card" not in u and os.getenv("STRIPE_SECRET_KEY"):
         try:
             await _saved_card(u)
         except Exception as e:
             print(f"[video] card lookup failed: {e!r}", flush=True)
+    if not u.get("owner") and _billing_ready() and _square_pending(u["id"]):
+        try:
+            await _square_reconcile(u["id"])
+        except Exception as e:
+            print(f"[video] square check failed: {e!r}", flush=True)
     return _account(u)
 
 
@@ -1964,8 +1965,7 @@ async def video_subscribe(request: Request):
     if (d := await _deny(request)) or (d := _customer_only(request)):
         return d
     u, base = request.state.user, _public_base(request)
-    if _is_member(u):
-        return _err("Your membership is already active.")
+    return _err("Video Studio is pay as you go now: there's no membership. Just add credit.", 410)
     try:
         cus = await _ensure_customer(u)
         sess = await _stripe("POST", "/checkout/sessions", {
@@ -1986,21 +1986,13 @@ async def video_topup(request: Request):
         return d
     u, base = request.state.user, _public_base(request)
     pack = str((await _body(request)).get("pack") or "")
-    price = _packs().get(pack)
-    if not price:
+    if pack not in _packs():
         return _err("Pick a credit amount")
     try:
-        cus = await _ensure_customer(u)
-        sess = await _stripe("POST", "/checkout/sessions", {
-            "mode": "payment", "customer": cus, "client_reference_id": u["id"],
-            "line_items": [{"price": price, "quantity": 1}],
-            "success_url": f"{base}/video?paid=credit", "cancel_url": f"{base}/video",
-            "payment_intent_data": {"setup_future_usage": "off_session",
-                                    "metadata": {"app": "video_studio", "kind": "credit_checkout", "user_id": u["id"]}},
-            "metadata": {"app": "video_studio", "kind": "credit", "user_id": u["id"], "credit_cents": str(int(pack) * 100)}})
+        url = await _square_checkout(u, int(pack) * 100, f"{base}/video?paid=credit")
     except Exception as e:
         return _err(f"Couldn't start checkout: {e}", 502)
-    return {"url": sess["url"]}
+    return {"url": url}
 
 
 @video_router.post("/video/billing/portal")
@@ -2008,6 +2000,7 @@ async def video_portal(request: Request):
     if (d := await _deny(request)) or (d := _customer_only(request)):
         return d
     u = request.state.user
+    return _err("Video Studio is pay as you go now: there's no membership to manage.", 410)
     if not u.get("stripe_customer"):
         return _err("You don't have a membership to manage yet.")
     try:
@@ -2083,6 +2076,144 @@ async def video_stripe_webhook(request: Request):
     await _save_users()
     return {"ok": True}
 
+
+
+# --------------------------------------------------------------------------- square (credit packs)
+# One-time Square payment links. Each link's order is remembered in users.json ("square_orders")
+# so the credit lands exactly once, either from the webhook (payment.updated) or from polling the
+# order when the customer comes back / every minute in the background.
+SQUARE_VERSION = "2025-01-23"
+_square_loc: dict = {}
+
+
+def _square_base() -> str:
+    return ("https://connect.squareupsandbox.com" if (os.getenv("SQUARE_ENVIRONMENT") or "").lower() == "sandbox"
+            else "https://connect.squareup.com")
+
+
+async def _square(method: str, path: str, body: dict | None = None) -> dict:
+    tok = os.getenv("SQUARE_ACCESS_TOKEN")
+    if not tok:
+        raise RuntimeError("payments aren't set up yet")
+    async with httpx.AsyncClient(timeout=30) as c:
+        r = await c.request(method, f"{_square_base()}{path}", json=body,
+                            headers={"Authorization": f"Bearer {tok}", "Square-Version": SQUARE_VERSION,
+                                     "Content-Type": "application/json"})
+    data = r.json() if r.content else {}
+    if r.status_code >= 400:
+        errs = data.get("errors") or [{}]
+        raise RuntimeError(errs[0].get("detail") or errs[0].get("code") or f"Square {r.status_code}")
+    return data
+
+
+async def _square_location() -> str:
+    if os.getenv("SQUARE_LOCATION_ID"):
+        return os.getenv("SQUARE_LOCATION_ID")
+    if not _square_loc.get("id"):
+        locs = (await _square("GET", "/v2/locations")).get("locations") or []
+        live = [l for l in locs if l.get("status") == "ACTIVE"] or locs
+        if not live:
+            raise RuntimeError("no Square location found")
+        _square_loc["id"] = live[0]["id"]
+    return _square_loc["id"]
+
+
+async def _square_checkout(u: dict, cents: int, redirect: str) -> str:
+    loc = await _square_location()
+    data = await _square("POST", "/v2/online-checkout/payment-links", {
+        "idempotency_key": secrets.token_hex(16),
+        "order": {"location_id": loc, "reference_id": u["id"][:40],
+                  "line_items": [{"name": f"Video Studio credit ${cents / 100:.0f}", "quantity": "1",
+                                  "base_price_money": {"amount": cents, "currency": "USD"}}],
+                  "metadata": {"app": "video_studio", "user_id": u["id"][:255], "credit_cents": str(cents)}},
+        "checkout_options": {"redirect_url": redirect},
+        "payment_note": f"Video Studio credit for {u.get('email') or u['id']}"[:500]})
+    link = data.get("payment_link") or {}
+    if not link.get("url") or not link.get("order_id"):
+        raise RuntimeError("Square didn't return a checkout link")
+    doc = await _users_doc()
+    async with _lock:
+        doc.setdefault("square_orders", {})[link["order_id"]] = {"user": u["id"], "cents": cents,
+                                                                  "t": time.time(), "status": "waiting"}
+        # keep the map small: forget finished or abandoned orders older than 3 days
+        cut = time.time() - 3 * 86400
+        doc["square_orders"] = {k: v for k, v in doc["square_orders"].items()
+                                if v["status"] == "waiting" or v["t"] > cut}
+    await _save_users()
+    return link["url"]
+
+
+def _square_pending(uid: str | None = None) -> list[str]:
+    doc = _users or {}
+    cut = time.time() - 86400
+    return [k for k, v in (doc.get("square_orders") or {}).items()
+            if v["status"] == "waiting" and v["t"] > cut and (uid is None or v["user"] == uid)]
+
+
+async def _square_credit(order_id: str, paid_cents: int, source: str) -> bool:
+    """Credit an order once. Returns True if credit was added now."""
+    doc = await _users_doc()
+    rec = (doc.get("square_orders") or {}).get(order_id)
+    if not rec or rec["status"] != "waiting" or order_id in doc["events"]:
+        return False
+    if paid_cents + 1 < rec["cents"]:
+        print(f"[video] square order {order_id} paid {paid_cents} < {rec['cents']}, not crediting", flush=True)
+        return False
+    u = await _user_by_id(rec["user"])
+    if not u:
+        return False
+    async with _lock:
+        rec["status"] = "paid"
+        doc["events"].append(order_id)
+    await _ledger(u, rec["cents"] / 100, f"Added ${rec['cents'] / 100:.2f} credit")
+    print(f"[video] square credit {rec['cents']}c to {u['id']} via {source}", flush=True)
+    return True
+
+
+async def _square_reconcile(uid: str | None = None) -> int:
+    n = 0
+    for oid in _square_pending(uid):
+        order = (await _square("GET", f"/v2/orders/{oid}")).get("order") or {}
+        paid = 0
+        for t in order.get("tenders") or []:
+            pid = t.get("payment_id") or t.get("id")
+            if not pid:
+                continue
+            pay = (await _square("GET", f"/v2/payments/{pid}")).get("payment") or {}
+            if pay.get("status") == "COMPLETED":
+                paid += int((pay.get("amount_money") or {}).get("amount") or 0)
+        if paid and await _square_credit(oid, paid, "poll"):
+            n += 1
+    return n
+
+
+async def _square_loop() -> None:
+    while True:
+        try:
+            if _square_pending():
+                await _square_reconcile()
+        except Exception as e:
+            print(f"[video] square poll error: {e!r}", flush=True)
+        await asyncio.sleep(60)
+
+
+@video_router.post("/video/square/webhook")
+async def video_square_webhook(request: Request):
+    """Square payment.created / payment.updated. Signed with SQUARE_WEBHOOK_SIGNATURE_KEY over
+    SQUARE_WEBHOOK_URL + raw body. Polling covers us if this isn't configured."""
+    key, url = os.getenv("SQUARE_WEBHOOK_SIGNATURE_KEY"), os.getenv("SQUARE_WEBHOOK_URL")
+    payload = await request.body()
+    if not key or not url:
+        return _err("webhook not configured", 503)
+    sig = request.headers.get("x-square-hmacsha256-signature", "")
+    expected = base64.b64encode(hmac.new(key.encode(), url.encode() + payload, hashlib.sha256).digest()).decode()
+    if not hmac.compare_digest(expected, sig):
+        return _err("bad signature", 400)
+    ev = json.loads(payload)
+    pay = ((ev.get("data") or {}).get("object") or {}).get("payment") or {}
+    if pay.get("status") == "COMPLETED" and pay.get("order_id"):
+        await _square_credit(pay["order_id"], int((pay.get("amount_money") or {}).get("amount") or 0), "webhook")
+    return {"ok": True}
 
 # --------------------------------------------------------------------------- passkeys (Face ID)
 # Sign-in with no email service: the phone keeps a private key behind Face ID/Touch ID and
@@ -2980,10 +3111,10 @@ async def sweep_once() -> dict:
     joined within RETAIN_DAYS, lose their files. Owner files are never touched."""
     now, out = time.time(), {"users": 0, "files": 0}
     for u in list((await _users_doc())["users"]):
-        if u.get("comp") or _is_member(u) or u.get("files_purged_at"):
+        if u.get("comp") or _credit(u) > 0.01 or u.get("files_purged_at"):
             continue
-        ended = u.get("period_end") if u.get("sub_status") else None
-        since = ended or u.get("created") or now
+        last = max([float(x.get("t") or 0) for x in (u.get("ledger") or [])] + [float(u.get("created") or 0)])
+        since = last or now  # pay as you go: files go after RETAIN_DAYS with no credit and no activity
         if now - since < RETAIN_DAYS * 86400:
             continue
         n = await _purge_user_files(u["id"])
@@ -3009,6 +3140,8 @@ async def _sweep_loop() -> None:
 def _ensure_sweeper() -> None:
     if _accounts_on() and (_sweeper["task"] is None or _sweeper["task"].done()):
         _sweeper["task"] = asyncio.create_task(_sweep_loop())
+    if _accounts_on() and _billing_ready() and (_sweeper.get("square") is None or _sweeper["square"].done()):
+        _sweeper["square"] = asyncio.create_task(_square_loop())
     if _accounts_on() and _funding_fa() and (_sweeper.get("fund") is None or _sweeper["fund"].done()):
         _sweeper["fund"] = asyncio.create_task(_funding_loop())
 
@@ -3113,7 +3246,7 @@ _reloading: set[str] = set()
 
 
 async def _saved_card(u: dict, refresh: bool = False) -> dict | None:
-    if not u.get("stripe_customer") or not _billing_ready():
+    if not u.get("stripe_customer") or not os.getenv("STRIPE_SECRET_KEY"):
         return None
     if isinstance(u.get("card"), dict) and not refresh:
         return u["card"]

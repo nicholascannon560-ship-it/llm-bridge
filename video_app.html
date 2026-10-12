@@ -1285,7 +1285,7 @@ function renderAccount(a){
   const fund = owner && a.funding && a.funding.enabled
     ? ` Card funding: ${money(a.funding.waiting_cents / 100)} waiting to clear, ${money(a.funding.moved_cents / 100)} moved so far.` : '';
   $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.' + fund
-    : (a.member ? (a.trial_end ? `Free trial until ${new Date(a.trial_end * 1000).toLocaleDateString()}, then $10/month` : `Member${end ? ', renews ' + end : ''}`) : (a.status === 'past_due' ? 'Your last payment failed. Update your card.' : 'Not a member yet')) + (a.email ? ' · ' + a.email : '');
+    : 'Pay as you go: videos cost what the AI charges plus ' + Math.round((state.markup || 0) * 100) + '%' + (a.email ? ' · ' + a.email : '');
   $('memberBox').hidden = owner || a.member || !a.billing;
   if (a.trial_offer){
     $('joinText').textContent = `Your first ${a.trial_offer} days are free: you only pay for the credit your videos use. After that it's $10 a month. Cancel anytime before then and you won't be charged.`;
@@ -1293,13 +1293,13 @@ function renderAccount(a){
   } else { $('joinText').textContent = 'Membership is $10 a month. Videos are then paid from your credit at what they actually cost.';
     $('joinBtn').textContent = 'Start membership: $10/month'; }
   $('acctLine').title = '';
-  if (!owner && state.retainDays) $('acctLine').textContent += ` · If your membership ends, your videos are deleted ${state.retainDays} days later.`;
+  if (!owner && state.retainDays) $('acctLine').textContent += ` · With no credit and no activity for ${state.retainDays} days, your videos are deleted.`;
   $('topupBox').hidden = owner || !a.billing || !a.packs.length;
   $('portalBtn').hidden = owner || !a.has_customer || !a.billing;
   $('historyBtn').hidden = owner || !a.ledger.length;
   chips($('packs'), a.packs, null, v => addCredit(v), v => '$' + v);
   $('cardLine').innerHTML = a.card ? `Charged to your ${esc(a.card.brand)} ending ${esc(a.card.last4)}. <a href="#" id="useCheckout">Use a different card</a>`
-    : 'Your card is saved after your first purchase, so next time it\'s one tap.';
+    : 'Secure checkout by Square. Credit never expires.';
   const uc = document.getElementById('useCheckout'); if (uc) uc.onclick = e => { e.preventDefault(); state.forceCheckout = true;
     $('cardLine').textContent = 'Tap an amount to pay with a different card.'; };
   $('reloadBox').hidden = !a.card;
@@ -1358,11 +1358,11 @@ async function boot(){
   $('login').hidden = true; $('app').hidden = false;
   state.spent = s.spent_today; state.cap = s.daily_cap; state.retainDays = s.retain_days; state.markup = s.markup || 0;
   renderAccount(s.account);
-  // Back from Stripe: the payment lands by webhook a moment later, so check a few times.
+  // Back from checkout: the credit lands a few seconds later, so check a few times.
   const paid = new URLSearchParams(location.search).get('paid');
-  if (paid){ history.replaceState(null, '', '/video');
+  if (paid){ history.replaceState(null, '', '/video'); state.paidFrom = (s.account && s.account.credit) || 0;
     let n = 0; const t = setInterval(async () => { await loadAccount(); n++;
-      const a = state.account; if (n > 10 || (paid === 'member' ? a.member : true && n > 2)) clearInterval(t); }, 2000); }
+      const before = state.paidFrom; if (n > 15 || (state.account && state.account.credit > (before || 0))) clearInterval(t); }, 2000); }
   try {
     const [mo, so] = await Promise.all([api('/video/models'), api('/video/songs')]);
     state.songs = so.songs;
