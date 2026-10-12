@@ -67,7 +67,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 video_router = APIRouter()
 
-VIDEO_APP_VERSION = "2.15.0"  # bump on HTML-only changes so the *.py watch pattern deploys
+VIDEO_APP_VERSION = "2.16.0"  # bump on HTML-only changes so the *.py watch pattern deploys
 COOKIE = "video_session"
 SESSION_DAYS = 60
 OR_BASE = "https://openrouter.ai/api/v1"
@@ -1671,7 +1671,7 @@ async def video_job_extend(jid: str, request: Request):
 
 
 # =========================================================================== accounts & billing
-# Customers sign in with a passkey and buy prepaid credit packs through Square (pay as you go,
+# Customers sign in with a passkey and buy prepaid credit packs through North River Pay (Square) (pay as you go,
 # no membership). Usage is billed from credit at AI cost + VIDEO_USAGE_MARKUP. The owner never pays.
 STRIPE_API = "https://api.stripe.com/v1"
 CODE_TTL = 15 * 60
@@ -1708,7 +1708,7 @@ def _trial_ok(u: dict) -> bool:
 
 
 def _billing_ready() -> bool:
-    return bool(os.getenv("SQUARE_ACCESS_TOKEN"))
+    return bool(os.getenv("PAY_URL") and os.getenv("PAY_APP_KEY"))
 
 
 async def _users_doc() -> dict:
@@ -2078,69 +2078,39 @@ async def video_stripe_webhook(request: Request):
 
 
 
-# --------------------------------------------------------------------------- square (credit packs)
-# One-time Square payment links. Each link's order is remembered in users.json ("square_orders")
-# so the credit lands exactly once, either from the webhook (payment.updated) or from polling the
-# order when the customer comes back / every minute in the background.
-SQUARE_VERSION = "2025-01-23"
-_square_loc: dict = {}
+# --------------------------------------------------------------------------- credit packs via North River Pay
+# Checkout goes through the shared North River Pay service, which holds the Square token for all
+# apps. Each order is remembered in users.json ("square_orders") so credit lands exactly once,
+# checked when the customer comes back and every minute in the background.
+def _pay_cfg() -> tuple[str, str, str]:
+    return ((os.getenv("PAY_URL") or "").rstrip("/"), os.getenv("PAY_APP_ID") or "video-studio",
+            os.getenv("PAY_APP_KEY") or "")
 
 
-def _square_base() -> str:
-    return ("https://connect.squareupsandbox.com" if (os.getenv("SQUARE_ENVIRONMENT") or "").lower() == "sandbox"
-            else "https://connect.squareup.com")
-
-
-async def _square(method: str, path: str, body: dict | None = None) -> dict:
-    tok = os.getenv("SQUARE_ACCESS_TOKEN")
-    if not tok:
+async def _pay(method: str, path: str, body: dict | None = None) -> dict:
+    url, aid, key = _pay_cfg()
+    if not url or not key:
         raise RuntimeError("payments aren't set up yet")
-    async with httpx.AsyncClient(timeout=30) as c:
-        r = await c.request(method, f"{_square_base()}{path}", json=body,
-                            headers={"Authorization": f"Bearer {tok}", "Square-Version": SQUARE_VERSION,
-                                     "Content-Type": "application/json"})
+    async with httpx.AsyncClient(timeout=40) as c:
+        r = await c.request(method, f"{url}{path}", json=body, headers={"X-App-Id": aid, "X-App-Key": key})
     data = r.json() if r.content else {}
     if r.status_code >= 400:
-        errs = data.get("errors") or [{}]
-        raise RuntimeError(errs[0].get("detail") or errs[0].get("code") or f"Square {r.status_code}")
+        raise RuntimeError(data.get("error") or f"payments {r.status_code}")
     return data
 
 
-async def _square_location() -> str:
-    if os.getenv("SQUARE_LOCATION_ID"):
-        return os.getenv("SQUARE_LOCATION_ID")
-    if not _square_loc.get("id"):
-        locs = (await _square("GET", "/v2/locations")).get("locations") or []
-        live = [l for l in locs if l.get("status") == "ACTIVE"] or locs
-        if not live:
-            raise RuntimeError("no Square location found")
-        _square_loc["id"] = live[0]["id"]
-    return _square_loc["id"]
-
-
 async def _square_checkout(u: dict, cents: int, redirect: str) -> str:
-    loc = await _square_location()
-    data = await _square("POST", "/v2/online-checkout/payment-links", {
-        "idempotency_key": secrets.token_hex(16),
-        "order": {"location_id": loc, "reference_id": u["id"][:40],
-                  "line_items": [{"name": f"Video Studio credit ${cents / 100:.0f}", "quantity": "1",
-                                  "base_price_money": {"amount": cents, "currency": "USD"}}],
-                  "metadata": {"app": "video_studio", "user_id": u["id"][:255], "credit_cents": str(cents)}},
-        "checkout_options": {"redirect_url": redirect},
-        "payment_note": f"Video Studio credit for {u.get('email') or u['id']}"[:500]})
-    link = data.get("payment_link") or {}
-    if not link.get("url") or not link.get("order_id"):
-        raise RuntimeError("Square didn't return a checkout link")
+    data = await _pay("POST", "/v1/checkout", {"user_ref": u["id"], "cents": cents, "redirect_url": redirect,
+                                               "label": f"Video Studio credit ${cents / 100:.0f}"})
     doc = await _users_doc()
     async with _lock:
-        doc.setdefault("square_orders", {})[link["order_id"]] = {"user": u["id"], "cents": cents,
+        doc.setdefault("square_orders", {})[data["order_id"]] = {"user": u["id"], "cents": cents,
                                                                   "t": time.time(), "status": "waiting"}
-        # keep the map small: forget finished or abandoned orders older than 3 days
         cut = time.time() - 3 * 86400
         doc["square_orders"] = {k: v for k, v in doc["square_orders"].items()
                                 if v["status"] == "waiting" or v["t"] > cut}
     await _save_users()
-    return link["url"]
+    return data["url"]
 
 
 def _square_pending(uid: str | None = None) -> list[str]:
@@ -2157,7 +2127,6 @@ async def _square_credit(order_id: str, paid_cents: int, source: str) -> bool:
     if not rec or rec["status"] != "waiting" or order_id in doc["events"]:
         return False
     if paid_cents + 1 < rec["cents"]:
-        print(f"[video] square order {order_id} paid {paid_cents} < {rec['cents']}, not crediting", flush=True)
         return False
     u = await _user_by_id(rec["user"])
     if not u:
@@ -2166,24 +2135,18 @@ async def _square_credit(order_id: str, paid_cents: int, source: str) -> bool:
         rec["status"] = "paid"
         doc["events"].append(order_id)
     await _ledger(u, rec["cents"] / 100, f"Added ${rec['cents'] / 100:.2f} credit")
-    print(f"[video] square credit {rec['cents']}c to {u['id']} via {source}", flush=True)
+    print(f"[video] credit {rec['cents']}c to {u['id']} via {source}", flush=True)
     return True
 
 
 async def _square_reconcile(uid: str | None = None) -> int:
     n = 0
     for oid in _square_pending(uid):
-        order = (await _square("GET", f"/v2/orders/{oid}")).get("order") or {}
-        paid = 0
-        for t in order.get("tenders") or []:
-            pid = t.get("payment_id") or t.get("id")
-            if not pid:
-                continue
-            pay = (await _square("GET", f"/v2/payments/{pid}")).get("payment") or {}
-            if pay.get("status") == "COMPLETED":
-                paid += int((pay.get("amount_money") or {}).get("amount") or 0)
-        if paid and await _square_credit(oid, paid, "poll"):
-            n += 1
+        mine = ((_users or {}).get("square_orders") or {}).get(oid) or {}
+        o = await _pay("GET", f"/v1/orders/{oid}")
+        if o.get("status") == "paid" and o.get("user_ref") == mine.get("user"):
+            if await _square_credit(oid, int(o.get("paid_cents") or 0), "pay"):
+                n += 1
     return n
 
 
@@ -2193,27 +2156,9 @@ async def _square_loop() -> None:
             if _square_pending():
                 await _square_reconcile()
         except Exception as e:
-            print(f"[video] square poll error: {e!r}", flush=True)
+            print(f"[video] payment poll error: {e!r}", flush=True)
         await asyncio.sleep(60)
 
-
-@video_router.post("/video/square/webhook")
-async def video_square_webhook(request: Request):
-    """Square payment.created / payment.updated. Signed with SQUARE_WEBHOOK_SIGNATURE_KEY over
-    SQUARE_WEBHOOK_URL + raw body. Polling covers us if this isn't configured."""
-    key, url = os.getenv("SQUARE_WEBHOOK_SIGNATURE_KEY"), os.getenv("SQUARE_WEBHOOK_URL")
-    payload = await request.body()
-    if not key or not url:
-        return _err("webhook not configured", 503)
-    sig = request.headers.get("x-square-hmacsha256-signature", "")
-    expected = base64.b64encode(hmac.new(key.encode(), url.encode() + payload, hashlib.sha256).digest()).decode()
-    if not hmac.compare_digest(expected, sig):
-        return _err("bad signature", 400)
-    ev = json.loads(payload)
-    pay = ((ev.get("data") or {}).get("object") or {}).get("payment") or {}
-    if pay.get("status") == "COMPLETED" and pay.get("order_id"):
-        await _square_credit(pay["order_id"], int((pay.get("amount_money") or {}).get("amount") or 0), "webhook")
-    return {"ok": True}
 
 # --------------------------------------------------------------------------- passkeys (Face ID)
 # Sign-in with no email service: the phone keeps a private key behind Face ID/Touch ID and
