@@ -1958,7 +1958,7 @@ async def video_account(request: Request):
             await _saved_card(u)
         except Exception as e:
             print(f"[video] card lookup failed: {e!r}", flush=True)
-    if not u.get("owner") and _billing_ready() and _square_pending(u["id"]):
+    if (_pays(u["id"])) and _billing_ready() and _square_pending(u["id"]):
         try:
             await _square_reconcile(u["id"])
         except Exception as e:
