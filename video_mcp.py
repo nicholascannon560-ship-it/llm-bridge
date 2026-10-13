@@ -88,6 +88,15 @@ def _detail(out) -> str:
         return "refused"
 
 
+MAKERS = {"upload_image", "make_image", "make_video", "extend", "upscale", "stitch", "loop", "bundle", "last_frame"}
+
+
+async def _no_project(uid: str, ref) -> str:
+    names = [p["name"] for p in await vp.mine(uid)]
+    return (f"No project called {ref!r}. Your projects: {', '.join(names) if names else 'none yet'}. "
+            f"Use create_project to make it.")
+
+
 async def _view_url(request: Request, j: dict) -> str | None:
     """A public, unguessable link to a finished clip (the same kind OpenRouter uses for edits)."""
     if not j.get("clip_key"):
