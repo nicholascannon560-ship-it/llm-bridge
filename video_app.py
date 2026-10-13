@@ -338,6 +338,67 @@ async def _load_list(key: str) -> list[dict]:
         return []
 
 
+# --------------------------------------------------------------------------- projects
+# Every video, picture and timeline belongs to one project (None = Unsorted; see video_projects.py).
+# A new item goes to: the project named for this request (the connector sets _PROJECT), else the
+# project of the clip it was made from (extends, edits, upscales, later parts), else the account's
+# active project, which the app and the connector share.
+_PROJECT: contextvars.ContextVar = contextvars.ContextVar("video_project", default=None)
+KEEP_JOBS = max(300, int(os.getenv("VIDEO_KEEP_JOBS") or 3000))
+IMAGES_KEY = f"{PREFIX}images.json"
+_images: list[dict] | None = None
+
+
+def _active_project(uid: str | None) -> str | None:
+    for u in (_users or {}).get("users") or []:
+        if u["id"] == (uid or "owner"):
+            return u.get("project")
+    return None
+
+
+def _stamp(rows: list[dict]) -> None:
+    """Give any row without a project one, once. Old rows were set to Unsorted when loaded."""
+    by = None
+    for r in rows:
+        if "project" in r:
+            continue
+        pid = _PROJECT.get()
+        src = r.get("parent_id") or r.get("extend_of")
+        if pid is None and src:
+            if by is None:
+                by = {x.get("id"): x for x in rows}
+            par = by.get(src)
+            if par is not None and (par.get("user") or "owner") == (r.get("user") or "owner"):
+                pid = par.get("project")
+        r["project"] = pid if pid is not None else _active_project(r.get("user"))
+
+
+async def _all_images() -> list[dict]:
+    """Index of pictures: {id, user, project, t, kind (made|upload|frame), note}. Files stay in images/."""
+    global _images
+    if _images is None:
+        async with _lock:
+            if _images is None:
+                _images = await _load_list(IMAGES_KEY)
+    return _images
+
+
+async def _save_images() -> None:
+    rows = await _all_images()
+    async with _lock:
+        snapshot = json.dumps(rows[-20000:], separators=(",", ":")).encode()
+    await _put(IMAGES_KEY, snapshot, "application/json")
+
+
+async def _index_image(iid: str, uid: str, kind: str, note: str = "") -> None:
+    pid = _PROJECT.get()
+    rows = await _all_images()
+    async with _lock:
+        rows.append({"id": iid, "user": uid or "owner", "t": time.time(), "kind": kind, "note": (note or "")[:200],
+                     "project": pid if pid is not None else _active_project(uid)})
+    await _save_images()
+
+
 async def _all_jobs() -> list[dict]:
     global _jobs
     if _jobs is None:
