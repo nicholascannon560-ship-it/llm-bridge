@@ -1428,9 +1428,19 @@ $('mpGo').onclick = async () => {
   const b = $('mpGo'); b.disabled = true; b.textContent = 'Making…'; showErr($('mpErr'), '');
   try {
     const from = $('mpFrom').checked && state.pics.length ? state.pics[0].id : null;
-    const out = await api('/video/images/generate', {method:'POST', body: JSON.stringify({prompt: $('mpPrompt').value, aspect: state.aspect, from_image: from})});
-    const role = state.pics.some(p => p.role === 'first') ? 'ref' : 'first';
-    state.pics.push({id: out.id, role, thumb: out.url, w: 0, h: 0});
+    const refs = $('mpRefs').checked ? state.pics.filter(p => p.id !== from).map(p => p.id) : [];
+    const out = await api('/video/images/generate', {method:'POST', body: JSON.stringify({prompt: $('mpPrompt').value,
+      aspect: state.aspect, from_image: from, ref_images: refs, transparent: $('mpClear').checked,
+      model: $('mpModel').value, tier: $('mpCheap').checked ? 'budget' : 'best'})});
+    const why = $('mpWhy'); why.hidden = false; why.textContent = `Made with ${out.name}${out.resolution ? ' at ' + out.resolution : ''}: `
+      + `${out.reason} Cost ${money(out.cost)}.`;
+    if (out.vector){
+      const a = document.createElement('a'); a.href = out.url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = ' Open the SVG'; why.appendChild(a);
+    } else {
+      const role = state.pics.some(p => p.role === 'first') ? 'ref' : 'first';
+      state.pics.push({id: out.id, role, thumb: out.url, w: 0, h: 0});
+    }
     $('makePic').hidden = true; $('mpPrompt').value = ''; renderPics(); loadAccount();
   } catch(e){ showErr($('mpErr'), e.message); }
   b.disabled = false; b.textContent = 'Make it';
