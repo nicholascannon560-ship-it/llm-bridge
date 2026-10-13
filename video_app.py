@@ -2479,7 +2479,8 @@ async def _all_edits() -> list[dict]:
 async def _save_edits() -> None:
     rows = await _all_edits()
     async with _lock:
-        snapshot = json.dumps(rows[-300:], separators=(",", ":")).encode()
+        _stamp(rows)
+        snapshot = json.dumps(rows[-KEEP_JOBS:], separators=(",", ":")).encode()
     await _put(EDITS_KEY, snapshot, "application/json")
 
 
