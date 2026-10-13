@@ -379,9 +379,16 @@ label.btn{display:inline-block;text-align:center}
 
     <section class="panel" id="clips">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
-        <strong style="font-size:18px">Your clips</strong>
+        <strong style="font-size:18px" id="clipsTitle">Your clips</strong>
         <label class="btn ghost small" for="vidFile" id="vidUpBtn">Upload a video</label>
       </div>
+      <div class="tabs" id="tabs" hidden>
+        <button data-tab="videos" aria-pressed="true">Videos</button>
+        <button data-tab="pictures" aria-pressed="false">Pictures</button>
+        <button data-tab="edited" aria-pressed="false">Edited</button>
+      </div>
+      <div class="pgrid" id="picGrid" hidden></div>
+      <div class="editor" id="picMover" hidden></div>
       <input type="file" class="vh" accept="video/*" tabindex="-1" id="vidFile">
       <div class="hint" id="vidUpHint" style="margin-top:-4px">Bring in your own footage to restyle, caption, add a song to, or cut in the editor.</div>
       <div class="err" id="vidUpErr" hidden></div>
