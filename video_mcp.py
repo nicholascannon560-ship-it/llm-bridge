@@ -254,17 +254,26 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         payload = {"model": va.IMAGE_MODEL, "modalities": ["image", "text"], "messages": [{"role": "user", "content": content}]}
         if a.get("aspect") in ("9:16", "16:9", "1:1", "4:5", "3:4", "4:3"):
             payload["image_config"] = {"aspect_ratio": a["aspect"]}
-        async with httpx.AsyncClient(timeout=180) as c:
-            r = await c.post(f"{va.OR_BASE}/chat/completions", json=payload, headers=va._or_headers())
-        data = r.json()
-        if r.status_code >= 400 or data.get("error"):
-            raise ValueError(f"Image model refused: {(data.get('error') or {}).get('message') or r.status_code}")
-        msg = ((data.get("choices") or [{}])[0].get("message") or {})
-        url = (((msg.get("images") or [{}])[0].get("image_url") or {}).get("url")) or ""
-        if not url.startswith("data:"):
-            raise ValueError("The model didn't return a picture; try rewording")
-        img = base64.b64decode(url.split(",", 1)[1])
-        cost = float((data.get("usage") or {}).get("cost") or va.IMAGE_HOLD)
+        held = await va._image_hold("owner")  # paid from owner credit when the owner wallet is on
+        if isinstance(held, Response):
+            raise ValueError(_detail(held))
+        try:
+            async with httpx.AsyncClient(timeout=180) as c:
+                r = await c.post(f"{va.OR_BASE}/chat/completions", json=payload, headers=va._or_headers("owner"))
+            data = r.json()
+            if r.status_code >= 400 or data.get("error"):
+                raise ValueError(f"Image model refused: {(data.get('error') or {}).get('message') or r.status_code}")
+            msg = ((data.get("choices") or [{}])[0].get("message") or {})
+            url = (((msg.get("images") or [{}])[0].get("image_url") or {}).get("url")) or ""
+            if not url.startswith("data:"):
+                raise ValueError("The model didn't return a picture; try rewording")
+            img = base64.b64decode(url.split(",", 1)[1])
+        except Exception:
+            await va._release("owner", held, "picture failed")
+            raise
+        real = (data.get("usage") or {}).get("cost")
+        cost = float(real if real is not None else va.IMAGE_HOLD)
+        await va._charge_small("owner", held, float(real) if real is not None else None, "picture")
         _spend.append((time.time(), cost))
         kind = va._sniff(img) or ("png", "image/png")
         iid = _tok(24)
