@@ -1329,6 +1329,7 @@ function renderAccount(a){
   if (!owner && state.retainDays) $('acctLine').textContent += ` · With no credit and no activity for ${state.retainDays} days, your videos are deleted.`;
   $('topupBox').hidden = (owner && !wallet) || !a.billing || !a.packs.length;
   $('pkAddBtn').hidden = !state.accountsOn || (a.passkeys || 0) > 0;
+  if (!state.connChecked && state.accountsOn){ state.connChecked = true; loadConnections(); }
   $('portalBtn').hidden = owner || !a.has_customer || !a.billing;
   $('historyBtn').hidden = (owner && !wallet) || !a.ledger.length;
   chips($('packs'), a.packs, null, v => addCredit(v),
