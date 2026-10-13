@@ -162,7 +162,7 @@ TOOLS = [
      "description": "Start a video. Optional start_image / end_image (image ids) make the model move from one picture to the "
                     "other; ref_images guide style instead. Checks price against budget and the connector limits before running. "
                     "Returns a job; poll job_status until status is completed.",
-     "inputSchema": {"type": "object", "required": ["model", "prompt", "duration", "budget"], "properties": {
+     "inputSchema": {"type": "object", "required": ["model", "prompt", "duration", "budget"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "model": {"type": "string"}, "prompt": {"type": "string"}, "duration": {"type": "integer"},
          "resolution": {"type": "string"}, "aspect_ratio": {"type": "string"}, "audio": {"type": "boolean"},
          "start_image": {"type": "string"}, "end_image": {"type": "string"},
