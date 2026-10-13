@@ -2264,10 +2264,8 @@ async def video_pk_register_start(request: Request):
                                           ResidentKeyRequirement, UserVerificationRequirement)
     from webauthn.helpers import base64url_to_bytes
     me = await _current_user(request)
-    if me and me.get("owner"):
-        return _err("The owner signs in with the PIN.")
-    if me:  # signed in: add another passkey to this account
-        uid, email = me["id"], me["email"]
+    if me:  # signed in: add another passkey to this account (the owner too)
+        uid, email = me["id"], me.get("email") or "owner"
     else:
         email = str((await _body(request)).get("email") or "").strip().lower()[:200]
         if not EMAIL_RE.match(email):
