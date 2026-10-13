@@ -557,7 +557,9 @@ async def _handle(request: Request, user: dict):
                           "capabilities": {"tools": {"listChanged": False}},
                           "serverInfo": {"name": "video-studio", "version": va.VIDEO_APP_VERSION},
                           "instructions": "Make pictures and videos with Video Studio. Price things with estimate before "
-                                          "make_video, poll job_status for results, and stay within the budget the user gives."})
+                                          "make_video, poll job_status for results, and stay within the budget the user gives. "
+                                          "Work is filed in projects: when the user names a project, pass it as project on "
+                                          "each tool (or call use_project); tell the user which project things were saved to."})
     if method == "ping":
         return _rpc(mid, {})
     if method == "tools/list":
