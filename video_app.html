@@ -151,6 +151,19 @@ label.btn{display:inline-block;text-align:center}
   </section>
 
   <div id="app" hidden>
+    <section class="panel" id="projBar" hidden>
+      <div class="row" style="flex-wrap:nowrap;gap:8px;align-items:center">
+        <strong style="font-size:15px;white-space:nowrap">Project</strong>
+        <select id="projSel" style="flex:1;min-width:0" aria-label="Project"></select>
+        <button class="btn ghost small" id="projNew">New</button>
+        <button class="btn ghost small" id="projMore" aria-label="Rename or delete project">⋯</button>
+      </div>
+      <div class="row" id="projMenu" hidden style="margin-top:8px">
+        <button class="btn ghost small" id="projRename">Rename</button>
+        <button class="btn ghost small" id="projDelete" style="color:var(--red)">Delete project</button>
+      </div>
+      <div class="hint" id="projHint" style="margin-bottom:0">New videos and pictures, here or from Claude, go into this project.</div>
+    </section>
     <section class="panel acct" id="acct">
       <div class="row" style="justify-content:space-between;align-items:flex-start">
         <div>
