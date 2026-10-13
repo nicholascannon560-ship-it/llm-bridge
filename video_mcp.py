@@ -276,12 +276,12 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
                 raise ValueError("The model didn't return a picture; try rewording")
             img = base64.b64decode(url.split(",", 1)[1])
         except Exception:
-            await va._release("owner", held, "picture failed")
+            await va._release(uid, held, "picture failed")
             raise
         real = (data.get("usage") or {}).get("cost")
-        cost = float(real if real is not None else va.IMAGE_HOLD)
-        await va._charge_small("owner", held, float(real) if real is not None else None, "picture")
-        _spend.append((time.time(), cost))
+        cost = va._bill(uid, float(real)) if real is not None else va.IMAGE_HOLD
+        await va._charge_small(uid, held, cost if real is not None else None, "picture")
+        _note(uid, cost)
         kind = va._sniff(img) or ("png", "image/png")
         iid = _tok(24)
         await va._put(f"{va.PREFIX}images/{iid}", img, kind[1])
