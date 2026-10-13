@@ -218,7 +218,7 @@ TOOLS = [
     {"name": "last_frame",
      "description": "Save a finished video's final frame as an image id (free). Use it as the next video's start_image "
                     "so chained clips join exactly where the last one really ended.",
-     "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
+     "inputSchema": {"type": "object", "required": ["id"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, "id": {"type": "string"}}}},
 ]
 
 
