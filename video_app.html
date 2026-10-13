@@ -400,7 +400,8 @@ label.btn{display:inline-block;text-align:center}
 <script>
 const $ = id => document.getElementById(id);
 const state = {models:[], songs:[], model:null, duration:null, resolution:null, aspect:null,
-  estimate:null, basis:'', jobs:[], spent:0, cap:0, timer:null, pics:[]};
+  estimate:null, basis:'', jobs:[], spent:0, cap:0, timer:null, pics:[],
+  projectsOn:false, projects:[], project:null, tab:'videos', gallery:[]};
 const money = v => v == null ? '$—' : '$' + Number(v).toFixed(2);
 
 async function api(path, opts={}){
