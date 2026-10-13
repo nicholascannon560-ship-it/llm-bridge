@@ -1834,11 +1834,12 @@ async def _release(uid: str, hold: float, why: str) -> None:
 
 async def _settle(job: dict, actual: float | None) -> None:
     """Swap a job's hold for what it really cost. Runs once per job."""
-    if job.get("settled") or (job.get("user") or "owner") == "owner":
-        job["settled"] = True
+    payer = _payer(job.get("user"))
+    if job.get("settled") or not _pays(job.get("user")) or (payer == "owner" and job.get("or_key") != "owner"):
+        job["settled"] = True  # owner jobs from before the owner wallet carry no hold
         return
     job["settled"] = True
-    u = await _user_by_id(job["user"])
+    u = await _user_by_id(payer)
     if not u:
         return
     hold = float(job.get("hold") or 0)
