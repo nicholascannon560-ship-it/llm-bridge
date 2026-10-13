@@ -427,7 +427,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
 
     if name == "last_frame":
         try:
-            iid = await va.save_last_frame(str(a.get("id") or ""))
+            iid = await va.save_last_frame(str(a.get("id") or ""), user=uid)
         except RuntimeError as e:
             raise ValueError(str(e))
         return {"image_id": iid, "url": f"{base}/video/img/{iid}"}
