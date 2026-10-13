@@ -1604,6 +1604,7 @@ async def video_image_upload(request: Request):
         return _err("Use a JPEG, PNG or WebP picture")
     iid = secrets.token_urlsafe(24)
     await _put(f"{PREFIX}images/{iid}", img, kind[1])
+    await _index_image(iid, _uid(request), "upload")
     return {"id": iid, "url": f"/video/img/{iid}"}
 
 
