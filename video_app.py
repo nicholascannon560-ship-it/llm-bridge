@@ -1864,7 +1864,7 @@ def _account(u: dict) -> dict:
             "card": u.get("card") if isinstance(u.get("card"), dict) else None,
             "auto_reload": u.get("auto_reload"), "reload_error": u.get("reload_error"),
             "trial_end": u.get("trial_end") if u.get("sub_status") == "trialing" else None,
-            "ledger": [] if u.get("owner") else list(reversed((u.get("ledger") or [])[-30:])),
+            "ledger": list(reversed((u.get("ledger") or [])[-30:])),
             "funding": _funding_summary() if u.get("owner") else None}
 
 
