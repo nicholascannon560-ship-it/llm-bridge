@@ -1109,7 +1109,218 @@ function openEdit(e){
   drawEd(); if (ed.items.length) load(0, 0, false); else { vid().removeAttribute('src'); vid().dataset.src = ''; }
   $('ed').scrollIntoView({block: 'start'});
 }
-/*@@VISUAL_EDITOR@@*/
+function drawEd(){
+  // ---- clips in the timeline (filmstrip)
+  const tr = $('vTrack'); tr.innerHTML = '';
+  $('vEmpty').hidden = ed.items.length > 0;
+  ed.items.forEach((it, i) => {
+    const len = Math.max(0.1, itEnd(it) - (it.start || 0));
+    const b = document.createElement('div');
+    b.className = 'vblk' + (i === V.sel ? ' on' : ''); b.dataset.i = i;
+    b.style.width = Math.max(72, Math.round(len * 16)) + 'px';
+    b.innerHTML = `<img alt="" draggable="false" src="/video/thumb/${esc(it.job)}" onerror="this.style.visibility='hidden'">
+      <span class="vn">${i + 1}</span><span class="vl num">${len.toFixed(1)}s</span>
+      ${it.caption ? '<span class="vc">Aa</span>' : ''}`;
+    tr.appendChild(b);
+  });
+  const ph = document.createElement('div'); ph.className = 'vhead'; ph.id = 'vHead'; tr.appendChild(ph);
+  wireTrack();
+  // ---- clips you can add (this project's finished clips)
+  const bin = readyClips();
+  $('vBin').innerHTML = bin.length ? bin.map(j => `<button class="vadd" data-add="${j.id}" title="${esc(clipLabel(j.id))}">
+      <img alt="" src="/video/thumb/${j.id}" onerror="this.style.visibility='hidden'">
+      <span class="num">${j.total_seconds || j.duration || '?'}s</span><span class="plus">+</span></button>`).join('')
+    : '<div class="hint" style="margin:0">Finished clips in this project show up here to add.</div>';
+  $('vAddAll').hidden = bin.length < 2;
+  $('vBin').querySelectorAll('[data-add]').forEach(b => b.onclick = () => addClip(b.dataset.add));
+  drawSel();
+  chips($('edShape'), Object.keys(SHAPE_NAMES), ed.shape, v => { ed.shape = v; drawEd(); }, v => SHAPE_NAMES[v]);
+  chips($('edFit'), ['fill', 'fit'], ed.fit, v => { ed.fit = v; drawEd(); }, v => v === 'fill' ? 'Fill and crop' : 'Fit with bars');
+  $('edSong').innerHTML = '<option value="">No song</option>' + songOptions(); $('edSong').value = ed.song_id || '';
+  $('edSongRow').hidden = !ed.song_id;
+  stage();
+  const e = state.edits.find(x => x.id === ed.id);
+  $('edStatus').textContent = !e ? '' : e.status === 'rendering' ? 'Rendering… this takes about a minute.'
+    : e.status === 'ready' ? 'Rendered. The video is in the Edited tab.' : '';
+  if (e && e.status === 'failed') showErr($('edErr'), e.error || 'Render failed');
+  showTime();
+}
+
+// ---------------- visual editor: preview, trimming, captions
+const V = {sel: -1, i: 0, playing: false, dur: {}, drag: null};
+const vid = () => $('vPrev');
+function clipUrl(it){ return '/video/clip/' + it.job + (it.scored ? '?song=1' : ''); }
+function fullLen(id){
+  if (V.dur[id]) return V.dur[id];
+  const j = state.jobs.find(x => x.id === id); return (j && (j.total_seconds || j.duration)) || 5;
+}
+function itEnd(it){ const f = fullLen(it.job); return it.end > 0 ? Math.min(it.end, f) : f; }
+function vLens(){ return ed.items.map(it => Math.max(0, itEnd(it) - (it.start || 0))); }
+function total(){ return vLens().reduce((a, b) => a + b, 0); }
+const fmt = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + String(Math.floor(s % 60)).padStart(2, '0') + '.' + Math.floor((s % 1) * 10); };
+function elapsed(){
+  if (!ed || !ed.items.length) return 0;
+  const L = vLens(); let t = 0; for (let k = 0; k < V.i; k++) t += L[k];
+  const it = ed.items[V.i]; return t + Math.max(0, Math.min(L[V.i] || 0, (vid().currentTime || 0) - (it.start || 0)));
+}
+function showTime(){
+  $('vTime').textContent = fmt(elapsed()) + ' / ' + fmt(total());
+  const h = $('vHead'), blk = $('vTrack').querySelector(`.vblk[data-i="${V.i}"]`);
+  if (h && blk && ed.items[V.i]){
+    const it = ed.items[V.i], L = vLens()[V.i] || 1;
+    const f = Math.max(0, Math.min(1, ((vid().currentTime || 0) - (it.start || 0)) / L));
+    h.style.left = (blk.offsetLeft + f * blk.offsetWidth) + 'px'; h.hidden = false;
+  } else if (h) h.hidden = true;
+  const it = ed.items[V.i];
+  const cap = it && it.caption ? it.caption : '';
+  $('vCap').textContent = cap; $('vCap').hidden = !cap; $('vCap').dataset.pos = (it && it.caption_pos) || 'bottom';
+}
+function stage(){
+  const [w, h] = (ed.shape || '9:16').split(':').map(Number);
+  const s = $('vStage'); s.style.aspectRatio = w + ' / ' + h;
+  s.style.width = `min(100%, calc(56vh * ${w / h}))`;
+  vid().style.objectFit = ed.fit === 'fit' ? 'contain' : 'cover';
+  vid().muted = !$('edSound').checked;
+}
+function load(i, at, play){
+  const it = ed.items[i]; if (!it) return;
+  V.i = i; const v = vid(), url = clipUrl(it);
+  const go = () => {
+    v.currentTime = Math.max(0, (it.start || 0) + (at || 0));
+    if (play) v.play().catch(() => { V.playing = false; $('vPlay').textContent = '▶'; });
+    showTime();
+  };
+  if (v.dataset.src !== url){ v.dataset.src = url; v.src = url; v.addEventListener('loadedmetadata', go, {once: true}); v.load(); }
+  else go();
+}
+function songSync(play){
+  const a = $('vSong'); if (!a) return;
+  const sid = $('edSong').value;
+  if (!sid || !play){ a.pause(); return; }
+  if (a.dataset.src !== sid){ a.dataset.src = sid; a.src = '/video/song/' + sid; }
+  a.volume = Math.min(1, parseFloat($('edSongVol').value) || 1);
+  try { a.currentTime = (parseFloat($('edSongStart').value) || 0) + elapsed(); } catch(_){}
+  a.play().catch(() => {});
+}
+function setPlaying(on){
+  V.playing = on; $('vPlay').textContent = on ? '❚❚' : '▶';
+  if (on){
+    // At the end (or past it)? Play from the top, like any player.
+    if (V.i >= ed.items.length || elapsed() >= total() - 0.15){ V.i = 0; load(0, 0, true); }
+    else load(V.i, Math.max(0, vid().currentTime - (ed.items[V.i].start || 0)), true);
+    songSync(true);
+  }
+  else { vid().pause(); songSync(false); }
+}
+function wirePreview(){
+  const v = vid();
+  v.addEventListener('timeupdate', () => {
+    if (!ed || !ed.items.length) return;
+    const it = ed.items[V.i];
+    if (it && V.playing && v.currentTime >= itEnd(it) - 0.06){
+      if (V.i + 1 < ed.items.length) load(V.i + 1, 0, true);
+      else { setPlaying(false); load(0, 0, false); }
+    }
+    showTime();
+  });
+  v.addEventListener('loadedmetadata', () => {
+    const it = ed && ed.items[V.i];
+    if (it && v.duration && isFinite(v.duration) && Math.abs((V.dur[it.job] || 0) - v.duration) > 0.05){
+      V.dur[it.job] = v.duration; drawEd();
+    }
+  });
+  v.addEventListener('ended', () => { if (V.playing && V.i + 1 < ed.items.length) load(V.i + 1, 0, true); else setPlaying(false); });
+  $('vPlay').onclick = () => { if (ed && ed.items.length) setPlaying(!V.playing); };
+  $('vBack').onclick = () => { if (!ed || !ed.items.length) return; setPlaying(false); load(0, 0, false); };
+  $('edSound').addEventListener('change', stage);
+}
+function select(i){
+  V.sel = (V.sel === i) ? -1 : i;
+  if (V.sel >= 0){ if (V.playing) setPlaying(false); load(V.sel, 0, false); }
+  drawEd();
+}
+function drawSel(){
+  const box = $('vSel'), it = ed.items[V.sel];
+  if (!it){ box.hidden = true; return; }
+  box.hidden = false;
+  const f = fullLen(it.job), s = it.start || 0, e = itEnd(it);
+  const j = state.jobs.find(x => x.id === it.job);
+  $('vSelName').textContent = `Clip ${V.sel + 1}: ${clipLabel(it.job)}`;
+  for (const [id, val] of [['vIn', s], ['vOut', e]]){ const r = $(id); r.max = f.toFixed(2); r.value = val.toFixed(2); }
+  $('vFill').style.left = (s / f * 100) + '%'; $('vFill').style.right = (100 - e / f * 100) + '%';
+  $('vTrimTxt').textContent = `${s.toFixed(1)}s to ${e.toFixed(1)}s · ${(e - s).toFixed(1)}s of ${f.toFixed(1)}s`;
+  $('vCapTxt').value = it.caption || '';
+  chips($('vCapPos'), ['top', 'middle', 'bottom'], it.caption_pos || 'bottom',
+    v => { it.caption_pos = v; drawSel(); showTime(); }, v => v[0].toUpperCase() + v.slice(1));
+  $('vScoredRow').hidden = !(j && j.has_scored); $('vScored').checked = !!it.scored;
+  $('vLeft').disabled = V.sel === 0; $('vRight').disabled = V.sel === ed.items.length - 1;
+}
+function trim(which){
+  const it = ed.items[V.sel]; if (!it) return;
+  const f = fullLen(it.job); let s = parseFloat($('vIn').value), e = parseFloat($('vOut').value);
+  if (which === 'in' && s > e - 0.3){ s = Math.max(0, e - 0.3); $('vIn').value = s; }
+  if (which === 'out' && e < s + 0.3){ e = Math.min(f, s + 0.3); $('vOut').value = e; }
+  it.start = Math.round(s * 10) / 10;
+  it.end = e >= f - 0.05 ? 0 : Math.round(e * 10) / 10;
+  if (V.playing) setPlaying(false);
+  V.i = V.sel; const v = vid();
+  if (v.dataset.src === clipUrl(it)) v.currentTime = which === 'in' ? s : Math.max(s, e - 0.04); else load(V.sel, which === 'in' ? 0 : e - s - 0.04, false);
+  $('vFill').style.left = (s / f * 100) + '%'; $('vFill').style.right = (100 - e / f * 100) + '%';
+  $('vTrimTxt').textContent = `${s.toFixed(1)}s to ${e.toFixed(1)}s · ${(e - s).toFixed(1)}s of ${f.toFixed(1)}s`;
+  clearTimeout(V.redraw); V.redraw = setTimeout(() => { drawEd(); }, 400);
+  showTime();
+}
+function move(d){
+  const i = V.sel, k = i + d; if (i < 0 || k < 0 || k >= ed.items.length) return;
+  [ed.items[i], ed.items[k]] = [ed.items[k], ed.items[i]]; V.sel = k; V.i = k; drawEd();
+}
+function addClip(id){
+  ed.items.push({job: id, start: 0, end: 0, caption: '', caption_pos: 'bottom'});
+  V.sel = ed.items.length - 1; drawEd(); load(V.sel, 0, false);
+  $('vTrack').scrollLeft = $('vTrack').scrollWidth;
+}
+// Drag clips along the strip to reorder: press and hold a clip, then slide it.
+function wireTrack(){
+  const tr = $('vTrack');
+  tr.querySelectorAll('.vblk').forEach(b => {
+    b.onpointerdown = ev => {
+      const i = +b.dataset.i, x0 = ev.clientX;
+      V.drag = {i, x0, on: false, b, t: setTimeout(() => { if (V.drag){ V.drag.on = true; b.classList.add('drag'); } }, 260)};
+      b.setPointerCapture(ev.pointerId);
+    };
+    b.onpointermove = ev => {
+      const d = V.drag; if (!d) return;
+      if (!d.on){ if (Math.abs(ev.clientX - d.x0) > 8){ clearTimeout(d.t); V.drag = null; } return; }
+      b.style.transform = `translateX(${ev.clientX - d.x0}px)`;
+      const r = tr.getBoundingClientRect(); const x = ev.clientX - r.left + tr.scrollLeft;
+      let k = 0; tr.querySelectorAll('.vblk').forEach((o, n) => { if (n !== d.i && x > o.offsetLeft + o.offsetWidth / 2) k++; });
+      d.to = k;  // its new place among the other clips
+    };
+    b.onpointercancel = () => { if (V.drag) clearTimeout(V.drag.t); V.drag = null; b.classList.remove('drag'); b.style.transform = ''; };
+    b.onpointerup = () => {
+      const d = V.drag; V.drag = null; if (!d) return; clearTimeout(d.t);
+      if (!d.on){ select(+b.dataset.i); return; }
+      const to = d.to ?? d.i;
+      if (to !== d.i){ const [x] = ed.items.splice(d.i, 1); ed.items.splice(to, 0, x); V.sel = to; V.i = to; }
+      drawEd();
+    };
+  });
+}
+// Keep the page from scrolling while a clip is being dragged.
+document.addEventListener('touchmove', e => { if (V.drag && V.drag.on) e.preventDefault(); }, {passive: false});
+$('vIn').oninput = () => trim('in');
+$('vOut').oninput = () => trim('out');
+$('vCapTxt').oninput = () => { const it = ed.items[V.sel]; if (!it) return; it.caption = $('vCapTxt').value; showTime(); };
+// Redraw a moment after the text is finished, so a tap on Top/Middle/Bottom isn't swallowed.
+$('vCapTxt').onchange = () => { clearTimeout(V.capT); V.capT = setTimeout(() => { if (ed) drawEd(); }, 350); };
+$('vScored').onchange = () => { const it = ed.items[V.sel]; if (!it) return; it.scored = $('vScored').checked; load(V.sel, 0, false); };
+$('vLeft').onclick = () => move(-1);
+$('vRight').onclick = () => move(1);
+$('vDup').onclick = () => { const it = ed.items[V.sel]; if (!it) return; ed.items.splice(V.sel + 1, 0, JSON.parse(JSON.stringify(it))); V.sel++; drawEd(); };
+$('vRm').onclick = () => { if (V.sel < 0) return; ed.items.splice(V.sel, 1); V.sel = -1; V.i = 0; setPlaying(false); drawEd(); if (ed.items.length) load(0, 0, false); else { vid().removeAttribute('src'); vid().dataset.src = ''; } };
+$('vAddAll').onclick = () => { readyClips().slice().reverse().forEach(j => ed.items.push({job: j.id, start: 0, end: 0, caption: '', caption_pos: 'bottom'})); drawEd(); load(0, 0, false); };
+wirePreview();
+
 function edBody(){
   return {id: ed.id, title: $('edTitle').value.trim() || 'Untitled edit', items: ed.items, shape: ed.shape, fit: ed.fit,
     keep_sound: $('edSound').checked, fade: $('edFade').checked, song_id: $('edSong').value || null,
