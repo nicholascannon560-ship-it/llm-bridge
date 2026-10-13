@@ -2197,7 +2197,12 @@ async def _square_credit(order_id: str, paid_cents: int, source: str) -> bool:
     async with _lock:
         rec["status"] = "paid"
         doc["events"].append(order_id)
-    await _ledger(u, rec["cents"] / 100, f"Added ${rec['cents'] / 100:.2f} credit")
+    if u.get("owner"):
+        net = _owner_net(rec["cents"])
+        await _ledger(u, net, f"Added ${net:.2f} owner credit (${rec['cents'] / 100:.2f} paid, "
+                              f"after Square and OpenRouter fees)")
+    else:
+        await _ledger(u, rec["cents"] / 100, f"Added ${rec['cents'] / 100:.2f} credit")
     print(f"[video] credit {rec['cents']}c to {u['id']} via {source}", flush=True)
     return True
 
