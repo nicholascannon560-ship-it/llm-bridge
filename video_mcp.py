@@ -447,10 +447,28 @@ async def mcp_get(secret: str):
     return Response(status_code=405 if _secret_ok(secret) else 404, headers={"Allow": "POST"})
 
 
+@mcp_router.get("/mcp")
+async def mcp_get_oauth(request: Request):
+    return Response(status_code=405, headers={"Allow": "POST"})
+
+
+@mcp_router.post("/mcp")
+async def mcp_post_oauth(request: Request):
+    """The customer door: needs a signed-in account (OAuth bearer token)."""
+    user = await user_for_token(request)
+    if not user:
+        return challenge(request)
+    return await _handle(request, user)
+
+
 @mcp_router.post("/mcp/{secret}")
 async def mcp_post(secret: str, request: Request):
     if not _secret_ok(secret):
         return Response("Not found", status_code=404)
+    return await _handle(request, await va._owner_rec())
+
+
+async def _handle(request: Request, user: dict):
     try:
         msg = await request.json()
     except Exception:
