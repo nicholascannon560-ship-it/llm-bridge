@@ -1366,6 +1366,7 @@ $('pin').onkeydown = e => { if (e.key === 'Enter') $('loginBtn').click(); };
 async function boot(){
   const s = await api('/video/session');
   // Where email sign-up is off (the bridge), only the owner PIN is offered.
+  state.accountsOn = !!s.accounts;
   $('pkStep').hidden = !s.accounts;
   // Returning on a phone that already made a passkey: lead with sign-in.
   let known = false; try { known = localStorage.getItem('vs_passkey') === '1'; } catch(_){}
