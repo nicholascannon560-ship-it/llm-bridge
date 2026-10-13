@@ -1556,7 +1556,7 @@ async def video_clip(jid: str, request: Request):
     key = (j or {}).get("scored_key" if scored else "clip_key")
     if not key:
         return _err("No file for that video", 404)
-    data = await _get(key)
+    data = await _clip_bytes(key)
     if not data:
         return _err("File missing from storage", 404)
     size = len(data)
