@@ -1475,7 +1475,12 @@ async def video_jobs(request: Request):
     for j in jobs:
         _ensure_poller(j)
     mine = [j for j in jobs if _owns(request, j)]
-    return {"jobs": [_public(j) for j in reversed(mine[-80:]) if not j.get("superseded")][:60],
+    pq = request.query_params.get("project")
+    if pq is not None:  # "none" = Unsorted, otherwise a project id
+        want = None if pq in ("", "none") else pq
+        mine = [j for j in mine if j.get("project") == want]
+    n = 200 if pq is not None else 80
+    return {"jobs": [_public(j) for j in reversed(mine[-n:]) if not j.get("superseded")][:n],
             "spent_today": await _spent_24h(), "daily_cap": _daily_cap()}
 
 
