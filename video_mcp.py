@@ -420,7 +420,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         try:
             job = await va.start_bundle([str(x) for x in (a.get("jobs") or []) if x],
                                         [str(x) for x in (a.get("names") or [])],
-                                        title=str(a.get("title") or "clips")[:60])
+                                        title=str(a.get("title") or "clips")[:60], user=uid)
         except RuntimeError as e:
             raise ValueError(str(e))
         return {"job": await _job_view(req, job), "next": "Poll job_status; when ready, video_url downloads the zip."}
