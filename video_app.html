@@ -1412,7 +1412,17 @@ function pollEdits(){
 }
 
 // ---------------- picture maker
-$('makePicBtn').onclick = () => { $('makePic').hidden = !$('makePic').hidden; $('mpFromRow').hidden = !state.pics.length; showErr($('mpErr'), ''); };
+$('makePicBtn').onclick = () => { $('makePic').hidden = !$('makePic').hidden; $('mpFromRow').hidden = !state.pics.length;
+  $('mpRefsRow').hidden = !state.pics.length; showErr($('mpErr'), ''); loadPicModels(); };
+async function loadPicModels(){
+  if (state.picModels) return;
+  try {
+    const r = await api('/video/pictures/models'); state.picModels = r.models;
+    r.models.slice().sort((x, y) => x.name.localeCompare(y.name)).forEach(m => {
+      const o = document.createElement('option'); o.value = m.id; o.textContent = m.name + (m.vector ? ' (SVG)' : '');
+      $('mpModel').appendChild(o); });
+  } catch(e){ /* Auto still works */ }
+}
 $('mpCancel').onclick = () => { $('makePic').hidden = true; };
 $('mpGo').onclick = async () => {
   const b = $('mpGo'); b.disabled = true; b.textContent = 'Making…'; showErr($('mpErr'), '');
