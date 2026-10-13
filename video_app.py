@@ -1273,8 +1273,8 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
     # Customers pay from prepaid credit: hold this part's estimate now, settle to the real
     # charge when it finishes, refund it if it fails. A long video must be covered in full up front.
     hold = 0.0
-    if uid not in ("owner", "demo"):  # "demo" = public site demo, capped in video_demo.py
-        u = await _user_by_id(uid)
+    if _pays(uid):  # "demo" = public site demo, capped in video_demo.py, paid by the owner
+        u = await (_owner_rec() if _payer(uid) == "owner" else _user_by_id(uid))
         if not u or u.get("blocked"):
             return _err("Sign in again", 401)
         if not _is_member(u):
