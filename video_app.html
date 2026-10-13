@@ -1311,10 +1311,12 @@ function renderAccount(a){
     $('joinBtn').textContent = 'Start membership: $10/month'; }
   $('acctLine').title = '';
   if (!owner && state.retainDays) $('acctLine').textContent += ` · With no credit and no activity for ${state.retainDays} days, your videos are deleted.`;
-  $('topupBox').hidden = owner || !a.billing || !a.packs.length;
+  $('topupBox').hidden = (owner && !wallet) || !a.billing || !a.packs.length;
+  $('pkAddBtn').hidden = !state.accountsOn || (a.passkeys || 0) > 0;
   $('portalBtn').hidden = owner || !a.has_customer || !a.billing;
-  $('historyBtn').hidden = owner || !a.ledger.length;
-  chips($('packs'), a.packs, null, v => addCredit(v), v => '$' + v);
+  $('historyBtn').hidden = (owner && !wallet) || !a.ledger.length;
+  chips($('packs'), a.packs, null, v => addCredit(v),
+    v => wallet && a.owner_net ? '$' + v + ' → ' + money(a.owner_net[v]) : '$' + v);
   $('cardLine').innerHTML = a.card ? `Charged to your ${esc(a.card.brand)} ending ${esc(a.card.last4)}. <a href="#" id="useCheckout">Use a different card</a>`
     : 'Secure checkout by Square. Credit never expires.';
   const uc = document.getElementById('useCheckout'); if (uc) uc.onclick = e => { e.preventDefault(); state.forceCheckout = true;
