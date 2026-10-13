@@ -1161,7 +1161,7 @@ def _public(job: dict) -> dict:
             "audio", "budget", "estimate", "actual_cost", "status", "error", "poll_error",
             "song_id", "song_name", "song_start", "song_error", "images", "image_note",
             "parent_id", "edit_mode", "change", "total_seconds", "parts_total", "part_no",
-            "chain_remaining", "chain_error", "chain_estimate", "charged", "options_note", "uploaded")
+            "chain_remaining", "chain_error", "chain_estimate", "charged", "options_note", "uploaded", "project")
     out = {k: job.get(k) for k in keep}
     out["has_clip"] = bool(job.get("clip_key"))
     out["has_scored"] = bool(job.get("scored_key"))
