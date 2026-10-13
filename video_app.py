@@ -2675,7 +2675,8 @@ async def _render(e: dict) -> None:
                "prompt": f"Edit: {e['title']}", "duration": round(total, 1) or None, "total_seconds": round(total, 1) or None,
                "resolution": "720p", "aspect_ratio": e["shape"], "audio": True, "budget": 0, "estimate": 0,
                "actual_cost": 0, "status": "ready", "clip_key": key, "user": e.get("user") or "owner",
-               "settled": True, "edit_mode": "timeline", "change": e["title"], "parent_id": e["items"][0]["job"]}
+               "settled": True, "edit_mode": "timeline", "change": e["title"], "parent_id": e["items"][0]["job"],
+               "project": e.get("project")}
         all_jobs = await _all_jobs()
         async with _lock:
             all_jobs.append(job)
