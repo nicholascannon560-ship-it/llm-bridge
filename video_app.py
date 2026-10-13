@@ -2858,6 +2858,7 @@ async def video_image_generate(request: Request):
     kind = _sniff(img) or ("png", "image/png")
     iid = secrets.token_urlsafe(24)
     await _put(f"{PREFIX}images/{iid}", img, kind[1])
+    await _index_image(iid, u["id"], "made", prompt)
     await _charge_small(u["id"], held, _bill(u["id"], float(cost)) if cost is not None else None, "picture")
     return {"id": iid, "url": f"/video/img/{iid}", "cost": cost}
 
