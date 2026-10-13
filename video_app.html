@@ -704,6 +704,8 @@ function renderJobs(){
     sel.innerHTML = songOptions() || '<option value="">Upload a song first</option>';
     sc.querySelector('[data-upfor]').addEventListener('click', () => { songUploadTarget = b.dataset.open; });
   });
+  box.querySelectorAll('[data-move]').forEach(b => b.onclick = () =>
+    openMover(box.querySelector(`[data-mover="${b.dataset.move}"]`), 'video', b.dataset.move));
   box.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (!confirm('Delete this video for good? This can\'t be undone.')) return;
     b.disabled = true;
