@@ -351,11 +351,39 @@ label.btn{display:inline-block;text-align:center}
       <div class="editor" id="ed" hidden>
         <label class="f" style="margin-top:0">Title</label>
         <input type="text" id="edTitle" placeholder="My edit">
-        <label class="f">Timeline</label>
-        <div id="edItems"></div>
-        <div class="row" style="margin-top:8px;flex-wrap:nowrap">
-          <select id="edAddSel" style="flex:1"></select>
-          <button class="btn ghost small" id="edAdd">Add clip</button></div>
+        <div class="vstage" id="vStage">
+          <video id="vPrev" playsinline preload="auto"></video>
+          <div class="vcap" id="vCap" hidden></div>
+          <div class="vempty" id="vEmpty">Add clips below to start your edit</div>
+        </div>
+        <audio id="vSong" preload="auto"></audio>
+        <div class="vctl">
+          <button class="btn ghost small" id="vBack" aria-label="Back to start">⏮</button>
+          <button class="btn small" id="vPlay" aria-label="Play or pause">▶</button>
+          <span class="num" id="vTime">0:00.0 / 0:00.0</span>
+        </div>
+        <div class="vtrack" id="vTrack"></div>
+        <div class="hint" style="margin-top:4px">Tap a clip to trim it or add a caption. Press and hold a clip to drag it.</div>
+        <div class="vsel" id="vSel" hidden>
+          <div class="row" style="justify-content:space-between"><strong id="vSelName" style="font-size:14px"></strong></div>
+          <div class="vtrim"><div class="vbar"></div><div class="vfill" id="vFill"></div>
+            <input type="range" id="vIn" min="0" step="0.05" aria-label="Start of clip">
+            <input type="range" id="vOut" min="0" step="0.05" aria-label="End of clip"></div>
+          <div class="hint num" id="vTrimTxt" style="margin-top:2px"></div>
+          <label class="f">Caption</label>
+          <input type="text" id="vCapTxt" placeholder="Text on screen (optional)">
+          <div class="chips" id="vCapPos" style="margin-top:8px"></div>
+          <label class="toggle" id="vScoredRow" hidden><input type="checkbox" id="vScored"> Use the version with its song</label>
+          <div class="row" style="margin-top:10px">
+            <button class="btn ghost small" id="vLeft" aria-label="Move earlier">◀ Earlier</button>
+            <button class="btn ghost small" id="vRight" aria-label="Move later">Later ▶</button>
+            <button class="btn ghost small" id="vDup">Duplicate</button>
+            <button class="btn ghost small" id="vRm" style="color:var(--red)">Remove</button></div>
+        </div>
+        <div class="row" style="justify-content:space-between;margin-top:14px">
+          <label class="f" style="margin:0">Add clips</label>
+          <button class="btn ghost small" id="vAddAll" hidden>Add all</button></div>
+        <div class="vbin" id="vBin"></div>
         <label class="f">Shape</label>
         <div class="chips" id="edShape"></div>
         <label class="f">When a clip's shape doesn't match</label>
