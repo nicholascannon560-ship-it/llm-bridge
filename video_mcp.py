@@ -232,7 +232,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
             r.raise_for_status()
             raw = r.content
         if not raw:
-            raise ValueError("Send data_base64 or an https url")
+            raise ValueError("Send the picture as data_base64" + ("" if not user.get("owner") else " or an https url"))
         if len(raw) > va.MAX_IMAGE_BYTES:
             raise ValueError("Pictures must be under 8 MB")
         kind = va._sniff(raw)
