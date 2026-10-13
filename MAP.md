@@ -211,6 +211,7 @@ service variable if you want it to persist.
 <!-- Agents: append one-line deltas here, MAX 120 CHARS.
      Format: - YYYY-MM-DD | short description | files: path1, path2
      Longer detail belongs in the change-log issue, not here. -->
+- 2026-10-13 | MCP connector at POST /mcp/<BRIDGE_MCP_SECRET>; tools call routes in-process | files: bridge_mcp.py, main.py
 - 2026-07-31 | Added agent_loop validation test (validate.py) | files: agent_loop/validate.py
 - 2026-07-31 | Added agent_loop/ module: autonomous agent harness with tool calling + memory | files: agent_loop/*
 - 2026-07-28 | Forwarded reasoning_effort + raised LLM timeout to 120s | files: command_channel.py

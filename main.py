@@ -205,7 +205,10 @@ _EXEMPT_PATHS = {"/health", "/ui", "/ui/", "/ui/login",
 # /rv and /rv/* is RV Lab. Same model as Cart Tally: it never accepts the bridge
 # key, and every data route checks its own PIN session cookie (see rv_app.py).
 # /video and /video/* is Video Studio: same model, its own VIDEO_PIN/CART_PIN cookie.
-_EXEMPT_PREFIXES = ("/rv/", "/video/")
+_EXEMPT_PREFIXES = ("/rv/", "/video/", "/mcp/")
+# /mcp/<secret> is the MCP connector (bridge_mcp.py): it checks its own secret
+# and calls the routes below in-process with a per-process internal token.
+from bridge_mcp import router as mcp_router, INTERNAL_HEADER, INTERNAL_TOKEN
 
 
 class _KeyState:
@@ -241,6 +244,10 @@ class BridgeAuthMiddleware(BaseHTTPMiddleware):
             except Exception:
                 pass
 
+        internal = request.headers.get(INTERNAL_HEADER)
+        if internal and secrets.compare_digest(internal, INTERNAL_TOKEN):
+            return await call_next(request)
+
         supplied = request.headers.get("x-bridge-key")
         if supplied != KEY_STATE.key:
             return JSONResponse(
@@ -268,6 +275,7 @@ class BridgeAuthMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(BridgeAuthMiddleware)
+app.include_router(mcp_router)
 
 
 class RotateKeyResponse(BaseModel):
