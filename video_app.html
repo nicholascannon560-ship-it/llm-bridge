@@ -1273,6 +1273,19 @@ async function passkeyLogin(){
   b.disabled = false;
 }
 $('pkSignup').onclick = passkeySignup;
+async function passkeyAdd(){
+  if (!window.PublicKeyCredential){ alert("This browser can't use passkeys. Open the link in Safari or Chrome."); return; }
+  const b = $('pkAddBtn'); b.disabled = true;
+  try {
+    const st = await api('/video/passkey/register/start', {method:'POST', body: '{}'});
+    const cred = await navigator.credentials.create({publicKey: createOpts(st.options)});
+    await api('/video/passkey/register/finish', {method:'POST', body: JSON.stringify({token: st.token, credential: credJSON(cred)})});
+    try { localStorage.setItem('vs_passkey', '1'); } catch(_){}
+    b.hidden = true; await loadAccount();
+  } catch(e){ alert(pkError(e)); }
+  b.disabled = false;
+}
+$('pkAddBtn').onclick = passkeyAdd;
 $('pkLogin').onclick = passkeyLogin;
 $('email').onkeydown = e => { if (e.key === 'Enter') $('pkSignup').click(); };
 $('logoutBtn').onclick = async () => { await api('/video/logout', {method:'POST'}).catch(() => {}); location.href = '/video'; };
