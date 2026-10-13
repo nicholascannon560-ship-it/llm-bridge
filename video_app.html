@@ -1288,6 +1288,20 @@ async function passkeyAdd(){
   b.disabled = false;
 }
 $('pkAddBtn').onclick = passkeyAdd;
+async function loadConnections(){
+  try {
+    const c = await api('/video/oauth/connections'); const n = c.connections.length;
+    $('connBtn').hidden = !n; $('connBtn').textContent = n > 1 ? `Disconnect Claude (${n})` : 'Disconnect Claude';
+    $('mcpLine').hidden = false;
+    $('mcpLine').textContent = (n ? 'Connected to Claude. ' : 'Use Video Studio in Claude: ')
+      + 'add a custom connector with ' + location.origin + '/mcp';
+  } catch(e){ $('connBtn').hidden = true; $('mcpLine').hidden = true; }
+}
+$('connBtn').onclick = async () => {
+  if (!confirm('Sign Claude out of your Video Studio account?')) return;
+  await api('/video/oauth/disconnect', {method:'POST', body:'{}'}).catch(() => {});
+  loadConnections();
+};
 $('pkLogin').onclick = passkeyLogin;
 $('email').onkeydown = e => { if (e.key === 'Enter') $('pkSignup').click(); };
 $('logoutBtn').onclick = async () => { await api('/video/logout', {method:'POST'}).catch(() => {}); location.href = '/video'; };
