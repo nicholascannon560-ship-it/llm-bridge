@@ -491,8 +491,8 @@ async def _handle(request: Request, user: dict):
     if method == "tools/call":
         name, args = params.get("name"), params.get("arguments") or {}
         try:
-            out = await _call(str(name), args if isinstance(args, dict) else {}, request)
-            print(f"VIDEO_MCP call {name} ok", flush=True)
+            out = await _call(str(name), args if isinstance(args, dict) else {}, request, user)
+            print(f"VIDEO_MCP call {name} ok ({'owner' if user.get('owner') else 'customer'})", flush=True)
             return _rpc(mid, {"content": [{"type": "text", "text": json.dumps(out, indent=1, default=str)}]})
         except Exception as e:
             print(f"VIDEO_MCP call {name} failed: {str(e)[:200]}", flush=True)
