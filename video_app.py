@@ -2748,12 +2748,9 @@ async def video_image_generate(request: Request):
     prompt = str(b.get("prompt") or "").strip()[:1500]
     if not prompt:
         return _err("Describe the picture")
-    if not u.get("owner"):
-        if not _is_member(u):
-            return _err("Start a membership to make pictures.", 402)
-        if _credit(u) < IMAGE_HOLD:
-            return _err(f"Making a picture needs about ${IMAGE_HOLD:.2f} of credit. Add credit to continue.", 402)
-        await _ledger(u, -IMAGE_HOLD, "Hold for a picture")
+    held = await _image_hold(u["id"])
+    if isinstance(held, JSONResponse):
+        return held
     content = [{"type": "text", "text": prompt}]
     src = str(b.get("from_image") or "")
     if IMG_ID.match(src):
