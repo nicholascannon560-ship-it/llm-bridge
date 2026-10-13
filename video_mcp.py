@@ -150,12 +150,12 @@ TOOLS = [
     {"name": "upload_image",
      "description": "Upload a picture (base64 PNG/JPEG/WebP, or an https URL) to use as a start frame, end frame or reference. "
                     "Returns an image id and a public URL.",
-     "inputSchema": {"type": "object", "properties": {"data_base64": {"type": "string"}, "url": {"type": "string"}}}},
+     "inputSchema": {"type": "object", "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, "data_base64": {"type": "string"}, "url": {"type": "string"}}}},
     {"name": "make_image",
      "description": "Make a picture with the image model, or change an existing one by passing from_image (an image id). "
                     "Good for photoreal end frames: pass the sketch as from_image and ask for the same scene made real. "
                     "Costs a few cents. Returns an image id and URL.",
-     "inputSchema": {"type": "object", "required": ["prompt"], "properties": {
+     "inputSchema": {"type": "object", "required": ["prompt"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "prompt": {"type": "string"}, "from_image": {"type": "string"},
          "aspect": {"type": "string", "enum": ["16:9", "9:16", "1:1", "4:5", "3:4", "4:3"]}}}},
     {"name": "make_video",
