@@ -226,7 +226,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
             if "," in s[:100]:
                 s = s.split(",", 1)[1]
             raw = base64.b64decode(s)
-        elif str(a.get("url") or "").startswith("https://"):
+        elif str(a.get("url") or "").startswith("https://") and user.get("owner"):
             async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
                 r = await c.get(a["url"])
             r.raise_for_status()
