@@ -1454,9 +1454,107 @@ async function boot(){
     renderSongs('');
     if (state.models.length) pickModel(state.models[0].id);
   } catch(e){ showErr($('goErr'), e.message); }
+  await loadProjects();
   await loadJobs();
   await Promise.all([loadChars(), loadEdits()]);
   if (state.edits.some(e => e.status === 'rendering')) pollEdits();
+}
+
+// ---------------- projects
+function projName(id){ if (!id) return 'Unsorted'; const p = state.projects.find(x => x.id === id); return p ? p.name : 'Unsorted'; }
+function drawProjects(o){
+  state.projects = o.projects; const changed = (state.project || null) !== (o.active || null); state.project = o.active || null;
+  const opt = (id, name, c) => `<option value="${esc(id)}">${esc(name)} (${c.videos + c.edited + c.pictures})</option>`;
+  $('projSel').innerHTML = opt('none', 'Unsorted', o.unsorted) + o.projects.map(p => opt(p.id, p.name, p)).join('');
+  $('projSel').value = state.project || 'none';
+  $('projMore').hidden = !state.project; if (!state.project) $('projMenu').hidden = true;
+  $('clipsTitle').textContent = projName(state.project);
+  return changed;
+}
+async function loadProjects(){
+  try {
+    const o = await api('/video/projects');
+    state.projectsOn = true; $('projBar').hidden = false; $('tabs').hidden = false;
+    return drawProjects(o);
+  } catch(e){ state.projectsOn = false; $('projBar').hidden = true; $('tabs').hidden = true; return false; }
+}
+async function switchedProject(){
+  state.stale = true; state.gallery = [];
+  await loadJobs().catch(() => {}); drawEditList();
+  if (state.tab === 'pictures') await loadGallery();
+}
+$('projSel').onchange = async () => {
+  try { drawProjects(await api('/video/projects/active', {method:'POST', body: JSON.stringify({id: $('projSel').value})})); }
+  catch(e){ alert(e.message); }
+  await switchedProject();
+};
+$('projNew').onclick = async () => {
+  const name = prompt('Name the new project'); if (!name || !name.trim()) return;
+  try { drawProjects(await api('/video/projects', {method:'POST', body: JSON.stringify({name})})); await switchedProject(); }
+  catch(e){ alert(e.message); }
+};
+$('projMore').onclick = () => { $('projMenu').hidden = !$('projMenu').hidden; };
+$('projRename').onclick = async () => {
+  const name = prompt('New name', projName(state.project)); if (!name || !name.trim()) return;
+  try { drawProjects(await api('/video/projects/' + state.project + '/rename', {method:'POST', body: JSON.stringify({name})})); }
+  catch(e){ alert(e.message); }
+};
+$('projDelete').onclick = async () => {
+  if (!confirm(`Delete the project "${projName(state.project)}"? Its videos and pictures move to Unsorted; nothing is deleted.`)) return;
+  try { drawProjects(await api('/video/projects/' + state.project + '/delete', {method:'POST', body:'{}'})); await switchedProject(); }
+  catch(e){ alert(e.message); }
+};
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = async () => {
+  state.tab = b.dataset.tab;
+  document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  renderJobs();
+  if (state.tab === 'pictures') await loadGallery();
+});
+// Claude may have switched the project while the app was in the background: follow it.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !state.projectsOn) return;
+  if (await loadProjects()) await switchedProject(); else loadJobs().catch(() => {});
+});
+function openMover(box, kind, id){
+  if (!box) return;
+  if (!box.hidden){ box.hidden = true; return; }
+  const targets = [{id:'none', name:'Unsorted'}, ...state.projects].filter(p => (p.id === 'none' ? null : p.id) !== (state.project || null));
+  box.innerHTML = targets.length ? `<div class="hint" style="margin-top:0">Move to</div><div class="chips">${targets.map(p =>
+    `<button class="chip" data-to="${esc(p.id)}">${esc(p.name)}</button>`).join('')}</div>`
+    : '<div class="hint" style="margin:0">Make another project first.</div>';
+  box.hidden = false;
+  box.querySelectorAll('[data-to]').forEach(c => c.onclick = async () => {
+    try {
+      await api('/video/projects/move', {method:'POST', body: JSON.stringify({kind, ids:[id], project: c.dataset.to})});
+      box.hidden = true; await loadProjects();
+      if (kind === 'video'){ state.stale = true; await loadJobs(); } else await loadGallery();
+    } catch(e){ alert(e.message); }
+  });
+}
+async function loadGallery(){
+  try { state.gallery = (await api('/video/pictures?project=' + encodeURIComponent(state.project || 'none'))).pictures; }
+  catch(e){ state.gallery = []; }
+  if (state.tab === 'pictures') drawGallery();
+}
+function drawGallery(){
+  const g = $('picGrid');
+  g.innerHTML = state.gallery.length ? state.gallery.map(p => `<div class="pc">
+      <a href="${esc(p.url)}" target="_blank"><img alt="${esc(p.note || 'Picture')}" src="${esc(p.url)}" loading="lazy"></a>
+      ${p.note ? `<div class="note">${esc(p.note)}</div>` : ''}
+      <div class="pcb"><button data-use="${esc(p.id)}">Use</button><button data-pmove="${esc(p.id)}">Move</button></div></div>`).join('')
+    : '<div class="empty" style="grid-column:1/-1">Pictures you make or upload in this project show up here.</div>';
+  g.querySelectorAll('[data-use]').forEach(b => b.onclick = () => {
+    const p = state.gallery.find(x => x.id === b.dataset.use); if (!p) return;
+    const img = new Image();
+    img.onload = () => {
+      const role = state.pics.some(x => x.role === 'first') ? 'ref' : 'first';
+      state.pics.push({id: p.id, role, thumb: p.url, w: img.naturalWidth, h: img.naturalHeight});
+      if (role === 'first') closestAspect(img.naturalWidth, img.naturalHeight);
+      renderPics(); checkPics(); render(); window.scrollTo({top: 0, behavior: 'smooth'});
+    };
+    img.src = p.url;
+  });
+  g.querySelectorAll('[data-pmove]').forEach(b => b.onclick = () => openMover($('picMover'), 'picture', b.dataset.pmove));
 }
 boot().catch(e => { showLogin(); showErr($('loginErr'), e.message); });
 </script>
