@@ -163,12 +163,24 @@ TOOLS = [
      "description": "Start a video. Optional start_image / end_image (image ids) make the model move from one picture to the "
                     "other; ref_images guide style instead. Checks price against budget and the connector limits before running. "
                     "Returns a job; poll job_status until status is completed.",
-     "inputSchema": {"type": "object", "required": ["model", "prompt", "duration", "budget"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
-         "model": {"type": "string"}, "prompt": {"type": "string"}, "duration": {"type": "integer"},
+     "inputSchema": {"type": "object", "required": ["prompt", "duration", "budget"], "properties": {"tier": {"type": "string", "enum": ["best", "budget"], "description": "Only when model is auto/omitted: best quality (default) or cheapest good option"}, "project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
+         "model": {"type": "string", "description": "Model id, or omit / \"auto\" to let the router pick the best model for the job"}, "prompt": {"type": "string"}, "duration": {"type": "integer"},
          "resolution": {"type": "string"}, "aspect_ratio": {"type": "string"}, "audio": {"type": "boolean"},
          "start_image": {"type": "string"}, "end_image": {"type": "string"},
          "ref_images": {"type": "array", "items": {"type": "string"}},
          "budget": {"type": "number", "description": "Most this video may cost, in USD"}}}},
+    {"name": "pick_model",
+     "description": "Preview which model auto-routing would use for a video, and why, without making it. Same inputs as make_video.",
+     "inputSchema": {"type": "object", "required": ["prompt", "duration"], "properties": {
+         "prompt": {"type": "string"}, "duration": {"type": "integer"}, "budget": {"type": "number"},
+         "resolution": {"type": "string"}, "aspect_ratio": {"type": "string"}, "audio": {"type": "boolean"},
+         "start_image": {"type": "string"}, "ref_images": {"type": "array", "items": {"type": "string"}},
+         "tier": {"type": "string", "enum": ["best", "budget"]}}}},
+    {"name": "routing",
+     "description": "Show the auto-routing table (which models are tried, in order, for each job type). The owner can "
+                    "change one job's list by passing job and models (model ids, best first); an empty list restores the default.",
+     "inputSchema": {"type": "object", "properties": {"job": {"type": "string"},
+         "models": {"type": "array", "items": {"type": "string"}}}}},
     {"name": "job_status",
      "description": "Status of a video job. When it's finished, video_url is a link to watch or download it.",
      "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
