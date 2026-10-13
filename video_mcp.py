@@ -193,7 +193,7 @@ TOOLS = [
                     "crossfade blends each join over that many seconds (0 = hard cut, ~0.15 hides small jumps). "
                     "mask_image (an image id: white = keep, black = drop) makes everything outside the shape pure black, "
                     "e.g. for projection mapping. Video only, no sound. Returns a job; poll job_status for video_url.",
-     "inputSchema": {"type": "object", "required": ["jobs"], "properties": {
+     "inputSchema": {"type": "object", "required": ["jobs"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "jobs": {"type": "array", "items": {"type": "string"}, "description": "Job ids in play order"},
          "shape": {"type": "string", "enum": ["3:4", "9:16", "16:9", "1:1", "4:5"]},
          "crossfade": {"type": "number"}, "mask_image": {"type": "string"},
