@@ -1573,6 +1573,25 @@ async function passkeyAdd(){
   b.disabled = false;
 }
 $('pkAddBtn').onclick = passkeyAdd;
+// ---------------- auto model routing (best quality for the job unless the shot asks for cheap)
+async function autoPick(){
+  const b = $('autoPick'); showErr($('goErr'), '');
+  if (!$('idea').value.trim()){ showErr($('goErr'), 'Describe the shot first, then auto-pick.'); return; }
+  b.disabled = true; b.textContent = 'Picking…';
+  try {
+    const r = await api('/video/route', {method:'POST', body: JSON.stringify({prompt: $('idea').value.trim(),
+      duration: state.length, aspect_ratio: state.aspect, images: state.pics.map(p => ({role: p.role})),
+      budget: parseFloat($('budget').value) || 0})});
+    $('audio').checked = !!r.audio; state.resolution = r.resolution; $('model').value = r.model; pickModel(r.model);
+    state.resolution = r.resolution; render();
+    $('autoWhy').hidden = false;
+    $('autoWhy').textContent = `Auto chose ${r.name} at ${r.resolution || 'default quality'}${r.audio ? ' with sound' : ''}: `
+      + `${r.reason} About ${money(r.estimate)}.`;
+  } catch(e){ showErr($('goErr'), e.message); }
+  b.disabled = false; b.textContent = 'Auto-pick the best model';
+}
+$('autoPick').onclick = autoPick;
+$('model').addEventListener('change', () => { $('autoWhy').hidden = true; });
 async function loadConnections(){
   try {
     const c = await api('/video/oauth/connections'); const n = c.connections.length;
