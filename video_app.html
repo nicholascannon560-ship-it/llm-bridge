@@ -681,7 +681,9 @@ function renderJobs(){
           <button class="btn small" data-edit="${j.id}">Edit</button>
           <button class="btn ghost small" data-extend="${j.id}">Make longer</button>
           <button class="btn ghost small" data-upscale="${j.id}">Sharpen (upscale)</button>
+          ${state.projectsOn ? `<button class="btn ghost small" data-move="${j.id}">Move</button>` : ''}
           <button class="btn ghost small" data-del="${j.id}" style="color:var(--red)">Delete</button></div>
+        <div class="editor" data-mover="${j.id}" hidden></div>
         <div class="editor" data-upscaler="${j.id}" hidden></div>
         <div class="editor" data-editor="${j.id}" hidden></div>
         <div class="editor" data-extender="${j.id}" hidden></div>
