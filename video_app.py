@@ -142,9 +142,55 @@ def _user_sign(uid: str, exp: int) -> str:
     return f"{uid}.{exp}.{mac}"
 
 
+# --------------------------------------------------------------------------- owner wallet
+# With OPENROUTER_OWNER_KEY set, the owner (and the public demo) run on their own OpenRouter key
+# and pay from an owner credit balance at plain cost, so owner usage never spends customer money.
+# The owner buys that credit in the app; it is credited net of Square's and OpenRouter's fees.
+def _owner_wallet_on() -> bool:
+    return bool(os.getenv("OPENROUTER_OWNER_KEY"))
+
+
+def _payer(uid: str | None) -> str:
+    """Whose credit pays: the public demo is the owner's marketing, so the owner pays for it."""
+    return "owner" if (uid or "owner") in ("owner", "demo") else uid
+
+
+def _pays(uid: str | None) -> bool:
+    return _payer(uid) != "owner" or _owner_wallet_on()
+
+
+def _fee(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(os.getenv(name) or default))
+    except ValueError:
+        return default
+
+
+def _owner_net(cents: int) -> float:
+    """What an owner purchase is worth in AI time: Square's cut, then OpenRouter's purchase fee."""
+    after_square = cents / 100 * (1 - _fee("VIDEO_SQUARE_PCT", 0.029)) - _fee("VIDEO_SQUARE_FIXED", 0.30)
+    return round(max(0.0, after_square / (1 + _fee("VIDEO_OR_FEE", 0.055))), 4)
+
+
+async def _owner_rec() -> dict:
+    """The owner's stored record (credit, ledger, passkeys). Created on first use."""
+    doc = await _users_doc()
+    u = next((x for x in doc["users"] if x["id"] == "owner"), None)
+    if u is None:
+        async with _lock:
+            u = next((x for x in doc["users"] if x["id"] == "owner"), None)
+            if u is None:
+                u = {"id": "owner", "owner": True, "email": None, "created": time.time(),
+                     "credit": 0.0, "ledger": [], "passkeys": []}
+                doc["users"].append(u)
+        await _save_users()
+    u["owner"] = True
+    return u
+
+
 async def _current_user(request: Request) -> dict | None:
     if _authed(request):
-        return OWNER
+        return await _owner_rec()
     tok = request.cookies.get(USER_COOKIE) or ""
     parts = tok.split(".")
     if len(parts) != 3 or not parts[1].isdigit() or int(parts[1]) < time.time():
