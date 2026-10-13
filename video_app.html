@@ -1336,7 +1336,7 @@ $('edRender').onclick = async () => {
   catch(e){ showErr($('edErr'), e.message); }
   b.disabled = false;
 };
-$('edClose').onclick = () => { $('ed').hidden = true; ed = null; };
+$('edClose').onclick = () => { setPlaying(false); $('ed').hidden = true; ed = null; };
 $('edDelete').onclick = async () => { if (!ed.id || !confirm('Delete this edit? Rendered videos stay in your clips.')) return;
   await api('/video/edits/' + ed.id + '/delete', {method:'POST'}).catch(() => {}); $('ed').hidden = true; ed = null; await loadEdits(); };
 async function loadEdits(){ try { state.edits = (await api('/video/edits')).edits; } catch(e){ state.edits = []; } drawEditList(); }
