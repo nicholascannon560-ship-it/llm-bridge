@@ -405,6 +405,8 @@ async def _all_jobs() -> list[dict]:
         async with _lock:
             if _jobs is None:
                 _jobs = await _load_list(JOBS_KEY)
+                for j in _jobs:
+                    j.setdefault("project", None)  # everything from before projects is Unsorted
     return _jobs
 
 
