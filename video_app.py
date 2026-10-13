@@ -1579,6 +1579,28 @@ async def video_clip(jid: str, request: Request):
     return Response(data, media_type="video/mp4", headers=headers)
 
 
+@video_router.get("/video/thumb/{jid}")
+async def video_thumb(jid: str, request: Request):
+    """Small still of a clip for the editor (made once, then kept in storage)."""
+    if (d := await _deny(request)):
+        return d
+    j = _mine(request, await _all_jobs(), jid)
+    if not j or not j.get("clip_key"):
+        return _err("Not found", 404)
+    key = f"{PREFIX}thumbs/{j['id']}.jpg"
+    img = await _get(key)
+    if not img:
+        clip = await _clip_bytes(j["clip_key"])
+        if not clip:
+            return _err("File missing from storage", 404)
+        try:
+            img = await asyncio.to_thread(thumb_sync, clip)
+        except Exception as e:
+            return _err(str(e)[:200], 500)
+        await _put(key, img, "image/jpeg")
+    return Response(img, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
 @video_router.get("/video/songs")
 async def video_songs(request: Request):
     if (d := await _deny(request)):
