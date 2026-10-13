@@ -78,9 +78,6 @@ def _secret_ok(s: str) -> bool:
     return len(want) >= 24 and hmac.compare_digest(s.encode(), want.encode())
 
 
-def _as_owner(request: Request) -> Request:
-    request.state.user = va.OWNER
-    return request
 
 
 def _detail(out) -> str:
