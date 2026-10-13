@@ -11,10 +11,12 @@ from fastapi.responses import RedirectResponse
 from video_app import VIDEO_APP_VERSION, video_router
 from video_mcp import mcp_router
 from video_demo import demo_router
+from video_oauth import oauth_router
 
 app = FastAPI(title="Video Studio", docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(video_router)
-app.include_router(mcp_router)  # Claude connector at /mcp/{VIDEO_MCP_SECRET}
+app.include_router(oauth_router)  # sign-in for the customer connector (OAuth 2.1 + PKCE)
+app.include_router(mcp_router)  # Claude connector: /mcp (signed-in accounts) and /mcp/{VIDEO_MCP_SECRET} (owner)
 app.include_router(demo_router)  # free public demo at /video/demo (embedded on North River Labs)
 
 
