@@ -2766,7 +2766,7 @@ async def video_image_generate(request: Request):
         payload["image_config"] = {"aspect_ratio": aspect}
     try:
         async with httpx.AsyncClient(timeout=180) as c:
-            r = await c.post(f"{OR_BASE}/chat/completions", json=payload, headers=_or_headers())
+            r = await c.post(f"{OR_BASE}/chat/completions", json=payload, headers=_or_headers(u["id"]))
         data = r.json()
         if r.status_code >= 400 or data.get("error"):
             raise RuntimeError((data.get("error") or {}).get("message") or f"HTTP {r.status_code}")
