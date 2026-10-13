@@ -1094,7 +1094,8 @@ function readyClips(){ return state.jobs.filter(j => j.status === 'ready' && j.h
 function clipLabel(id){ const j = state.jobs.find(x => x.id === id); if (!j) return 'Clip (no longer listed)';
   return `${j.total_seconds || j.duration || '?'}s · ${(j.change && j.model === 'editor') ? j.change : (j.prompt || '').slice(0, 60)}`; }
 function drawEditList(){
-  $('editList').innerHTML = state.edits.map(e => `<div class="tl"><div class="top"><span>${esc(e.title)}</span>
+  const edits = state.projectsOn ? state.edits.filter(e => (e.project || null) === (state.project || null)) : state.edits;
+  $('editList').innerHTML = edits.map(e => `<div class="tl"><div class="top"><span>${esc(e.title)}</span>
     <span class="hint" style="margin:0">${e.status === 'rendering' ? 'Rendering…' : e.status === 'ready' ? 'Rendered' : e.status === 'failed' ? 'Failed' : 'Draft'}</span></div>
     <div class="ctl2"><button data-open-edit="${e.id}">Open</button></div></div>`).join('');
   $('editList').querySelectorAll('[data-open-edit]').forEach(b => b.onclick = () => openEdit(state.edits.find(e => e.id === b.dataset.openEdit)));
