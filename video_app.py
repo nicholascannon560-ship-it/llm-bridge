@@ -1362,7 +1362,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                     audio = True
                 else:
                     break
-                r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
+                r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers(uid))
                 data = r.json()
     except Exception as e:
         await _release(uid, hold, "OpenRouter did not answer")
