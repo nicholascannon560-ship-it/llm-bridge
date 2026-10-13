@@ -731,6 +731,38 @@ def last_frame_sync(video: bytes) -> bytes:
         return Path(op).read_bytes()
 
 
+def thumb_sync(video: bytes) -> bytes:
+    """A small still from early in a clip, for the editor's timeline strip."""
+    with tempfile.TemporaryDirectory() as d:
+        vp, op = f"{d}/v.mp4", f"{d}/t.jpg"
+        Path(vp).write_bytes(video)
+        for at in ("0.5", "0"):
+            p = subprocess.run([_ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-ss", at, "-i", vp,
+                                "-frames:v", "1", "-vf", "scale=240:-2", "-q:v", "5", op],
+                               capture_output=True, text=True, timeout=60)
+            if p.returncode == 0 and Path(op).exists() and Path(op).stat().st_size:
+                return Path(op).read_bytes()
+        raise RuntimeError(f"couldn't make a thumbnail: {(p.stderr or '').strip()[-300:]}")
+
+
+# Recently played clips stay in memory so scrubbing in the editor (many small range requests)
+# doesn't pull the whole file from storage every time.
+_clip_cache: dict[str, bytes] = {}
+CLIP_CACHE_BYTES = max(0, int(os.getenv("VIDEO_CLIP_CACHE_MB") or 150)) * 1024 * 1024
+
+
+async def _clip_bytes(key: str) -> bytes | None:
+    data = _clip_cache.pop(key, None)
+    if data is None:
+        data = await _get(key)
+        if not data or len(data) > CLIP_CACHE_BYTES // 3:
+            return data
+    _clip_cache[key] = data  # most recent last
+    while sum(len(v) for v in _clip_cache.values()) > CLIP_CACHE_BYTES and len(_clip_cache) > 1:
+        _clip_cache.pop(next(iter(_clip_cache)))
+    return data
+
+
 def _probe(path: str) -> tuple[int, int, bool]:
     p = subprocess.run([_ffmpeg(), "-hide_banner", "-i", path], capture_output=True, text=True)
     m = re.search(r"Video:.*?(\d{2,5})x(\d{2,5})", p.stderr)
