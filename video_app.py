@@ -2164,7 +2164,7 @@ async def _pay(method: str, path: str, body: dict | None = None) -> dict:
 
 async def _square_checkout(u: dict, cents: int, redirect: str) -> str:
     data = await _pay("POST", "/v1/checkout", {"user_ref": u["id"], "cents": cents, "redirect_url": redirect,
-                                               "label": f"Video Studio credit ${cents / 100:.0f}"})
+                                               "label": f"Video Studio {'owner ' if u.get('owner') else ''}credit ${cents / 100:.0f}"})
     doc = await _users_doc()
     async with _lock:
         doc.setdefault("square_orders", {})[data["order_id"]] = {"user": u["id"], "cents": cents,
