@@ -261,12 +261,12 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         payload = {"model": va.IMAGE_MODEL, "modalities": ["image", "text"], "messages": [{"role": "user", "content": content}]}
         if a.get("aspect") in ("9:16", "16:9", "1:1", "4:5", "3:4", "4:3"):
             payload["image_config"] = {"aspect_ratio": a["aspect"]}
-        held = await va._image_hold("owner")  # paid from owner credit when the owner wallet is on
+        held = await va._image_hold(uid)  # customers pay from credit; the owner from owner credit
         if isinstance(held, Response):
             raise ValueError(_detail(held))
         try:
             async with httpx.AsyncClient(timeout=180) as c:
-                r = await c.post(f"{va.OR_BASE}/chat/completions", json=payload, headers=va._or_headers("owner"))
+                r = await c.post(f"{va.OR_BASE}/chat/completions", json=payload, headers=va._or_headers(uid))
             data = r.json()
             if r.status_code >= 400 or data.get("error"):
                 raise ValueError(f"Image model refused: {(data.get('error') or {}).get('message') or r.status_code}")
