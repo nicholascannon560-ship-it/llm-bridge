@@ -346,13 +346,14 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         j, plan, err = await va._upscale_quote(req, str(a.get("id") or ""), a.get("factor"), mode)
         if err:
             raise ValueError(_detail(err))
+        plan = {**plan, "cost_billed": va._bill(uid, plan["cost"])}
         if a.get("quote_only"):
             return {"quote": plan}
-        if (g := _guard(plan["cost"])):
+        if (g := _guard(plan["cost_billed"], uid)):
             raise ValueError(g)
-        budget = round(float(a.get("budget") or plan["cost"] + 0.05), 2)
+        budget = round(float(a.get("budget") or plan["cost_billed"] + 0.05), 2)
         url = await _view_url(req, j)
-        extra = {"user": "owner", "base": base, "video_ref_url": url + ("?song=1" if j.get("scored_key") else ""),
+        extra = {"user": uid, "base": base, "video_ref_url": url + ("?song=1" if j.get("scored_key") else ""),
                  "no_duration": True, "est_override": plan["cost"], "est_basis": plan["basis"], "parent_id": j["id"],
                  "edit_mode": "upscale", "change": f"Upscaled {plan['factor']:g}x ({mode}) to {plan['width']}x{plan['height']}"}
         if plan["can_tune"]:
