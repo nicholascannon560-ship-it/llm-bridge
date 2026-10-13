@@ -182,7 +182,7 @@ TOOLS = [
     {"name": "upscale",
      "description": "Sharpen a finished clip (up to 20 s). mode precise keeps it faithful; creative adds detail. "
                     "Call with quote_only true first to see the price.",
-     "inputSchema": {"type": "object", "required": ["id"], "properties": {
+     "inputSchema": {"type": "object", "required": ["id"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "id": {"type": "string"}, "factor": {"type": "number"}, "mode": {"type": "string", "enum": ["precise", "creative"]},
          "budget": {"type": "number"}, "quote_only": {"type": "boolean"}}}},
     {"name": "balance",
