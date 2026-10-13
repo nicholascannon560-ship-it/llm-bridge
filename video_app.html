@@ -466,7 +466,7 @@ function render(){
   else if (state.estimate > budget){ st.classList.add('over'); st.textContent = money(state.estimate - budget) + ' over budget'; ok = false; }
   else if (state.estimate > left){ st.classList.add('over'); st.textContent = 'Over today\'s limit'; ok = false; }
   else if (state.account && !state.account.owner && !state.account.member){ st.textContent = 'Start a membership to make videos'; ok = false; }
-  else if (state.account && !state.account.owner && state.estimate > state.account.credit){ st.classList.add('over'); st.textContent = 'Not enough credit. Add some above.'; ok = false; }
+  else if (state.account && (!state.account.owner || state.account.owner_wallet) && state.estimate > state.account.credit){ st.classList.add('over'); st.textContent = 'Not enough credit. Add some above.'; ok = false; }
   else st.textContent = money(budget - state.estimate) + ' under budget';
   $('today').textContent = money(state.spent) + (state.cap == null ? '' : ' of ' + money(state.cap)) + ' spent in the last 24 hours';
   $('goBtn').disabled = !ok || !checkPics();
