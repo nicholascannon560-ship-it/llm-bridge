@@ -2471,6 +2471,8 @@ async def _all_edits() -> list[dict]:
         async with _lock:
             if _edits is None:
                 _edits = await _load_list(EDITS_KEY)
+                for e in _edits:
+                    e.setdefault("project", None)
     return _edits
 
 
