@@ -1046,6 +1046,7 @@ async def save_last_frame(job_id: str, user: str = "owner") -> str:
     while not iid[-1].isalnum():
         iid = secrets.token_urlsafe(24)
     await _put(f"{PREFIX}images/{iid}", frame, "image/jpeg")
+    await _index_image(iid, user, "frame", f"Last frame of {(j.get('prompt') or '')[:80]}")
     return iid
 
 
