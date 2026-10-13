@@ -173,10 +173,10 @@ TOOLS = [
      "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
     {"name": "list_jobs",
      "description": "Recent videos, newest first.",
-     "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer"}}}},
+     "inputSchema": {"type": "object", "properties": {"project": {"type": "string", "description": "Only this project (name or id); \"unsorted\" for none"}, "limit": {"type": "integer"}}}},
     {"name": "extend",
      "description": "Continue a finished video from its last frame. change optionally describes what happens next.",
-     "inputSchema": {"type": "object", "required": ["id", "budget"], "properties": {
+     "inputSchema": {"type": "object", "required": ["id", "budget"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "id": {"type": "string"}, "seconds": {"type": "integer"}, "change": {"type": "string"},
          "budget": {"type": "number"}}}},
     {"name": "upscale",
