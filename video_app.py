@@ -1391,7 +1391,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
            "chain_remaining": extra["chain_remaining"] if "chain_remaining" in extra else parts - 1,
            "chain_estimate": extra.get("chain_estimate") or (round(est * parts, 4) if parts > 1 else None),
            # what each later part may spend; the total was already checked against the budget above
-           "user": uid, "hold": hold,
+           "user": uid, "hold": hold, "or_key": "owner" if (_payer(uid) == "owner" and _owner_wallet_on()) else "main",
            "part_budget": extra.get("part_budget") or (round(max(budget / parts, est) + 0.01, 2) if parts > 1 else None)}
     jobs = await _all_jobs()
     async with _lock:
