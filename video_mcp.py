@@ -202,7 +202,7 @@ TOOLS = [
      "description": "Cut one finished video for a VJ deck (free, no AI cost). mode pingpong plays the cut forward then "
                     "backward, so it loops seamlessly; mode trim just cuts it. start = seconds in, length = seconds "
                     "(0 = to the end). mask_image burns in a shape (white = keep) like stitch. Returns a job; poll job_status.",
-     "inputSchema": {"type": "object", "required": ["id"], "properties": {
+     "inputSchema": {"type": "object", "required": ["id"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "id": {"type": "string"}, "mode": {"type": "string", "enum": ["pingpong", "trim"]},
          "start": {"type": "number"}, "length": {"type": "number"},
          "shape": {"type": "string", "enum": ["3:4", "9:16", "16:9", "1:1", "4:5"]},
