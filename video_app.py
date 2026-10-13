@@ -422,7 +422,8 @@ async def _all_songs() -> list[dict]:
 async def _save_jobs() -> None:
     rows = await _all_jobs()
     async with _lock:
-        snapshot = json.dumps(rows[-300:], separators=(",", ":")).encode()
+        _stamp(rows)
+        snapshot = json.dumps(rows[-KEEP_JOBS:], separators=(",", ":")).encode()
     await _put(JOBS_KEY, snapshot, "application/json")
 
 
