@@ -1294,11 +1294,14 @@ $('logoutBtn').onclick = async () => { await api('/video/logout', {method:'POST'
 function renderAccount(a){
   state.account = a;
   const owner = a.owner;
-  $('acctCredit').textContent = owner ? 'Owner account' : money(a.credit) + ' credit';
+  const wallet = owner && a.owner_wallet;
+  $('acctCredit').textContent = wallet ? money(a.credit) + ' owner credit' : owner ? 'Owner account' : money(a.credit) + ' credit';
   const end = a.period_end ? new Date(a.period_end * 1000).toLocaleDateString() : '';
   const fund = owner && a.funding && a.funding.enabled
     ? ` Card funding: ${money(a.funding.waiting_cents / 100)} waiting to clear, ${money(a.funding.moved_cents / 100)} moved so far.` : '';
-  $('acctLine').textContent = owner ? 'Videos are billed to your OpenRouter account.' + fund
+  $('acctLine').textContent = wallet ? 'Your own videos run on your owner key at plain cost, paid from owner credit. '
+      + 'Each amount below shows what you get after Square and OpenRouter fees.' + fund
+    : owner ? 'Videos are billed to your OpenRouter account.' + fund
     : 'Pay as you go: videos cost what the AI charges plus ' + Math.round((state.markup || 0) * 100) + '%' + (a.email ? ' · ' + a.email : '');
   $('memberBox').hidden = owner || a.member || !a.billing;
   if (a.trial_offer){
