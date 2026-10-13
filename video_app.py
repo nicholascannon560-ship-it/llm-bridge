@@ -1349,8 +1349,8 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
                         await _release(uid, hold, "Over budget")
                         return _err(f"{m['name']} always makes its own sound, which brings this to about "
                                     f"${(est2 or 0) * parts:.2f}, over your ${budget:.2f} budget.")
-                    if uid != "owner" and est2 > est:
-                        u2 = await _user_by_id(uid)
+                    if _pays(uid) and est2 > est:
+                        u2 = await _user_by_id(_payer(uid))
                         extra_hold = round(est2 - est, 4)
                         if _credit(u2) + 1e-9 < extra_hold:
                             await _release(uid, hold, "Not enough credit")
