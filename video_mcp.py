@@ -227,6 +227,44 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
     req, uid = request, user["id"]
     base = va._public_base(req)
 
+    if name == "list_projects":
+        return await vp.overview(uid)
+
+    if name == "create_project":
+        p = await vp.create(uid, a.get("name"))
+        return {"created": p["name"], "id": p["id"], "active": p["name"]}
+
+    if name == "use_project":
+        ok, p = await vp.resolve(uid, a.get("project"))
+        if not ok:
+            raise ValueError(await _no_project(uid, a.get("project")))
+        await vp.set_active(uid, p["id"] if p else None)
+        return {"active": p["name"] if p else "Unsorted"}
+
+    if name == "project_contents":
+        ref = a.get("project")
+        ok, p = await vp.resolve(uid, ref) if ref is not None else (True, {"id": await vp.active(uid)})
+        if not ok:
+            raise ValueError(await _no_project(uid, ref))
+        pid = (p or {}).get("id")
+        n = max(1, min(100, int(a.get("limit") or 30)))
+        rows = [j for j in await va._all_jobs() if va._owns(uid, j) and j.get("project") == pid and not j.get("superseded")]
+        vids = [await _job_view(req, j) for j in reversed(rows) if not vp.is_edited(j)][:n]
+        edited = [await _job_view(req, j) for j in reversed(rows) if vp.is_edited(j)][:n]
+        pics = [{**x, "url": base + x["url"]} for x in await vp.pictures(uid, pid, n)]
+        return {"project": await vp.name_of(uid, pid), "videos": vids, "edited": edited, "pictures": pics}
+
+    if name == "move_to_project":
+        ok, p = await vp.resolve(uid, a.get("project"))
+        if not ok:
+            raise ValueError(await _no_project(uid, a.get("project")))
+        ids = [str(x) for x in (a.get("ids") or [])]
+        kinds = [a["kind"]] if a.get("kind") in ("video", "picture") else ["video", "picture"]
+        moved = 0
+        for k in kinds:
+            moved += await vp.move(uid, k, ids, p["id"] if p else None)
+        return {"moved": moved, "to": p["name"] if p else "Unsorted"}
+
     if name == "list_models":
         q = str(a.get("search") or "").lower()
         out = []
