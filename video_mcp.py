@@ -196,9 +196,10 @@ TOOLS = [
          "start_image": {"type": "string"}, "ref_images": {"type": "array", "items": {"type": "string"}},
          "tier": {"type": "string", "enum": ["best", "budget"]}}}},
     {"name": "routing",
-     "description": "Show the auto-routing table (which models are tried, in order, for each job type). The owner can "
-                    "change one job's list by passing job and models (model ids, best first); an empty list restores the default.",
-     "inputSchema": {"type": "object", "properties": {"job": {"type": "string"},
+     "description": "Show the auto-routing table (which models are tried, in order, for each job type). kind is video "
+                    "(default) or picture. The owner can change one job's list by passing job and models (model ids, "
+                    "best first); an empty list restores the default.",
+     "inputSchema": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["video", "picture"]}, "job": {"type": "string"},
          "models": {"type": "array", "items": {"type": "string"}}}}},
     {"name": "job_status",
      "description": "Status of a video job. When it's finished, video_url is a link to watch or download it.",
