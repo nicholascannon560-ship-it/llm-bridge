@@ -343,52 +343,6 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         await va._index_image(iid, uid, "upload")
         return {"image_id": iid, "url": f"{base}/video/img/{iid}"}
 
-    if name == "make_image":
-        if (g := _guard(va.IMAGE_HOLD, uid)):
-            raise ValueError(g)
-        prompt = str(a.get("prompt") or "").strip()[:1500]
-        if not prompt:
-            raise ValueError("Describe the picture")
-        content = [{"type": "text", "text": prompt}]
-        src = str(a.get("from_image") or "")
-        if src:
-            if not va.IMG_ID.match(src):
-                raise ValueError("from_image must be an image id")
-            data = await va._get(f"{va.PREFIX}images/{src}")
-            if not data:
-                raise ValueError("That image id wasn't found")
-            kind = va._sniff(data) or ("jpg", "image/jpeg")
-            content.append({"type": "image_url", "image_url": {"url": f"data:{kind[1]};base64,{base64.b64encode(data).decode()}"}})
-        payload = {"model": va.IMAGE_MODEL, "modalities": ["image", "text"], "messages": [{"role": "user", "content": content}]}
-        if a.get("aspect") in ("9:16", "16:9", "1:1", "4:5", "3:4", "4:3"):
-            payload["image_config"] = {"aspect_ratio": a["aspect"]}
-        held = await va._image_hold(uid)  # customers pay from credit; the owner from owner credit
-        if isinstance(held, Response):
-            raise ValueError(_detail(held))
-        try:
-            async with httpx.AsyncClient(timeout=180) as c:
-                r = await c.post(f"{va.OR_BASE}/chat/completions", json=payload, headers=va._or_headers(uid))
-            data = r.json()
-            if r.status_code >= 400 or data.get("error"):
-                raise ValueError(f"Image model refused: {(data.get('error') or {}).get('message') or r.status_code}")
-            msg = ((data.get("choices") or [{}])[0].get("message") or {})
-            url = (((msg.get("images") or [{}])[0].get("image_url") or {}).get("url")) or ""
-            if not url.startswith("data:"):
-                raise ValueError("The model didn't return a picture; try rewording")
-            img = base64.b64decode(url.split(",", 1)[1])
-        except Exception:
-            await va._release(uid, held, "picture failed")
-            raise
-        real = (data.get("usage") or {}).get("cost")
-        cost = va._bill(uid, float(real)) if real is not None else va.IMAGE_HOLD
-        await va._charge_small(uid, held, cost if real is not None else None, "picture")
-        _note(uid, cost)
-        kind = va._sniff(img) or ("png", "image/png")
-        iid = _tok(24)
-        await va._put(f"{va.PREFIX}images/{iid}", img, kind[1])
-        await va._index_image(iid, uid, "made", prompt)
-        return {"image_id": iid, "url": f"{base}/video/img/{iid}", "cost_usd": round(cost, 4)}
-
     if name in ("pick_model", "make_video") and str(a.get("model") or "auto").lower() == "auto":
         budget = round(float(a.get("budget") or 0), 2)
         r = await vr.route(uid, str(a.get("prompt") or ""), duration=float(a.get("duration") or 0),
