@@ -157,7 +157,7 @@ TOOLS = [
          "id": {"type": "string"}, "factor": {"type": "number"}, "mode": {"type": "string", "enum": ["precise", "creative"]},
          "budget": {"type": "number"}, "quote_only": {"type": "boolean"}}}},
     {"name": "balance",
-     "description": "OpenRouter credit left, plus what the connector has spent in the last 24 hours and its limits.",
+     "description": "Credit left on this Video Studio account, plus what the connector has spent in the last 24 hours and its limits.",
      "inputSchema": {"type": "object", "properties": {}}},
     {"name": "stitch",
      "description": "Join finished videos, in the order given, into one clip on the server (free, no AI cost). "
