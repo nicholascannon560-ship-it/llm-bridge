@@ -985,7 +985,7 @@ function openEditor(j, el){
   upd();
 }
 async function loadJobs(){
-  const out = await api('/video/jobs');
+  const out = await api('/video/jobs' + (state.projectsOn ? '?project=' + encodeURIComponent(state.project || 'none') : ''));
   const before = JSON.stringify(state.jobs.map(j => [j.id, j.status, j.has_scored, j.song_name]));
   state.jobs = out.jobs; state.spent = out.spent_today; state.cap = out.daily_cap;
   // Don't wipe an open edit or song panel while someone is typing in it.
