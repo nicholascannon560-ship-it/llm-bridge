@@ -365,12 +365,17 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         out = await va._start_job(req, spec, extra)
         if isinstance(out, Response):
             raise ValueError(_detail(out))
-        _spend.append((time.time(), plan["cost"]))
+        _note(uid, plan["cost_billed"])
         return {"job": out}
 
     if name == "balance":
-        info = {"connector_spent_24h": _spent(), "connector_daily_limit": _daily(), "per_job_limit": _max_job(),
-                "app_spent_24h": await va._spent_24h()}
+        info = {"connector_spent_24h": _spent(uid), "connector_daily_limit": _daily(), "per_job_limit": _max_job()}
+        if not user.get("owner"):  # customers see their own credit, never the business's accounts
+            fresh = await va._user_by_id(uid)
+            info.update(credit=va._credit(fresh), markup=va.USAGE_MARKUP,
+                        note="Add credit in Video Studio > Account.")
+            return info
+        info["app_spent_24h"] = await va._spent_24h()
         try:
             async with httpx.AsyncClient(timeout=20) as c:
                 r = await c.get(f"{va.OR_BASE}/credits", headers=va._or_headers())
