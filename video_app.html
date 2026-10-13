@@ -46,6 +46,15 @@ textarea,input[type=text],input[type=password],input[type=number],select{
 textarea{min-height:92px;resize:vertical}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tabs button{flex:1;border:0;background:transparent;color:var(--muted);padding:10px 4px;font-weight:600;font-size:15px;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--teal)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.pgrid .pc{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--sheet)}
+.pgrid img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
+.pgrid .pcb{display:flex;gap:4px;padding:6px;flex-wrap:wrap}
+.pgrid .pcb button,.pgrid .pcb a{flex:1;font-size:13px;padding:6px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);text-align:center;text-decoration:none}
+.pgrid .note{font-size:12px;color:var(--muted);padding:0 6px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 13px;font-size:14px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .chip:disabled{opacity:.35;cursor:default}
