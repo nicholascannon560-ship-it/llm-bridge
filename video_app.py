@@ -2595,7 +2595,7 @@ def render_edit_sync(items: list[dict], clips: list[bytes], shape: str, fit: str
 def _edit_public(e: dict) -> dict:
     return {k: e.get(k) for k in ("id", "title", "items", "shape", "fit", "keep_sound", "song_id",
                                   "song_start", "song_volume", "fade", "status", "error", "job_id",
-                                  "created", "updated")}
+                                  "created", "updated", "project")}
 
 
 @video_router.get("/video/edits")
