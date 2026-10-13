@@ -2037,9 +2037,15 @@ async def video_subscribe(request: Request):
     return {"url": sess["url"]}
 
 
+def _payer_only(request: Request):
+    if request.state.user.get("owner") and _owner_wallet_on():
+        return None if _billing_ready() else _err("Payments aren't set up yet.", 503)
+    return _customer_only(request)
+
+
 @video_router.post("/video/billing/topup")
 async def video_topup(request: Request):
-    if (d := await _deny(request)) or (d := _customer_only(request)):
+    if (d := await _deny(request)) or (d := _payer_only(request)):
         return d
     u, base = request.state.user, _public_base(request)
     pack = str((await _body(request)).get("pack") or "")
