@@ -1105,38 +1105,11 @@ function openEdit(e){
     song_id: null, song_start: 0, song_volume: 1};
   $('ed').hidden = false; $('edTitle').value = ed.title || ''; $('edSound').checked = ed.keep_sound !== false; $('edFade').checked = ed.fade !== false;
   $('edSongStart').value = ed.song_start || 0; $('edSongVol').value = ed.song_volume ?? 1; showErr($('edErr'), '');
-  $('edDelete').hidden = !ed.id; drawEd(); $('ed').scrollIntoView({block: 'start'});
+  $('edDelete').hidden = !ed.id; V.sel = -1; V.i = 0; V.playing = false; vid().pause();
+  drawEd(); if (ed.items.length) load(0, 0, false); else { vid().removeAttribute('src'); vid().dataset.src = ''; }
+  $('ed').scrollIntoView({block: 'start'});
 }
-function drawEd(){
-  $('edItems').innerHTML = ed.items.length ? '' : '<div class="hint">No clips yet. Add one below.</div>';
-  ed.items.forEach((it, i) => {
-    const d = document.createElement('div'); d.className = 'tl';
-    const j = state.jobs.find(x => x.id === it.job);
-    d.innerHTML = `<div class="top"><span>${i + 1}. ${esc(clipLabel(it.job))}</span></div>
-      <div class="ctl2">From <input type="number" min="0" step="0.5" value="${it.start || 0}" data-k="start"> s
-        to <input type="number" min="0" step="0.5" value="${it.end || ''}" placeholder="end" data-k="end"> s
-        ${j && j.has_scored ? `<label><input type="checkbox" data-k="scored" ${it.scored ? 'checked' : ''}> with its song</label>` : ''}</div>
-      <div class="ctl2"><input type="text" placeholder="Caption (optional)" value="${esc(it.caption || '')}" data-k="caption" style="flex:1;min-width:160px">
-        <select data-k="caption_pos"><option value="bottom">Bottom</option><option value="middle">Middle</option><option value="top">Top</option></select></div>
-      <div class="ctl2"><button data-a="up" aria-label="Move up">↑</button><button data-a="down" aria-label="Move down">↓</button><button data-a="rm">Remove</button></div>`;
-    d.querySelector('[data-k=caption_pos]').value = it.caption_pos || 'bottom';
-    d.querySelectorAll('[data-k]').forEach(inp => inp.onchange = () => {
-      const k = inp.dataset.k; it[k] = inp.type === 'checkbox' ? inp.checked : inp.type === 'number' ? parseFloat(inp.value) || 0 : inp.value; });
-    d.querySelector('[data-a=up]').onclick = () => { if (i > 0){ [ed.items[i - 1], ed.items[i]] = [ed.items[i], ed.items[i - 1]]; drawEd(); } };
-    d.querySelector('[data-a=down]').onclick = () => { if (i < ed.items.length - 1){ [ed.items[i + 1], ed.items[i]] = [ed.items[i], ed.items[i + 1]]; drawEd(); } };
-    d.querySelector('[data-a=rm]').onclick = () => { ed.items.splice(i, 1); drawEd(); };
-    $('edItems').appendChild(d);
-  });
-  $('edAddSel').innerHTML = readyClips().map(j => `<option value="${j.id}">${esc(clipLabel(j.id))}</option>`).join('') || '<option value="">Make a clip first</option>';
-  chips($('edShape'), Object.keys(SHAPE_NAMES), ed.shape, v => { ed.shape = v; drawEd(); }, v => SHAPE_NAMES[v]);
-  chips($('edFit'), ['fill', 'fit'], ed.fit, v => { ed.fit = v; drawEd(); }, v => v === 'fill' ? 'Fill and crop' : 'Fit with bars');
-  $('edSong').innerHTML = '<option value="">No song</option>' + songOptions(); $('edSong').value = ed.song_id || '';
-  $('edSongRow').hidden = !ed.song_id;
-  const e = state.edits.find(x => x.id === ed.id);
-  $('edStatus').textContent = !e ? '' : e.status === 'rendering' ? 'Rendering… this takes about a minute.'
-    : e.status === 'ready' ? 'Rendered. The video is in your clips below.' : e.status === 'failed' ? '' : '';
-  if (e && e.status === 'failed') showErr($('edErr'), e.error || 'Render failed');
-}
+/*@@VISUAL_EDITOR@@*/
 function edBody(){
   return {id: ed.id, title: $('edTitle').value.trim() || 'Untitled edit', items: ed.items, shape: ed.shape, fit: ed.fit,
     keep_sound: $('edSound').checked, fade: $('edFade').checked, song_id: $('edSong').value || null,
