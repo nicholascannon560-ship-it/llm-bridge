@@ -366,9 +366,14 @@ async def _call(name: str, a: dict, request: Request) -> dict:
         try:
             async with httpx.AsyncClient(timeout=20) as c:
                 r = await c.get(f"{va.OR_BASE}/credits", headers=va._or_headers())
-            d = (r.json() or {}).get("data") or {}
-            if "total_credits" in d:
-                info["openrouter_credit_left"] = round(float(d["total_credits"]) - float(d.get("total_usage") or 0), 2)
+                d = (r.json() or {}).get("data") or {}
+                if "total_credits" in d:
+                    info["openrouter_credit_left"] = round(float(d["total_credits"]) - float(d.get("total_usage") or 0), 2)
+                if va._owner_wallet_on():
+                    info["owner_credit"] = va._credit(await va._owner_rec())
+                    k = await c.get(f"{va.OR_BASE}/key", headers=va._or_headers("owner"))
+                    kd = (k.json() or {}).get("data") or {}
+                    info["owner_key_spent_total"] = round(float(kd.get("usage") or 0), 4)
         except Exception as e:
             info["openrouter_credit_error"] = str(e)[:120]
         return info
