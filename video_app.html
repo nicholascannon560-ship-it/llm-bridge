@@ -949,7 +949,7 @@ async function loadJobs(){
   if (JSON.stringify(state.jobs.map(j => [j.id, j.status, j.has_scored, j.song_name])) !== before || state.stale){
     if (panelOpen) state.stale = true; else { state.stale = false; renderJobs(); } }
   render();
-  if (state.account && !state.account.owner) loadAccount();
+  if (state.account && (!state.account.owner || state.account.owner_wallet)) loadAccount();
   const busy = state.stale || state.jobs.some(j => ['pending','in_progress'].includes(j.status) || j.chain_remaining > 0);
   clearTimeout(state.timer); if (busy) state.timer = setTimeout(() => loadJobs().catch(() => {}), 10000);
 }
