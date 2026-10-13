@@ -2716,10 +2716,24 @@ IMAGE_MODEL = os.getenv("VIDEO_IMAGE_MODEL") or "google/gemini-3.1-flash-image-p
 IMAGE_HOLD = 0.15
 
 
+async def _image_hold(uid: str):
+    """Hold a picture's price from whoever pays. Returns the hold, or a JSONResponse refusal."""
+    if not _pays(uid):
+        return 0.0
+    u = await (_owner_rec() if _payer(uid) == "owner" else _user_by_id(uid))
+    if not u:
+        return _err("Sign in again", 401)
+    if _credit(u) < IMAGE_HOLD:
+        who = "owner credit. Buy owner credit in Account." if u.get("owner") else "credit. Add credit to continue."
+        return _err(f"Making a picture needs about ${IMAGE_HOLD:.2f} of {who}", 402)
+    await _ledger(u, -IMAGE_HOLD, "Hold for a picture")
+    return IMAGE_HOLD
+
+
 async def _charge_small(uid: str, hold: float, actual: float | None, what: str) -> None:
-    if uid == "owner":
+    if not _pays(uid) or not hold:
         return
-    u = await _user_by_id(uid)
+    u = await _user_by_id(_payer(uid))
     if u and actual is not None and abs(hold - actual) >= 0.0001:
         await _ledger(u, round(hold - actual, 4), f"Adjust {what} to actual cost")
 
