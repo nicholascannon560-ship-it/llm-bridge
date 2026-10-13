@@ -647,8 +647,16 @@ function stateLabel(j){
 function renderJobs(){
   const box = $('clips');
   box.querySelectorAll('.clip').forEach(n => n.remove());
-  $('noClips').hidden = state.jobs.length > 0;
-  for (const j of state.jobs){
+  const pics = state.projectsOn && state.tab === 'pictures';
+  $('picGrid').hidden = !pics; if (!pics) $('picMover').hidden = true;
+  const shown = pics ? [] : !state.projectsOn ? state.jobs
+    : state.jobs.filter(j => state.tab === 'edited' ? j.model === 'editor' : j.model !== 'editor');
+  $('noClips').hidden = pics || shown.length > 0;
+  $('noClips').textContent = !state.projectsOn ? 'Your videos show up here. Most take one to five minutes.'
+    : state.tab === 'edited' ? 'Stitched videos, loops, zips and editor renders for this project show up here.'
+    : 'Videos for this project show up here. Most take one to five minutes.';
+  if (pics) drawGallery();
+  for (const j of shown){
     const d = document.createElement('div'); d.className = 'clip';
     const cost = j.charged != null ? money(j.charged) : (j.actual_cost != null && state.account && state.account.owner) ? money(j.actual_cost) : 'about ' + money(j.estimate);
     const src = '/video/clip/' + j.id + (j.has_scored ? '?song=1' : '');
