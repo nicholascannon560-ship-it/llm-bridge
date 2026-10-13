@@ -307,6 +307,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
             raise ValueError("Use a PNG, JPEG or WebP picture")
         iid = _tok(24)
         await va._put(f"{va.PREFIX}images/{iid}", raw, kind[1])
+        await va._index_image(iid, uid, "upload")
         return {"image_id": iid, "url": f"{base}/video/img/{iid}"}
 
     if name == "make_image":
