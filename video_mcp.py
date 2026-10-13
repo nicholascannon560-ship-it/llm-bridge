@@ -45,17 +45,22 @@ def _daily() -> float:
         return 25.0
 
 
-def _spent() -> float:
+def _spent(uid: str) -> float:
     cut = time.time() - 86400
-    _spend[:] = [s for s in _spend if s[0] > cut]
-    return round(sum(s[1] for s in _spend), 4)
+    rows = _spend[uid] = [s for s in _spend.get(uid, []) if s[0] > cut]
+    return round(sum(s[1] for s in rows), 4)
 
 
-def _guard(cost: float) -> str | None:
+def _note(uid: str, cost: float) -> None:
+    _spend.setdefault(uid, []).append((time.time(), float(cost)))
+
+
+def _guard(cost: float, uid: str) -> str | None:
+    """Per-account connector limits. Customers are also bounded by their prepaid credit."""
     if cost > _max_job() + 1e-9:
         return f"This would cost about ${cost:.2f}, over the ${_max_job():.2f} per-job limit for the connector."
-    if _spent() + cost > _daily() + 1e-9:
-        return (f"Daily connector limit: ${_spent():.2f} of ${_daily():.2f} used in the last 24 hours, "
+    if _spent(uid) + cost > _daily() + 1e-9:
+        return (f"Daily connector limit: ${_spent(uid):.2f} of ${_daily():.2f} used in the last 24 hours, "
                 f"and this one is about ${cost:.2f}.")
     return None
 
