@@ -369,6 +369,31 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         await va._index_image(iid, uid, "made", prompt)
         return {"image_id": iid, "url": f"{base}/video/img/{iid}", "cost_usd": round(cost, 4)}
 
+    if name in ("pick_model", "make_video") and str(a.get("model") or "auto").lower() == "auto":
+        budget = round(float(a.get("budget") or 0), 2)
+        r = await vr.route(uid, str(a.get("prompt") or ""), duration=float(a.get("duration") or 0),
+                           aspect=str(a.get("aspect_ratio") or ""), resolution=str(a.get("resolution") or ""),
+                           audio=a.get("audio"), start=bool(a.get("start_image") or a.get("end_image")),
+                           refs=len(a.get("ref_images") or []), budget=budget, tier=str(a.get("tier") or "best"))
+        if name == "pick_model":
+            return r
+        a = {**a, "model": r["model"], "resolution": r["resolution"], "audio": r["audio"]}
+        routed = r
+    else:
+        routed = None
+        if name == "pick_model":
+            return {"model": a.get("model"), "note": "A model was named, so nothing was routed."}
+
+    if name == "routing":
+        if a.get("job"):
+            if not user.get("owner"):
+                raise ValueError("Only the owner can change routing")
+            await vr.set_route(str(a["job"]), [str(x) for x in (a.get("models") or [])])
+        names = {m["id"]: m["name"] for m in await va._models()}
+        t = await vr.table()
+        return {k: {"label": vr.JOBS[k], "models": [names.get(x, x) for x in t[k]], "ids": t[k],
+                    "is_default": t[k] == vr.DEFAULTS[k]} for k in vr.JOBS}
+
     if name == "make_video":
         budget = round(float(a.get("budget") or 0), 2)
         if budget <= 0:
