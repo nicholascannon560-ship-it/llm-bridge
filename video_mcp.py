@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 
 import video_app as va
 from video_oauth import challenge, user_for_token
+import video_projects as vp
 
 mcp_router = APIRouter()
 PROTOCOL = "2025-06-18"
