@@ -395,6 +395,11 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
     if name == "list_jobs":
         n = max(1, min(40, int(a.get("limit") or 10)))
         jobs = [j for j in await va._all_jobs() if va._owns(uid, j) and not j.get("superseded")]
+        if a.get("project") is not None:
+            ok, p = await vp.resolve(uid, a["project"])
+            if not ok:
+                raise ValueError(await _no_project(uid, a["project"]))
+            jobs = [j for j in jobs if j.get("project") == (p["id"] if p else None)]
         return {"jobs": [await _job_view(req, j) for j in reversed(jobs[-n:])]}
 
     if name == "extend":
