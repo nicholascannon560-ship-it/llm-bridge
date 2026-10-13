@@ -1326,7 +1326,7 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
 
     try:
         async with httpx.AsyncClient(timeout=60) as c:
-            r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers())
+            r = await c.post(f"{OR_BASE}/videos", json=payload, headers=_or_headers(uid))
             data = r.json()
             options_dropped = False
             for _ in range(3):
