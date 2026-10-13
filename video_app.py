@@ -1004,7 +1004,7 @@ async def _poll(job: dict) -> None:
     try:
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as c:
             while time.time() - started < POLL_GIVE_UP:
-                r = await c.get(job["polling_url"], headers=_or_headers())
+                r = await c.get(job["polling_url"], headers=_or_headers(job.get("user") if job.get("or_key") == "owner" else None))
                 if r.status_code >= 400:
                     raise RuntimeError(f"poll HTTP {r.status_code}: {r.text[:200]}")
                 st = r.json()
