@@ -212,7 +212,7 @@ TOOLS = [
      "description": "Pack finished videos into one zip file you can download with a single link (free). names = file names "
                     "inside the zip, in the same order as jobs (optional). Keep each zip to about 20 clips. Returns a job; "
                     "poll job_status, then give the person the video_url: it downloads as a .zip.",
-     "inputSchema": {"type": "object", "required": ["jobs"], "properties": {
+     "inputSchema": {"type": "object", "required": ["jobs"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
          "jobs": {"type": "array", "items": {"type": "string"}}, "names": {"type": "array", "items": {"type": "string"}},
          "title": {"type": "string"}}}},
     {"name": "last_frame",
