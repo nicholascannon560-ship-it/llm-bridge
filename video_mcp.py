@@ -24,10 +24,11 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
 import video_app as va
+from video_oauth import challenge, user_for_token
 
 mcp_router = APIRouter()
 PROTOCOL = "2025-06-18"
-_spend: list[tuple[float, float]] = []  # (time, usd) for connector calls, last 24h
+_spend: dict[str, list[tuple[float, float]]] = {}  # uid -> (time, usd) for connector calls, last 24h
 
 
 def _max_job() -> float:
