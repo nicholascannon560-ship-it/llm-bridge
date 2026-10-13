@@ -215,7 +215,9 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
             raise ValueError("Unknown model. Use list_models.")
         cost, basis = va.estimate_cost(m, float(a.get("duration") or 0), str(a.get("resolution") or ""),
                                        bool(a.get("audio", True)), str(a.get("mode") or "text"), int(a.get("n_images") or 0))
-        return {"cost_usd": cost, "basis": basis, "per_job_limit": _max_job(), "spent_24h": _spent(), "daily_limit": _daily()}
+        if cost is not None:
+            cost = va._bill(uid, cost)
+        return {"cost_usd": cost, "basis": basis, "per_job_limit": _max_job(), "spent_24h": _spent(uid), "daily_limit": _daily()}
 
     if name == "upload_image":
         raw = None
