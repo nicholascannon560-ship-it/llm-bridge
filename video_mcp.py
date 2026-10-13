@@ -118,6 +118,25 @@ async def _job_view(request: Request, j: dict) -> dict:
 
 # --------------------------------------------------------------------------- tools
 TOOLS = [
+    {"name": "list_projects",
+     "description": "List this account's projects (folders of videos, pictures and edits) with counts, and which one "
+                    "is active. New work goes to the active project unless a tool is given a project.",
+     "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "create_project",
+     "description": "Make a new project and make it the active one.",
+     "inputSchema": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}},
+    {"name": "use_project",
+     "description": "Switch the active project (shared with the Video Studio app). Pass \"unsorted\" for no project.",
+     "inputSchema": {"type": "object", "required": ["project"], "properties": {"project": {"type": "string"}}}},
+    {"name": "project_contents",
+     "description": "What's in a project: its videos, edited videos (stitches, loops, zips, editor renders) and pictures. "
+                    "Defaults to the active project.",
+     "inputSchema": {"type": "object", "properties": {"project": {"type": "string"}, "limit": {"type": "integer"}}}},
+    {"name": "move_to_project",
+     "description": "Move videos or pictures into a project. ids are job ids (videos) or image ids (pictures).",
+     "inputSchema": {"type": "object", "required": ["ids", "project"], "properties": {
+         "ids": {"type": "array", "items": {"type": "string"}},
+         "kind": {"type": "string", "enum": ["video", "picture"]}, "project": {"type": "string"}}}},
     {"name": "list_models",
      "description": "List the video models available, with supported durations, resolutions, aspect ratios and prices. "
                     "Use before make_video to pick a model and valid settings. Pass search to filter by name.",
