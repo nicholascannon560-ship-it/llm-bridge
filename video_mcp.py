@@ -421,7 +421,10 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         if isinstance(out, Response):
             raise ValueError(_detail(out))
         _note(uid, float(out.get("estimate") or est))
-        return {"job": out, "next": "Poll job_status with this id; videos usually take 1-5 minutes."}
+        res = {"job": out, "next": "Poll job_status with this id; videos usually take 1-5 minutes."}
+        if routed:
+            res["routed"] = {k: routed[k] for k in ("name", "resolution", "audio", "job_label", "tier", "reason")}
+        return res
 
     if name == "job_status":
         j = va._find(await va._all_jobs(), str(a.get("id") or ""))
