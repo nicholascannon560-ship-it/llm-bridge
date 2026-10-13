@@ -193,8 +193,9 @@ TOOLS = [
 ]
 
 
-async def _call(name: str, a: dict, request: Request) -> dict:
-    req = _as_owner(request)
+async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
+    request.state.user = user
+    req, uid = request, user["id"]
     base = va._public_base(req)
 
     if name == "list_models":
