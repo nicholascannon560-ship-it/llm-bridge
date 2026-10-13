@@ -20,6 +20,7 @@ app = FastAPI(title="Video Studio", docs_url=None, redoc_url=None, openapi_url=N
 app.include_router(video_router)
 app.include_router(projects_router)  # project folders (videos, pictures, edited)
 app.include_router(routing_router)  # auto model routing (/video/route, /video/routing)
+app.include_router(pictures_router)  # picture models: catalog, routing, SVG serving
 app.include_router(oauth_router)  # sign-in for the customer connector (OAuth 2.1 + PKCE)
 app.include_router(mcp_router)  # Claude connector: /mcp (signed-in accounts) and /mcp/{VIDEO_MCP_SECRET} (owner)
 app.include_router(demo_router)  # free public demo at /video/demo (embedded on North River Labs)
