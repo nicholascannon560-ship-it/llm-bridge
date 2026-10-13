@@ -325,20 +325,20 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
 
     if name == "list_jobs":
         n = max(1, min(40, int(a.get("limit") or 10)))
-        jobs = [j for j in await va._all_jobs() if (j.get("user") or "owner") == "owner" and not j.get("superseded")]
+        jobs = [j for j in await va._all_jobs() if va._owns(uid, j) and not j.get("superseded")]
         return {"jobs": [await _job_view(req, j) for j in reversed(jobs[-n:])]}
 
     if name == "extend":
         src = va._find(await va._all_jobs(), str(a.get("id") or ""))
-        if not src or (src.get("user") or "owner") != "owner" or not src.get("clip_key"):
+        if not va._owns(uid, src) or not src.get("clip_key"):
             raise ValueError("That video isn't ready yet")
         budget = min(round(float(a.get("budget") or 0), 2), _max_job())
-        if (g := _guard(budget)):
+        if (g := _guard(budget, uid)):
             raise ValueError(g)
         src["base"] = src.get("base") or base
         out = await va._extend(src, auto=False, seconds=int(a["seconds"]) if a.get("seconds") else None, budget=budget,
                                change=str(a.get("change") or "").strip()[:1500] or None)
-        _spend.append((time.time(), float(out.get("estimate") or budget)))
+        _note(uid, float(out.get("estimate") or budget))
         return {"job": out}
 
     if name == "upscale":
