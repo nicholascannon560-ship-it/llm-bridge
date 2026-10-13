@@ -305,20 +305,20 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
                                       bool(a.get("audio", False)), mode, len(images))
         if est is None:
             raise ValueError(f"Can't price {m['name']} ({basis}); pick another model.")
-        if (g := _guard(est)):
+        if (g := _guard(va._bill(uid, est), uid)):
             raise ValueError(g)
         spec = {"model": m["id"], "prompt": str(a.get("prompt") or ""), "duration": a.get("duration"),
                 "resolution": a.get("resolution") or "", "aspect_ratio": a.get("aspect_ratio") or "",
                 "audio": bool(a.get("audio", False)), "budget": min(budget, _max_job()), "images": images}
-        out = await va._start_job(req, spec, {"user": "owner", "base": base})
+        out = await va._start_job(req, spec, {"user": uid, "base": base})
         if isinstance(out, Response):
             raise ValueError(_detail(out))
-        _spend.append((time.time(), float(out.get("estimate") or est)))
+        _note(uid, float(out.get("estimate") or est))
         return {"job": out, "next": "Poll job_status with this id; videos usually take 1-5 minutes."}
 
     if name == "job_status":
         j = va._find(await va._all_jobs(), str(a.get("id") or ""))
-        if not j or (j.get("user") or "owner") != "owner":
+        if not va._owns(uid, j):
             raise ValueError("No such video")
         va._ensure_poller(j)
         return await _job_view(req, j)
