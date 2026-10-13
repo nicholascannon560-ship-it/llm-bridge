@@ -566,11 +566,27 @@ async def _handle(request: Request, user: dict):
         return _rpc(mid, {"tools": TOOLS})
     if method == "tools/call":
         name, args = params.get("name"), params.get("arguments") or {}
+        args = args if isinstance(args, dict) else {}
+        token = None
         try:
-            out = await _call(str(name), args if isinstance(args, dict) else {}, request, user)
+            if name in MAKERS and args.get("project") is not None:
+                ok, p = await vp.resolve(user["id"], args["project"])
+                if not ok:
+                    raise ValueError(await _no_project(user["id"], args["project"]))
+                token = va._PROJECT.set(p["id"] if p else None)
+            out = await _call(str(name), args, request, user)
+            if name in MAKERS and isinstance(out, dict):
+                job = out.get("job") if isinstance(out.get("job"), dict) else None
+                pid = job.get("project") if job and "project" in job else (
+                    va._PROJECT.get() if token is not None else await vp.active(user["id"]))
+                out["saved_to_project"] = await vp.name_of(user["id"], pid)
             print(f"VIDEO_MCP call {name} ok ({'owner' if user.get('owner') else 'customer'})", flush=True)
+            if token is not None:
+                va._PROJECT.reset(token)
             return _rpc(mid, {"content": [{"type": "text", "text": json.dumps(out, indent=1, default=str)}]})
         except Exception as e:
             print(f"VIDEO_MCP call {name} failed: {str(e)[:200]}", flush=True)
+            if token is not None:
+                va._PROJECT.reset(token)
             return _rpc(mid, {"content": [{"type": "text", "text": f"Error: {e}"}], "isError": True})
     return _rpc(mid, error={"code": -32601, "message": f"unknown method {method}"})
