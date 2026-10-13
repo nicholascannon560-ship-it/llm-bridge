@@ -1,8 +1,9 @@
 """Video Studio as an MCP connector, so Claude can make pictures and videos on request.
 
-Mounted on the video-studio service at POST /mcp/{VIDEO_MCP_SECRET} (Streamable HTTP,
-JSON responses). It runs as the owner account: jobs land in the same history as the app,
-use the same storage, model list and price checks, and pay plain OpenRouter cost.
+Two doors, same tools (Streamable HTTP, JSON responses):
+  POST /mcp                    customers: OAuth sign-in (video_oauth.py); every call runs as the
+                               signed-in account, sees only its own videos and pays from its credit.
+  POST /mcp/{VIDEO_MCP_SECRET} the owner's private link: runs as the owner account.
 
 Spending guards, on top of the app's own budget checks:
   VIDEO_MCP_MAX_JOB_USD  most any one paid call may cost (default 5)
