@@ -243,7 +243,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         return {"image_id": iid, "url": f"{base}/video/img/{iid}"}
 
     if name == "make_image":
-        if (g := _guard(va.IMAGE_HOLD)):
+        if (g := _guard(va.IMAGE_HOLD, uid)):
             raise ValueError(g)
         prompt = str(a.get("prompt") or "").strip()[:1500]
         if not prompt:
