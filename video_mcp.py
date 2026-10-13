@@ -404,6 +404,41 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         if name == "pick_model":
             return {"model": a.get("model"), "note": "A model was named, so nothing was routed."}
 
+    if name == "routing" and a.get("kind") == "picture":
+        if a.get("job"):
+            if not user.get("owner"):
+                raise ValueError("Only the owner can change routing")
+            await vpic.set_proute(str(a["job"]), [str(x) for x in (a.get("models") or [])])
+        names = {m["id"]: m["name"] for m in await vpic.catalog()}
+        t = await vpic.ptable()
+        return {k: {"label": vpic.PJOBS[k], "models": [names.get(x, x + " (not available)") for x in t[k]], "ids": t[k],
+                    "is_default": t[k] == vpic.PDEFAULTS[k]} for k in vpic.PJOBS}
+
+    if name == "list_image_models":
+        q = str(a.get("q") or "").lower()
+        rows = [m for m in await vpic.describe_models()
+                if not q or q in (m["id"] + m["name"] + m["about"] + " ".join(m["can"])).lower()]
+        return {"models": rows, "count": len(rows),
+                "note": "Token-priced models show an estimate; it self-corrects from what pictures actually cost."}
+
+    if name in ("pick_image_model", "make_image"):
+        src = str(a.get("from_image") or "")
+        refs = [str(x) for x in (a.get("ref_images") or [])][:16]
+        kw = dict(aspect=str(a.get("aspect") or ""), clear=bool(a.get("transparent")),
+                  vector=True if a.get("vector") else None, resolution=str(a.get("resolution") or ""),
+                  tier=str(a.get("tier") or "best"), budget=float(a.get("budget") or 0), model=str(a.get("model") or ""))
+        if name == "pick_image_model":
+            return await vpic.route_picture(uid, str(a.get("prompt") or ""), has_src=bool(src), refs=len(refs), **kw)
+        if (g := _guard(va.IMAGE_HOLD, uid)):
+            raise ValueError(g)
+        out = await vpic.make_picture(uid, str(a.get("prompt") or ""), src_ids=[src] if src else [], ref_ids=refs, **kw)
+        _note(uid, out["cost"])
+        res = {"image_id": None if out["vector"] else out["id"], "url": f"{base}{out['url']}", "cost_usd": out["cost"],
+               "made_with": out["name"], "routed": {k: out[k] for k in ("job_label", "tier", "reason", "resolution", "quality")}}
+        if out["vector"]:
+            res["note"] = "SVG vector: open the url to view or download. It can't be used as a video frame."
+        return res
+
     if name == "routing":
         if a.get("job"):
             if not user.get("owner"):
