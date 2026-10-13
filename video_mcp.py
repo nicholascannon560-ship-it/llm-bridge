@@ -398,7 +398,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
             job = await va.start_stitch(ids, shape=shape, crossfade=float(a.get("crossfade") or 0),
                                         mask_image=str(a.get("mask_image") or "") or None,
                                         fit="fill" if a.get("fit") == "fill" else "fit",
-                                        title=str(a.get("title") or "Stitch")[:80])
+                                        title=str(a.get("title") or "Stitch")[:80], user=uid)
         except RuntimeError as e:
             raise ValueError(str(e))
         return {"job": await _job_view(req, job), "next": "Poll job_status with this id; stitching takes about 1-4 minutes."}
