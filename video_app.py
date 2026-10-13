@@ -1281,6 +1281,11 @@ async def _start_job(request: Request, b: dict, extra: dict | None = None):
             return _err("Start a membership to make videos.", 402)
         need = est * parts if extra.get("part_no") in (None, 1) else est
         if _credit(u) + 1e-9 < need:
+            if uid == "demo":
+                return _err("The demo is resting right now. Try again later.", 402)
+            if u.get("owner"):
+                return _err(f"This needs about ${need:.2f} of owner credit and you have ${_credit(u):.2f}. "
+                            f"Buy owner credit in Account.", 402)
             if u.get("auto_reload") and u["id"] not in _reloading:
                 _kick_autoreload(u)
                 return _err("Topping up your credit from your card. Try again in a few seconds.", 402)
