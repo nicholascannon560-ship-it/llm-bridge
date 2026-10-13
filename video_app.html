@@ -1328,7 +1328,6 @@ function edBody(){
 }
 async function saveEd(){ const out = await api('/video/edits', {method:'POST', body: JSON.stringify(edBody())}); ed.id = out.id; await loadEdits(); return out; }
 $('newEdit').onclick = () => openEdit(null);
-$('edAdd').onclick = () => { const id = $('edAddSel').value; if (!id) return; ed.items.push({job: id, start: 0, end: 0, caption: '', caption_pos: 'bottom'}); drawEd(); };
 $('edSong').onchange = () => { ed.song_id = $('edSong').value || null; $('edSongRow').hidden = !ed.song_id; };
 $('edSave').onclick = async () => { showErr($('edErr'), ''); try { await saveEd(); $('edStatus').textContent = 'Saved.'; } catch(e){ showErr($('edErr'), e.message); } };
 $('edRender').onclick = async () => {
