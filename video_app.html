@@ -269,14 +269,20 @@ label.btn{display:inline-block;text-align:center}
         <label class="f" style="margin-top:0">Describe the picture</label>
         <textarea id="mpPrompt" placeholder="A red vintage pickup truck parked at a misty lake at sunrise"></textarea>
         <label class="toggle" id="mpFromRow" hidden><input type="checkbox" id="mpFrom"> Change my first picture instead of starting fresh</label>
+        <label class="toggle" id="mpRefsRow" hidden><input type="checkbox" id="mpRefs"> Use my added pictures as references</label>
+        <label class="toggle"><input type="checkbox" id="mpClear"> Transparent background</label>
+        <label class="toggle"><input type="checkbox" id="mpCheap"> Cheapest good option</label>
+        <label class="f" for="mpModel">Picture model</label>
+        <select id="mpModel"><option value="auto">Auto: best model for the job</option></select>
         <div class="row" style="margin-top:10px">
           <button class="btn small" id="mpGo">Make it</button>
           <button class="btn ghost small" id="mpCancel">Cancel</button>
-          <span class="hint" style="margin:0">About 5–15¢</span></div>
+          <span class="hint" style="margin:0">Price depends on the model</span></div>
         <div class="err" id="mpErr" hidden></div>
       </div>
       <input type="file" id="picFile" accept="image/*" multiple hidden>
       <div class="pics" id="pics"></div>
+      <div class="hint" id="mpWhy" hidden></div>
       <div class="hint" id="picHint" hidden>Start: the video opens on this exact picture. End: it finishes on it. Reference: the model borrows its look, subject or style.</div>
       <div class="err" id="picErr" hidden></div>
 
