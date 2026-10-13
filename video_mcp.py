@@ -610,7 +610,7 @@ async def _handle(request: Request, user: dict):
                                           "make_video, poll job_status for results, and stay within the budget the user gives. "
                                           "Work is filed in projects: when the user names a project, pass it as project on "
                                           "each tool (or call use_project); tell the user which project things were saved to. "
-                                          "Leave make_video's model out (auto) unless the user names one: the router picks the "
+                                          "Leave make_video's and make_image's model out (auto) unless the user names one: the router picks the "
                                           "best model for the job; pass tier budget only if they ask for cheap. Tell the user "
                                           "which model was used and why."})
     if method == "ping":
