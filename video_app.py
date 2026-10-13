@@ -3132,7 +3132,7 @@ async def sweep_once() -> dict:
     joined within RETAIN_DAYS, lose their files. Owner files are never touched."""
     now, out = time.time(), {"users": 0, "files": 0}
     for u in list((await _users_doc())["users"]):
-        if u.get("comp") or _credit(u) > 0.01 or u.get("files_purged_at"):
+        if u.get("owner") or u.get("comp") or _credit(u) > 0.01 or u.get("files_purged_at"):
             continue
         last = max([float(x.get("t") or 0) for x in (u.get("ledger") or [])] + [float(u.get("created") or 0)])
         since = last or now  # pay as you go: files go after RETAIN_DAYS with no credit and no activity
