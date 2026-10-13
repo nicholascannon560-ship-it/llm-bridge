@@ -2871,51 +2871,22 @@ async def _charge_small(uid: str, hold: float, actual: float | None, what: str) 
 
 @video_router.post("/video/images/generate")
 async def video_image_generate(request: Request):
-    """{"prompt", "aspect"?, "from_image"?} -> {"id","url"}. from_image edits an existing picture."""
+    """{"prompt", "aspect"?, "from_image"?, "ref_images"?, "transparent"?, "model"?, "tier"?, "budget"?}
+    -> picture. Routed to the picture model that fits the job (see video_pictures)."""
     if (d := await _deny(request)):
         return d
-    u = request.state.user
+    import video_pictures as vpic  # imports this module, so load it lazily
     b = await _body(request)
-    prompt = str(b.get("prompt") or "").strip()[:1500]
-    if not prompt:
-        return _err("Describe the picture")
-    held = await _image_hold(u["id"])
-    if isinstance(held, JSONResponse):
-        return held
-    content = [{"type": "text", "text": prompt}]
     src = str(b.get("from_image") or "")
-    if IMG_ID.match(src):
-        data = await _get(f"{PREFIX}images/{src}")
-        if data:
-            kind = _sniff(data) or ("jpg", "image/jpeg")
-            content.append({"type": "image_url", "image_url": {
-                "url": f"data:{kind[1]};base64,{base64.b64encode(data).decode()}"}})
-    payload = {"model": IMAGE_MODEL, "modalities": ["image", "text"],
-               "messages": [{"role": "user", "content": content}]}
-    aspect = str(b.get("aspect") or "")
-    if aspect in ("9:16", "16:9", "1:1", "4:5", "3:4", "4:3"):
-        payload["image_config"] = {"aspect_ratio": aspect}
     try:
-        async with httpx.AsyncClient(timeout=180) as c:
-            r = await c.post(f"{OR_BASE}/chat/completions", json=payload, headers=_or_headers(u["id"]))
-        data = r.json()
-        if r.status_code >= 400 or data.get("error"):
-            raise RuntimeError((data.get("error") or {}).get("message") or f"HTTP {r.status_code}")
-        msg = ((data.get("choices") or [{}])[0].get("message") or {})
-        url = (((msg.get("images") or [{}])[0].get("image_url") or {}).get("url")) or ""
-        if not url.startswith("data:"):
-            raise RuntimeError("the model didn't return a picture; try rewording")
-        img = base64.b64decode(url.split(",", 1)[1])
-        cost = (data.get("usage") or {}).get("cost")
-    except Exception as e:
-        await _release(u["id"], held, "picture failed")
-        return _err(f"Couldn't make the picture: {e}", 502)
-    kind = _sniff(img) or ("png", "image/png")
-    iid = secrets.token_urlsafe(24)
-    await _put(f"{PREFIX}images/{iid}", img, kind[1])
-    await _index_image(iid, u["id"], "made", prompt)
-    await _charge_small(u["id"], held, _bill(u["id"], float(cost)) if cost is not None else None, "picture")
-    return {"id": iid, "url": f"/video/img/{iid}", "cost": cost}
+        return await vpic.make_picture(
+            request.state.user["id"], str(b.get("prompt") or ""), aspect=str(b.get("aspect") or ""),
+            src_ids=[src] if src else [], ref_ids=[str(x) for x in (b.get("ref_images") or [])][:16],
+            clear=bool(b.get("transparent")), tier=str(b.get("tier") or "best"),
+            budget=float(b.get("budget") or 0), model=str(b.get("model") or ""))
+    except ValueError as e:
+        msg = str(e)
+        return _err(f"Couldn't make the picture: {msg}", 402 if "credit" in msg.lower() else 502)
 
 
 # =========================================================================== talking video
