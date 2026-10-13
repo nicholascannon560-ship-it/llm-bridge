@@ -517,7 +517,7 @@ USAGE_MARKUP = max(0.0, float(os.getenv("VIDEO_USAGE_MARKUP") or "0.015"))
 def _bill(uid: str, cost: float) -> float:
     """What a customer pays for usage: OpenRouter's cost plus the margin (covers the 1.5%
     instant-payout fee). The owner always pays plain cost."""
-    return round(float(cost), 4) if uid == "owner" else round(float(cost) * (1 + USAGE_MARKUP), 4)
+    return round(float(cost), 4) if _payer(uid) == "owner" else round(float(cost) * (1 + USAGE_MARKUP), 4)
 
 
 def _job_cost(j: dict) -> float:
