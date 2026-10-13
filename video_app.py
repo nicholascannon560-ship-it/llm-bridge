@@ -534,8 +534,11 @@ async def _spent_24h() -> float:
 
 
 # --------------------------------------------------------------------------- openrouter
-def _or_headers() -> dict:
+def _or_headers(uid: str | None = None) -> dict:
+    """Owner and demo work runs on the owner key; everything else on the customer key."""
     key = os.getenv("OPENROUTER_API_KEY")
+    if uid is not None and _payer(uid) == "owner" and _owner_wallet_on():
+        key = os.getenv("OPENROUTER_OWNER_KEY")
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY missing")
     return {"Authorization": f"Bearer {key}",
