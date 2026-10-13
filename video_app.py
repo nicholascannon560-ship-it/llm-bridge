@@ -2777,13 +2777,12 @@ async def video_image_generate(request: Request):
         img = base64.b64decode(url.split(",", 1)[1])
         cost = (data.get("usage") or {}).get("cost")
     except Exception as e:
-        if not u.get("owner"):
-            await _ledger(await _user_by_id(u["id"]), IMAGE_HOLD, "Refund: picture failed")
+        await _release(u["id"], held, "picture failed")
         return _err(f"Couldn't make the picture: {e}", 502)
     kind = _sniff(img) or ("png", "image/png")
     iid = secrets.token_urlsafe(24)
     await _put(f"{PREFIX}images/{iid}", img, kind[1])
-    await _charge_small(u["id"], IMAGE_HOLD, _bill(u["id"], float(cost)) if cost is not None else None, "picture")
+    await _charge_small(u["id"], held, _bill(u["id"], float(cost)) if cost is not None else None, "picture")
     return {"id": iid, "url": f"/video/img/{iid}", "cost": cost}
 
 
