@@ -1825,9 +1825,9 @@ async def _ledger(u: dict, amount: float, note: str) -> None:
 
 
 async def _release(uid: str, hold: float, why: str) -> None:
-    if uid == "owner" or not hold:
+    if not _pays(uid) or not hold:
         return
-    u = await _user_by_id(uid)
+    u = await _user_by_id(_payer(uid))
     if u:
         await _ledger(u, hold, f"Refund: {why}")
 
