@@ -154,12 +154,30 @@ TOOLS = [
                     "Returns an image id and a public URL.",
      "inputSchema": {"type": "object", "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, "data_base64": {"type": "string"}, "url": {"type": "string"}}}},
     {"name": "make_image",
-     "description": "Make a picture with the image model, or change an existing one by passing from_image (an image id). "
-                    "Good for photoreal end frames: pass the sketch as from_image and ask for the same scene made real. "
-                    "Costs a few cents. Returns an image id and URL.",
+     "description": "Make a picture. Leave model out (auto) and the router picks the best picture model for the job: "
+                    "readable text/design, photoreal, art, editing (from_image), combining pictures (ref_images), "
+                    "transparent cutouts, SVG vectors, style matching, 4K, or a cheap draft. Pass from_image (an image "
+                    "id) to change an existing picture. Returns an image id, URL, cost and which model made it.",
      "inputSchema": {"type": "object", "required": ["prompt"], "properties": {"project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}, 
-         "prompt": {"type": "string"}, "from_image": {"type": "string"},
-         "aspect": {"type": "string", "enum": ["16:9", "9:16", "1:1", "4:5", "3:4", "4:3"]}}}},
+         "prompt": {"type": "string"}, "from_image": {"type": "string", "description": "Image id of a picture to change"},
+         "ref_images": {"type": "array", "items": {"type": "string"}, "description": "Image ids to combine or use as references"},
+         "aspect": {"type": "string", "description": "Shape, e.g. 16:9, 9:16, 1:1, 4:5, 3:4, 4:3, 21:9"},
+         "transparent": {"type": "boolean", "description": "Transparent background (cutouts, stickers)"},
+         "vector": {"type": "boolean", "description": "Return an SVG vector (logos, icons)"},
+         "resolution": {"type": "string", "description": "Size tier such as 1K, 2K or 4K (default: best the model offers below 4K)"},
+         "model": {"type": "string", "description": "Picture model id, or omit / \"auto\" to route"},
+         "tier": {"type": "string", "enum": ["best", "budget"], "description": "best quality (default) or cheapest good option"},
+         "budget": {"type": "number", "description": "Most this picture may cost, in USD (optional)"}}}},
+    {"name": "list_image_models",
+     "description": "Every picture model available, with what each can do (editing, how many pictures it takes, "
+                    "transparent background, SVG, sizes, quality levels, shapes) and its price per picture.",
+     "inputSchema": {"type": "object", "properties": {"q": {"type": "string", "description": "Optional text filter"}}}},
+    {"name": "pick_image_model",
+     "description": "Preview which picture model auto-routing would use, and why, without making anything. Same inputs as make_image.",
+     "inputSchema": {"type": "object", "required": ["prompt"], "properties": {
+         "prompt": {"type": "string"}, "from_image": {"type": "string"}, "ref_images": {"type": "array", "items": {"type": "string"}},
+         "aspect": {"type": "string"}, "transparent": {"type": "boolean"}, "vector": {"type": "boolean"},
+         "resolution": {"type": "string"}, "tier": {"type": "string", "enum": ["best", "budget"]}, "budget": {"type": "number"}}}},
     {"name": "make_video",
      "description": "Start a video. Optional start_image / end_image (image ids) make the model move from one picture to the "
                     "other; ref_images guide style instead. Checks price against budget and the connector limits before running. "
