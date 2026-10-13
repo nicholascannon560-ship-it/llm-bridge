@@ -353,6 +353,7 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         kind = va._sniff(img) or ("png", "image/png")
         iid = _tok(24)
         await va._put(f"{va.PREFIX}images/{iid}", img, kind[1])
+        await va._index_image(iid, uid, "made", prompt)
         return {"image_id": iid, "url": f"{base}/video/img/{iid}", "cost_usd": round(cost, 4)}
 
     if name == "make_video":
