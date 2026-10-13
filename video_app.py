@@ -1020,7 +1020,7 @@ async def _poll(job: dict) -> None:
                     await _save_jobs()
                 if status == "completed":
                     url = (st.get("unsigned_urls") or [f"{OR_BASE}/videos/{job['or_id']}/content?index=0"])[0]
-                    v = await c.get(url, headers=_or_headers(), timeout=180)
+                    v = await c.get(url, headers=_or_headers(job.get("user") if job.get("or_key") == "owner" else None), timeout=180)
                     if v.status_code >= 400 or not v.content:
                         raise RuntimeError(f"download HTTP {v.status_code}")
                     key = f"{PREFIX}clips/{job['id']}.mp4"
