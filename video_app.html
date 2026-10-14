@@ -1587,8 +1587,11 @@ $('fitBtn').onclick = () => { showErr($('goErr'), ''); fitToBudget(); };
 $('goBtn').onclick = async () => {
   showErr($('goErr'), '');
   const song = $('song').value;
-  const body = {model: state.model.id, prompt: fullPrompt(), duration: curLen().seg, parts: curLen().parts,
-    resolution: state.resolution, aspect_ratio: state.aspect, audio: audioOn(),
+  const pick = state.auto ? await freshPick() : null;
+  if (state.auto && !pick){ showErr($('goErr'), state.routeErr || 'No model can do this yet. Change the settings.'); return; }
+  const body = {model: pick ? pick.model : state.model.id, prompt: fullPrompt(),
+    duration: pick ? pick.seg : curLen().seg, parts: pick ? pick.parts : curLen().parts,
+    resolution: pick ? pick.resolution : state.resolution, aspect_ratio: state.aspect, audio: audioOn(),
     budget: parseFloat($('budget').value) || 0,
     song_id: song || null, song_start: parseFloat($('songStart').value) || 0,
     images: state.pics.map(p => ({id: p.id, role: p.role}))};
