@@ -925,7 +925,7 @@ function openUpscaler(j, el){
     const btn = q('[data-submit]'); btn.disabled = true; btn.textContent = 'Sending…'; showErr(q('[data-err]'), '');
     try { await api('/video/jobs/' + j.id + '/upscale', {method:'POST', body: JSON.stringify({factor: up.factor, mode: up.mode,
         budget: parseFloat(q('[data-budget]').value) || 0})});
-      el.hidden = true; state.stale = true; await loadJobs(); window.scrollTo({top: $('clips').offsetTop, behavior: 'auto'}); }
+      el.hidden = true; state.stale = true; await loadJobs(); showView('library'); }
     catch(e){ showErr(q('[data-err]'), e.message); }
     btn.textContent = 'Sharpen it'; draw();
   };
