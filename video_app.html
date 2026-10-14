@@ -1095,7 +1095,7 @@ function openEditor(j, el){
         budget: parseFloat(q('[data-budget]').value) || 0, keep_look: q('[data-keep] input').checked,
         images: sentPics().list.map(p => ({id: p.id, role: p.role})),
         song_id: j.song_id || null, song_start: j.song_start || 0})});
-      el.hidden = true; state.stale = true; await loadJobs(); window.scrollTo({top: $('clips').offsetTop, behavior: 'auto'});
+      el.hidden = true; state.stale = true; await loadJobs(); showView('library');
     } catch(e){ showErr(q('[data-err]'), e.message); }
     btn.textContent = 'Make the new version'; upd();
   };
