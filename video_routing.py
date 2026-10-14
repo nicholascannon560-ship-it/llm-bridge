@@ -10,7 +10,11 @@ The ranked lists below are defaults from public blind-vote arenas (Arena and Art
 Aug-Sep 2026), limited to models available through OpenRouter. The owner can override any list; overrides
 are stored in {PREFIX}routing.json and survive deploys.
 
-Routes (signed in): POST /video/route  -> {model, resolution, audio, estimate, job, reason, tried}
+The app sends chain=true: lengths past a model's longest clip are built from parts (seg x parts), and the
+reply lists every model that can do the job within budget ("candidates"), so the page only offers those.
+
+Routes (signed in): POST /video/route  -> {model, resolution, audio, estimate, seg, parts, job, reason, tried,
+                                           candidates: [{model, name, resolution, estimate, seg, parts}]}
                     GET  /video/routing -> current table; POST /video/routing (owner) {job, models: [...]}
 """
 from __future__ import annotations
@@ -109,8 +113,24 @@ def _rules(prompt: str, start: bool, refs: int, duration: float, audio: bool, uh
     return ("draft" if cheap else "scene"), cheap
 
 
-async def classify(prompt: str, start: bool, refs: int, duration: float, audio: bool, uhd: bool) -> dict:
-    job, cheap = _rules(prompt, start, refs, duration, audio, uhd)
+_classify_cache: dict = {}
+
+
+async def classify(prompt: str, start: bool, refs: int, duration: float, audio: bool, uhd: bool,
+                   chain: bool = False) -> dict:
+    key = (prompt[:1500], start, refs, duration > 15, audio, uhd, chain)
+    if key in _classify_cache:
+        return dict(_classify_cache[key])
+    out = await _classify(prompt, start, refs, duration, audio, uhd, chain)
+    if len(_classify_cache) > 300:
+        _classify_cache.clear()
+    _classify_cache[key] = dict(out)
+    return out
+
+
+async def _classify(prompt: str, start: bool, refs: int, duration: float, audio: bool, uhd: bool,
+                    chain: bool) -> dict:
+    job, cheap = _rules(prompt, start, refs, 0 if chain else duration, audio, uhd)
     why = "matched the request's wording and attachments"
     try:
         txt = await va._or_chat(CLASSIFY.format(
@@ -128,7 +148,7 @@ async def classify(prompt: str, start: bool, refs: int, duration: float, audio: 
         job = "uhd"
     elif refs and job not in ("dialogue", "characters"):
         job = "characters"
-    if duration > 15 and job not in ("long_shot", "characters"):
+    if duration > 15 and job not in ("long_shot", "characters") and not chain:
         job = "long_shot"
     return {"job": job, "cheap": cheap, "why": why}
 
@@ -141,10 +161,26 @@ def _res_options(m: dict, want: str, uhd: bool) -> list[str]:
     return sorted(allowed, key=lambda r: -RES_RANK.get(r, 0))
 
 
+def _plan(m: dict, duration: float, chain: bool) -> tuple[int, int] | None:
+    """(seconds per part, parts) for this model, or None if it can't make this length.
+    chain=True (the app) builds lengths past the model's longest clip from parts, each starting on the
+    last frame of the one before, the same way the app's long videos work."""
+    T = int(duration or 0)
+    ds = sorted({int(d) for d in (m.get("durations") or [])})
+    if not ds or not T or T in ds:
+        return T, 1
+    if chain and T > ds[-1]:
+        parts = -(-T // ds[-1])
+        if parts <= 12:
+            return ds[-1], parts
+    return None
+
+
 async def route(uid: str, prompt: str, *, duration: float, aspect: str = "", resolution: str = "", audio=None,
-                start: bool = False, refs: int = 0, budget: float = 0, tier: str = "best") -> dict:
+                start: bool = False, refs: int = 0, budget: float = 0, tier: str = "best",
+                chain: bool = False) -> dict:
     uhd = resolution.upper() == "4K" or bool(re.search(r"\b4k\b", prompt.lower()))
-    c = await classify(prompt, start, refs, duration, bool(audio), uhd)
+    c = await classify(prompt, start, refs, duration, bool(audio), uhd, chain)
     job = c["job"]
     sound = bool(audio) if audio is not None else job == "dialogue"
     cheap = tier == "budget" or c["cheap"]
@@ -155,13 +191,15 @@ async def route(uid: str, prompt: str, *, duration: float, aspect: str = "", res
     models = {m["id"]: m for m in await va._models()}
     mode = "image" if start else "ref" if refs else "text"
     n_img = (1 if start else 0) + refs
-    tried = []
+    tried, candidates, best = [], [], None
     for mid in dict.fromkeys(order):
         m = models.get(mid)
         if not m:
             continue
-        if duration and m.get("durations") and int(duration) not in [int(d) for d in m["durations"]]:
+        plan = _plan(m, duration, chain)
+        if plan is None:
             tried.append(f"{m['name']}: can't do {int(duration)}s"); continue
+        seg, parts = plan
         if aspect and m.get("aspect_ratios") and aspect not in m["aspect_ratios"]:
             tried.append(f"{m['name']}: no {aspect}"); continue
         opts = _res_options(m, resolution, uhd)
@@ -169,20 +207,36 @@ async def route(uid: str, prompt: str, *, duration: float, aspect: str = "", res
             tried.append(f"{m['name']}: no {resolution}"); continue
         if cheap:
             opts = list(reversed(opts))
+        priced, pick = False, None
         for res in opts:
-            cost, _ = va.estimate_cost(m, float(duration or 0), res, sound, mode, n_img)
-            if cost is None:
+            cost, _ = va.estimate_cost(m, float(seg), res, sound, mode, n_img)
+            more = 0.0
+            if cost is not None and parts > 1:  # later parts start from the previous part's last frame
+                more, _ = va.estimate_cost(m, float(seg), res, sound, "image", 1)
+            if cost is None or more is None:
                 continue
-            billed = va._bill(uid, cost)
-            if budget and billed > budget + 1e-9:
+            priced = True
+            first = va._bill(uid, cost)
+            total = round(first + va._bill(uid, more) * (parts - 1), 4)
+            # the server checks first-part price x parts against the budget, so fit both ways
+            if budget and max(total, first * parts) > budget + 1e-9:
                 continue
-            reason = (f"{'Cheapest good option' if cheap else 'Best available'} for: {JOBS[job].lower()}"
-                      f"{' (top pick was skipped)' if tried else ''}.")
-            return {"model": m["id"], "name": m["name"], "resolution": res, "audio": sound, "estimate": billed,
-                    "job": job, "job_label": JOBS[job], "tier": "budget" if cheap else "best", "reason": reason,
-                    "classifier": c["why"], "tried": tried}
-        tried.append(f"{m['name']}: over ${budget:.2f} budget" if budget else f"{m['name']}: can't price this")
-    raise ValueError("No model can do this within the settings. " + "; ".join(tried[:6]))
+            pick = {"model": m["id"], "name": m["name"], "resolution": res, "estimate": total, "seg": seg,
+                    "parts": parts}
+            break
+        if pick:
+            candidates.append(pick)
+            if best is None:
+                best = pick
+        else:
+            tried.append(f"{m['name']}: over ${budget:.2f} budget" if priced and budget
+                         else f"{m['name']}: can't price this")
+    if best is None:
+        raise ValueError("No model can do this within the settings. " + "; ".join(tried[:6]))
+    reason = (f"{'Cheapest good option' if cheap else 'Best available'} for: {JOBS[job].lower()}"
+              f"{' (top pick was skipped)' if tried and order and best['model'] != order[0] else ''}.")
+    return {**best, "audio": sound, "job": job, "job_label": JOBS[job], "tier": "budget" if cheap else "best",
+            "reason": reason, "classifier": c["why"], "tried": tried, "candidates": candidates}
 
 
 # --------------------------------------------------------------------------- routes
@@ -197,7 +251,7 @@ async def route_endpoint(request: Request):
                           aspect=str(b.get("aspect_ratio") or ""), resolution=str(b.get("resolution") or ""),
                           audio=b.get("audio"), start=any(i.get("role") in ("first", "last") for i in imgs),
                           refs=sum(1 for i in imgs if i.get("role") == "ref"), budget=float(b.get("budget") or 0),
-                          tier=str(b.get("tier") or "best"))
+                          tier=str(b.get("tier") or "best"), chain=bool(b.get("chain")))
     except ValueError as e:
         return va._err(str(e))
     return out
