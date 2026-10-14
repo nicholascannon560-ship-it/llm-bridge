@@ -1430,10 +1430,23 @@ $('mpGo').onclick = async () => {
   try {
     const from = $('mpFrom').checked && state.pics.length ? state.pics[0].id : null;
     const refs = $('mpRefs').checked ? state.pics.filter(p => p.id !== from).map(p => p.id) : [];
+    const why = $('mpWhy');
+    if ($('mpShape').checked && state.pics.length){
+      const s = await api('/video/shapes/fill', {method:'POST', body: JSON.stringify({image: state.pics[0].id,
+        prompt: $('mpPrompt').value, model: $('mpModel').value, tier: $('mpCheap').checked ? 'budget' : 'best'})});
+      state.pics.push({id: s.image_id, role: 'first', thumb: s.url, w: 0, h: 0});
+      state.pics.forEach((p, i) => { if (i < state.pics.length - 1 && p.role === 'first') p.role = 'ref'; });
+      why.hidden = false; why.textContent = `Filled the cutout shape with ${s.made_with} (${s.mask_how || 'mask reused'}). `
+        + `Cost ${money(s.cost)}. Video shape set to ${s.aspect} to match. The mask is saved in Pictures; ask Claude to loop the video with it for an exact edge.`;
+      if (s.aspect){ state.aspect = s.aspect; render(); }  // video shape must match the mask's shape
+      $('makePic').hidden = true; $('mpPrompt').value = ''; renderPics(); loadAccount();
+      b.disabled = false; b.textContent = 'Make it';
+      return;
+    }
     const out = await api('/video/images/generate', {method:'POST', body: JSON.stringify({prompt: $('mpPrompt').value,
       aspect: state.aspect, from_image: from, ref_images: refs, transparent: $('mpClear').checked,
       model: $('mpModel').value, tier: $('mpCheap').checked ? 'budget' : 'best'})});
-    const why = $('mpWhy'); why.hidden = false; why.textContent = `Made with ${out.name}${out.resolution ? ' at ' + out.resolution : ''}: `
+    why.hidden = false; why.textContent = `Made with ${out.name}${out.resolution ? ' at ' + out.resolution : ''}: `
       + `${out.reason} Cost ${money(out.cost)}.`;
     if (out.vector){
       const a = document.createElement('a'); a.href = out.url; a.target = '_blank'; a.rel = 'noopener';
