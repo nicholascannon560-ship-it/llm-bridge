@@ -1819,7 +1819,7 @@ async function boot(){
     $('newBox').style.marginTop = '18px'; $('pkSignup').className = 'btn ghost'; $('pkSignup').style.width = '100%'; }
   $('login').querySelector('details').open = !s.accounts;
   if (!s.authed){ showLogin(); return; }
-  $('login').hidden = true; $('app').hidden = false;
+  $('login').hidden = true; $('app').hidden = false; enterApp();
   state.spent = s.spent_today; state.cap = s.daily_cap; state.retainDays = s.retain_days; state.markup = s.markup || 0;
   renderAccount(s.account);
   // Back from checkout: the credit lands a few seconds later, so check a few times.
