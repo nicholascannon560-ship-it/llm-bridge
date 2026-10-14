@@ -1,0 +1,9 @@
+{
+  "id": "wake-1791940085",
+  "status": "error",
+  "action": "llm_chat",
+  "result": null,
+  "error": "Moonshot API error 429: {\"error\":{\"message\":\"Your account org-033ae0b312d64ea4be78522424759cb3 \\u003cak-fbfyawrgo7ti11bc9q4i\\u003e is suspended due to insufficient balance, please recharge your account or check your plan and billing details\",\"type\":\"exceeded_current_quota_error\"}}",
+  "processed_at": "2026-10-14T01:08:15.771242+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/app/command_channel.py\", line 963, in process_pending_commands\n    result_payload[\"result\"] = _execute(cmd, cmd_id)\n                               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 561, in _execute\n    return _llm_chat(cmd)\n           ^^^^^^^^^^^^^^\n  File \"/app/command_channel.py\", line 318, in _llm_chat\n    raise RuntimeError(f\"Moonshot API error {resp.status_code}: {resp.text[:500]}\")\nRuntimeError: Moonshot API error 429: {\"error\":{\"message\":\"Your account org-033ae0b312d64ea4be78522424759cb3 \\u003cak-fbfyawrgo7ti11bc9q4i\\u003e is suspended due to insufficient balance, please recharge your account or check your plan and billing details\",\"type\":\"exceeded_current_quota_error\"}}\n"
+}
