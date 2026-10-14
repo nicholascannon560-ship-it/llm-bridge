@@ -810,6 +810,11 @@ function renderJobs(){
         </div>` : ''}`;
     box.appendChild(d);
   }
+  box.querySelectorAll('[data-moreacts]').forEach(b => b.onclick = () => {
+    const r = box.querySelector(`[data-acts="${b.dataset.moreacts}"]`); r.hidden = !r.hidden;
+    b.setAttribute('aria-expanded', String(!r.hidden)); b.textContent = r.hidden ? 'More ▾' : 'Less ▴';
+  });
+  box.querySelectorAll('.clip .prompt').forEach(p => p.onclick = () => p.classList.toggle('full'));
   box.querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
     const sc = box.querySelector(`[data-scorer="${b.dataset.open}"]`); sc.hidden = !sc.hidden;
     const sel = sc.querySelector('select');
