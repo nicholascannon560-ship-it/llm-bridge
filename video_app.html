@@ -1414,7 +1414,7 @@ function pollEdits(){
 
 // ---------------- picture maker
 $('makePicBtn').onclick = () => { $('makePic').hidden = !$('makePic').hidden; $('mpFromRow').hidden = !state.pics.length;
-  $('mpRefsRow').hidden = !state.pics.length; showErr($('mpErr'), ''); loadPicModels(); };
+  $('mpRefsRow').hidden = !state.pics.length; $('mpShapeRow').hidden = !state.pics.length; showErr($('mpErr'), ''); loadPicModels(); };
 async function loadPicModels(){
   if (state.picModels) return;
   try {
