@@ -787,8 +787,10 @@ function renderJobs(){
       ${j.has_clip ? `<div class="row" style="margin-top:6px">
           <button class="btn ghost small" data-save="${j.id}" data-song="0">Save video</button>
           ${j.has_scored ? `<button class="btn ghost small" data-save="${j.id}" data-song="1">Save with song</button>` : ''}
-          <button class="btn ghost small" data-open="${j.id}">${j.has_scored ? 'Change song' : 'Add song'}</button>
           <button class="btn small" data-edit="${j.id}">Edit</button>
+          <button class="btn ghost small" data-moreacts="${j.id}" aria-expanded="false">More ▾</button></div>
+        <div class="row more-acts" data-acts="${j.id}" hidden>
+          <button class="btn ghost small" data-open="${j.id}">${j.has_scored ? 'Change song' : 'Add song'}</button>
           <button class="btn ghost small" data-extend="${j.id}">Make longer</button>
           <button class="btn ghost small" data-upscale="${j.id}">Sharpen (upscale)</button>
           ${state.projectsOn ? `<button class="btn ghost small" data-move="${j.id}">Move</button>` : ''}
