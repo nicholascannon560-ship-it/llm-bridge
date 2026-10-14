@@ -1936,7 +1936,8 @@ async function boot(){
     if (state.models.length) pickModel(state.models[0].id);
   } catch(e){ showErr($('goErr'), e.message); }
   await loadProjects();
-  $('autoPick').hidden = !state.projectsOn;  // the router lives on the Video Studio service
+  $('autoPick').hidden = true;  // the router lives on the Video Studio service; there it's always on
+  if (state.projectsOn) startAuto();
   await loadJobs();
   await Promise.all([loadChars(), loadEdits()]);
   if (state.edits.some(e => e.status === 'rendering')) pollEdits();
