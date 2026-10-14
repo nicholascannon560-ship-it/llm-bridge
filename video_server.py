@@ -15,6 +15,7 @@ from video_oauth import oauth_router
 from video_projects import projects_router
 from video_routing import routing_router
 from video_pictures import pictures_router
+from video_shapes import shapes_router
 
 app = FastAPI(title="Video Studio", docs_url=None, redoc_url=None, openapi_url=None)
 app.include_router(video_router)
