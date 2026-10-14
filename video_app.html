@@ -646,9 +646,9 @@ function shrink(file){
     img.src = url; });
 }
 function closestAspect(w, h){
-  const m = state.model; if (!m || !m.aspect_ratios.length) return;
+  const list = state.auto ? AUTO_SHAPES : (state.model && state.model.aspect_ratios) || []; if (!list.length) return;
   const r = w / h; let best = null, diff = 1e9;
-  for (const a of m.aspect_ratios){ const [x, y] = a.split(':').map(Number); if (!x || !y) continue;
+  for (const a of list){ const [x, y] = a.split(':').map(Number); if (!x || !y) continue;
     const d = Math.abs(Math.log(r / (x / y))); if (d < diff){ diff = d; best = a; } }
   if (best) state.aspect = best;
 }
