@@ -1696,6 +1696,99 @@ async function passkeyAdd(){
   b.disabled = false;
 }
 $('pkAddBtn').onclick = passkeyAdd;
+
+// ---------------- auto model: the same router Claude uses picks the model for what you asked and your budget.
+// You can only switch to models that can do this exact job (length, shape, pictures, sound) within budget.
+const AUTO_SHAPES = ['9:16', '16:9', '1:1'];
+const AUTO_LENS = [5, 8, 10, 15, 30, 60];
+const AUTO_RES = ['', '720p', '1080p', '4K'];
+function autoCan(){
+  const priced = state.models.filter(m => Object.values(m.prices || {}).some(Boolean));
+  const lens = AUTO_LENS.filter(T => priced.some(m => { const ds = (m.durations || []).map(Number);
+    if (!ds.length || ds.includes(T)) return true; const mx = Math.max(...ds); return T > mx && Math.ceil(T / mx) <= 12; }));
+  const res = AUTO_RES.filter(r => !r || priced.some(m => (m.resolutions || []).includes(r)));
+  return {lens: lens.length ? lens : [5], res};
+}
+function startAuto(){
+  state.auto = true; state.pin = null; state.route = null; state.routeErr = ''; state.routeKey = ''; state.routeSeq = 0;
+  state.autoRes = ''; if (!AUTO_LENS.includes(state.length)) state.length = 5;
+  if (!AUTO_SHAPES.includes(state.aspect)) state.aspect = '9:16';
+  $('idea').addEventListener('input', () => { if (state.auto) renderAuto(); });
+  renderAuto();
+}
+function routeInput(){
+  return {prompt: $('idea').value.trim(), duration: state.length, aspect_ratio: state.aspect, resolution: state.autoRes,
+    audio: audioOn(), images: state.pics.map(p => ({role: p.role})), budget: parseFloat($('budget').value) || 0, chain: true};
+}
+function autoChoice(){
+  const r = state.route; if (!r) return null;
+  return (state.pin && r.candidates.find(c => c.model === state.pin)) || r;
+}
+async function doRoute(){
+  const inp = routeInput(), key = JSON.stringify(inp), seq = ++state.routeSeq;
+  state.routeKey = key; state.routeBusy = true;
+  try { const r = await api('/video/route', {method: 'POST', body: key});
+    if (seq !== state.routeSeq) return; state.route = r; state.routeErr = ''; }
+  catch(e){ if (seq !== state.routeSeq) return; state.route = null; state.routeErr = e.message; }
+  state.routeBusy = false; renderAuto();
+}
+async function freshPick(){
+  const key = JSON.stringify(routeInput());
+  if (!JSON.parse(key).prompt){ state.routeErr = 'Describe the shot first.'; return null; }
+  if (key !== state.routeKey || state.routeBusy || (!state.route && !state.routeErr)){ clearTimeout(state.routeTimer); await doRoute(); }
+  return autoChoice();
+}
+function renderAuto(){
+  const can = autoCan();
+  if (!can.lens.includes(state.length)) state.length = can.lens[0];
+  chips($('durations'), can.lens, state.length, v => { state.length = v; renderAuto(); }, v => v + 's');
+  chips($('resolutions'), can.res, state.autoRes, v => { state.autoRes = v; renderAuto(); }, v => v || 'Best for budget');
+  chips($('aspects'), AUTO_SHAPES, state.aspect, v => { state.aspect = v; renderAuto(); },
+    v => ({'9:16':'9:16 vertical','16:9':'16:9 wide','1:1':'1:1 square'}[v]));
+  $('audio').disabled = !!$('song').value; $('songStartRow').hidden = !$('song').value; $('songDel').hidden = !$('song').value;
+  $('fitBtn').hidden = true; $('autoWhy').hidden = true;
+  // Re-route only when something the router reads has changed (render runs on every job poll).
+  const inp = routeInput(), key = JSON.stringify(inp);
+  if (key !== state.routeKey && inp.prompt){
+    state.routeKey = key; state.routeBusy = true; clearTimeout(state.routeTimer);
+    state.routeTimer = setTimeout(doRoute, document.activeElement === $('idea') ? 900 : 350);
+  }
+  const r = state.route, pick = autoChoice();
+  if (state.pin && r && !r.candidates.some(c => c.model === state.pin)) state.pin = null;  // can't do this anymore
+  const sel = $('model');
+  sel.innerHTML = r ? `<option value="">Auto: ${esc(r.name)} (best for this)</option>` + r.candidates.map(c =>
+      `<option value="${esc(c.model)}">${esc(c.name)} · ${esc(c.resolution || 'default')} · ${money(c.estimate)}</option>`).join('')
+    : '<option value="">Auto: picks the best model for your shot</option>';
+  sel.value = state.pin || ''; sel.disabled = !r;
+  const hint = $('modelHint');
+  if (!inp.prompt) hint.textContent = 'Describe the shot and the best model for it is picked automatically.';
+  else if (state.routeBusy && !r) hint.textContent = 'Picking the best model…';
+  else if (pick) hint.textContent = `${state.pin ? 'You chose' : 'Using'} ${pick.name} at ${pick.resolution || 'default quality'}`
+    + (state.pin ? '. ' : ', the best fit for this shot and budget. ')
+    + (r.candidates.length > 1 ? `${r.candidates.length - 1} other model${r.candidates.length > 2 ? 's' : ''} can also do it.` : 'No other model can do it in budget.');
+  else hint.textContent = '';
+  $('lenHint').hidden = !(pick && pick.parts > 1);
+  if (pick && pick.parts > 1) $('lenHint').textContent = `Made as ${pick.parts} parts of ${pick.seg}s, each picking up where the last ended, then joined. Takes longer to finish.`;
+  // budget meter
+  state.estimate = pick ? pick.estimate : null;
+  const budget = inp.budget;
+  $('est').textContent = state.routeBusy && !pick ? '…' : money(state.estimate);
+  const fill = $('fill'); fill.className = 'fill';
+  if (state.estimate == null){ fill.classList.add('unknown'); fill.style.width = '100%'; }
+  else { fill.style.width = Math.min(100, budget > 0 ? state.estimate / budget * 100 : 100) + '%'; }
+  const st = $('budgetStatus'); st.className = 'status';
+  let ok = !!pick;
+  if (!inp.prompt){ st.textContent = 'Describe the shot first.'; ok = false; }
+  else if (budget <= 0){ st.textContent = 'Set a budget.'; ok = false; }
+  else if (state.routeErr && !state.routeBusy){ st.classList.add('over'); st.textContent = state.routeErr.startsWith('No model can do this')
+    ? 'No model can do this shot within your budget. Raise the budget, or change the length, quality or shape.' : state.routeErr; ok = false; }
+  else if (!pick){ st.textContent = 'Picking the best model…'; }
+  else if (state.account && !state.account.owner && !state.account.member){ st.textContent = 'Start a membership to make videos'; ok = false; }
+  else if (state.account && (!state.account.owner || state.account.owner_wallet) && state.estimate > state.account.credit){ st.classList.add('over'); st.textContent = 'Not enough credit. Add some on the Account tab.'; ok = false; }
+  else st.textContent = money(budget - state.estimate) + ' under budget';
+  $('today').textContent = money(state.spent) + (state.cap == null ? '' : ' of ' + money(state.cap)) + ' spent in the last 24 hours';
+  $('goBtn').disabled = !ok || !checkPics();
+}
 // ---------------- auto model routing (best quality for the job unless the shot asks for cheap)
 async function autoPick(){
   const b = $('autoPick'); showErr($('goErr'), '');
