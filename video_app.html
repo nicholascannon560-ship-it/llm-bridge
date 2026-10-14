@@ -150,12 +150,39 @@ label.btn{display:inline-block;text-align:center}
 .tl button{border:1px solid var(--line);background:transparent;border-radius:8px;padding:5px 9px;font-size:13px}
 .thumbs{display:flex;gap:6px;margin:4px 0 6px}
 .thumbs img{width:56px;height:42px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+/* ---- app shell: sticky header, one section at a time, bottom nav ---- */
+body.in-app .intro{display:none}
+body.in-app .wrap{padding-top:0;padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--paper);margin:0 -16px 12px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.tb-row{display:flex;align-items:center;gap:8px}
+.brand{font-size:19px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+.credpill{margin-left:auto;border:1px solid var(--line);background:var(--sheet);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600;white-space:nowrap;max-width:55%;overflow:hidden;text-overflow:ellipsis}
+.topbar #projBar{margin:8px 0 0;padding:0;border:0;background:transparent}
+.topbar #projBar select{padding:8px 10px}
+.topbar #projHint{display:none}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--sheet);border-top:1px solid var(--line);padding:0 0 env(safe-area-inset-bottom,0px)}
+.bnav .in{max-width:600px;margin:0 auto;display:flex}
+.bnav button{flex:1;border:0;background:transparent;color:var(--muted);padding:9px 2px 10px;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px}
+.bnav button .ic{font-size:20px;line-height:1}
+.bnav button[aria-current="page"]{color:var(--teal)}
+#modeSeg{margin-bottom:12px}
+details.more{border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:16px;padding-bottom:12px}
+details.more+details.more{border-top:0;margin-top:0}
+details.more>summary{cursor:pointer;list-style:none;display:flex;align-items:center;padding:12px 0 2px;font-weight:600;font-size:15px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::after{content:"+";margin-left:auto;color:var(--muted);font-weight:400;font-size:20px}
+details.more[open]>summary::after{content:"\2212"}
+details.more>summary .hint{font-weight:400;margin:0 0 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#talkPanel>.hint{margin:0 0 6px}
+.clip .prompt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.clip .prompt.full{display:block}
+.clip .more-acts{margin-top:6px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Video Studio</h1>
-  <p class="lede">Describe a shot, set what you'll pay for it, and get a clip.</p>
+  <div class="intro"><h1>Video Studio</h1>
+  <p class="lede">Describe a shot, set what you'll pay for it, and get a clip.</p></div>
 
   <section class="panel" id="login" hidden>
     <div id="pkStep">
