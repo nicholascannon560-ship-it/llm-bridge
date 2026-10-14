@@ -1224,7 +1224,7 @@ function openEdit(e){
   $('edSongStart').value = ed.song_start || 0; $('edSongVol').value = ed.song_volume ?? 1; showErr($('edErr'), '');
   $('edDelete').hidden = !ed.id; V.sel = -1; V.i = 0; V.playing = false; vid().pause();
   drawEd(); if (ed.items.length) load(0, 0, false); else { vid().removeAttribute('src'); vid().dataset.src = ''; }
-  $('ed').scrollIntoView({block: 'start'});
+  showView('editor', {keepScroll: true}); $('ed').scrollIntoView({block: 'start'});
 }
 function drawEd(){
   // ---- clips in the timeline (filmstrip)
