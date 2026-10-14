@@ -91,7 +91,7 @@ def _detail(out) -> str:
         return "refused"
 
 
-MAKERS = {"upload_image", "make_image", "make_video", "extend", "upscale", "stitch", "loop", "bundle", "last_frame"}
+MAKERS = {"upload_image", "make_image", "make_shape", "fill_shape", "make_video", "extend", "upscale", "stitch", "loop", "bundle", "last_frame"}
 
 
 async def _no_project(uid: str, ref) -> str:
