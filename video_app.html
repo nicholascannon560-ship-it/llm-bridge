@@ -577,6 +577,7 @@ function pickModel(id){
   render();
 }
 function render(){
+  if (state.auto) return renderAuto();
   const m = state.model; if (!m) return;
   const lens = lengthOptions(m);
   chips($('durations'), lens.map(o => o.total), state.length, v => { state.length = v; render(); },
