@@ -258,7 +258,11 @@ details.more>summary .hint{font-weight:400;margin:0 0 0 8px;overflow:hidden;text
       <div id="history" hidden></div>
       <div class="err" id="acctErr" hidden></div>
     </section>
-    <section class="panel">
+    <div class="seg" id="modeSeg" data-view="create">
+      <button type="button" data-mode="video" aria-pressed="true">Video</button>
+      <button type="button" data-mode="talk" aria-pressed="false">Talking video</button>
+    </div>
+    <section class="panel" data-view="create" data-cmode="video">
       <label class="f" for="idea">What should happen on screen?</label>
       <textarea id="idea" placeholder="A fox trotting through fresh snow at dawn, low camera following it"></textarea>
       <div class="row" style="margin-top:8px">
