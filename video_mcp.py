@@ -28,6 +28,7 @@ from video_oauth import challenge, user_for_token
 import video_projects as vp
 import video_routing as vr
 import video_pictures as vpic
+import video_shapes as vsh
 
 mcp_router = APIRouter()
 PROTOCOL = "2025-06-18"
