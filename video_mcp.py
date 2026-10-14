@@ -169,6 +169,28 @@ TOOLS = [
          "model": {"type": "string", "description": "Picture model id, or omit / \"auto\" to route"},
          "tier": {"type": "string", "enum": ["best", "budget"], "description": "best quality (default) or cheapest good option"},
          "budget": {"type": "number", "description": "Most this picture may cost, in USD (optional)"}}}},
+    {"name": "make_shape",
+     "description": "Projection mapping: turn a photo of a physical cutout (or a ready white-on-black mask) into a "
+                    "clean mask picture: white = the cutout, black = everything else. Upload the photo first "
+                    "(upload_image). A two-tone picture is just cleaned up for free; a real photo is traced by a "
+                    "picture model (a few cents). Returns mask_id, usable as mask_image in loop and stitch.",
+     "inputSchema": {"type": "object", "required": ["image"], "properties": {
+         "image": {"type": "string", "description": "Image id of the cutout photo or mask"},
+         "name": {"type": "string", "description": "Name for the shape, e.g. Castle"},
+         "project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}}}},
+    {"name": "fill_shape",
+     "description": "Projection mapping: make a picture that fills a cutout's shape (mask_id from make_shape), "
+                    "composed to fit the outline, with everything outside the shape forced to pure black. Uses the "
+                    "models best at mask-guided editing. For a looping clip, then make_video with start_image and "
+                    "end_image both = the returned image_id, and loop it (pingpong) with mask_image = mask_id.",
+     "inputSchema": {"type": "object", "required": ["mask_id", "prompt"], "properties": {
+         "mask_id": {"type": "string"}, "prompt": {"type": "string", "description": "What should fill the shape"},
+         "model": {"type": "string", "description": "Picture model id, or omit for the best shape-filling model"},
+         "tier": {"type": "string", "enum": ["best", "budget"]}, "budget": {"type": "number"},
+         "project": {"type": "string", "description": "Project name or id to save into (default: the active project)"}}}},
+    {"name": "list_shapes",
+     "description": "Cutout shapes (masks) saved on this account, newest first.",
+     "inputSchema": {"type": "object", "properties": {}}},
     {"name": "list_image_models",
      "description": "Every picture model available, with what each can do (editing, how many pictures it takes, "
                     "transparent background, SVG, sizes, quality levels, shapes) and its price per picture.",
