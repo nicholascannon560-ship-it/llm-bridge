@@ -966,7 +966,7 @@ function openExtender(j, el){
     try {
       await api('/video/jobs/' + j.id + '/extend', {method:'POST', body: JSON.stringify({seconds: secs,
         budget: parseFloat(q('[data-budget]').value) || 0, change: q('[data-next]').value.trim()})});
-      el.hidden = true; state.stale = true; await loadJobs(); window.scrollTo({top: $('clips').offsetTop, behavior: 'auto'});
+      el.hidden = true; state.stale = true; await loadJobs(); showView('library');
     } catch(e){ showErr(q('[data-err]'), e.message); }
     btn.textContent = 'Make it longer'; upd();
   };
