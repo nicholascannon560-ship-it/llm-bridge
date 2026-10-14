@@ -1935,7 +1935,7 @@ function drawGallery(){
       const role = state.pics.some(x => x.role === 'first') ? 'ref' : 'first';
       state.pics.push({id: p.id, role, thumb: p.url, w: img.naturalWidth, h: img.naturalHeight});
       if (role === 'first') closestAspect(img.naturalWidth, img.naturalHeight);
-      renderPics(); checkPics(); render(); window.scrollTo({top: 0, behavior: 'smooth'});
+      renderPics(); checkPics(); render(); setCreateMode('video'); showView('create');
     };
     img.src = p.url;
   });
