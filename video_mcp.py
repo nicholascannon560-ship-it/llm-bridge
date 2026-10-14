@@ -391,6 +391,23 @@ async def _call(name: str, a: dict, request: Request, user: dict) -> dict:
         return {k: {"label": vpic.PJOBS[k], "models": [names.get(x, x + " (not available)") for x in t[k]], "ids": t[k],
                     "is_default": t[k] == vpic.PDEFAULTS[k]} for k in vpic.PJOBS}
 
+    if name == "make_shape":
+        out = await vsh.make_shape(uid, str(a.get("image") or ""), str(a.get("name") or ""))
+        _note(uid, out["cost"])
+        return {**out, "url": f"{base}{out['url']}"}
+
+    if name == "fill_shape":
+        if (g := _guard(va.IMAGE_HOLD, uid)):
+            raise ValueError(g)
+        out = await vsh.fill_shape(uid, str(a.get("mask_id") or ""), str(a.get("prompt") or ""),
+                                   tier=str(a.get("tier") or "best"), budget=float(a.get("budget") or 0),
+                                   model=str(a.get("model") or ""))
+        _note(uid, out["cost"])
+        return {**out, "url": f"{base}{out['url']}"}
+
+    if name == "list_shapes":
+        return {"shapes": [{**s, "url": f"{base}{s['url']}"} for s in await vsh.list_shapes(uid)]}
+
     if name == "list_image_models":
         q = str(a.get("q") or "").lower()
         rows = [m for m in await vpic.describe_models()
