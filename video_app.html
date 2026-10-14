@@ -1557,7 +1557,7 @@ $('talkGo').onclick = async () => {
       aspect_ratio: talk.shape, resolution: '720p', budget: parseFloat($('talkBudget').value) || 0,
       captions: $('talkCaps').checked, remove_background: $('talkNoBg').checked,
       expressiveness: talk.expr === 'medium' ? null : talk.expr, motion: $('talkMotion').value.trim()})});
-    state.stale = true; await loadJobs(); $('clips').scrollIntoView(); }
+    state.stale = true; await loadJobs(); showView('library'); }
   catch(e){ showErr($('talkErr'), e.message); }
   b.textContent = 'Make talking video'; drawTalk();
 };
