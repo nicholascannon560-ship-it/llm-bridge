@@ -1124,7 +1124,7 @@ $('improveBtn').onclick = async () => {
   catch(e){ showErr($('goErr'), e.message); }
   b.disabled = false; b.textContent = 'Improve prompt';
 };
-$('model').onchange = () => pickModel($('model').value);
+$('model').onchange = () => { if (state.auto){ state.pin = $('model').value || null; renderAuto(); } else pickModel($('model').value); };
 $('audio').onchange = render;
 $('budget').oninput = render;
 // ---------------- camera & look presets (added to the prompt when the clip is made)
