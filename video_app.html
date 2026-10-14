@@ -1586,11 +1586,43 @@ $('goBtn').onclick = async () => {
     images: state.pics.map(p => ({id: p.id, role: p.role}))};
   const b = $('goBtn'); b.disabled = true; b.textContent = 'Sending…';
   try { await api('/video/generate', {method:'POST', body: JSON.stringify(body)}); await loadJobs();
-    $('clips').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); }
+    showView('library'); }
   catch(e){ showErr($('goErr'), e.message); }
   b.textContent = 'Make video'; render();
 };
-function showLogin(){ $('login').hidden = false; $('app').hidden = true; }
+function showLogin(){ $('login').hidden = false; $('app').hidden = true; document.body.classList.remove('in-app'); $('bnav').hidden = true; }
+// ---------------- app shell: one section on screen at a time
+const VIEWS = ['create', 'library', 'editor', 'account'];
+const nav = {view: 'create', mode: 'video'};
+function applyView(){
+  document.querySelectorAll('#app [data-view]').forEach(el => {
+    el.hidden = el.dataset.view !== nav.view || (!!el.dataset.cmode && el.dataset.cmode !== nav.mode); });
+  document.querySelectorAll('#bnav button').forEach(b => b.setAttribute('aria-current', b.dataset.view === nav.view ? 'page' : 'false'));
+  $('modeSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === nav.mode)));
+}
+function showView(v, opts = {}){
+  nav.view = VIEWS.includes(v) ? v : 'create'; applyView();
+  if (location.hash !== '#' + nav.view) history.replaceState(null, '', location.pathname + location.search + '#' + nav.view);
+  if (!opts.keepScroll) window.scrollTo({top: 0, behavior: 'auto'});
+}
+function setCreateMode(m){ nav.mode = m; applyView(); if (m === 'talk') drawTalk(); }
+document.querySelectorAll('#bnav button').forEach(b => b.onclick = () => showView(b.dataset.view));
+$('modeSeg').querySelectorAll('button').forEach(b => b.onclick = () => setCreateMode(b.dataset.mode));
+$('credPill').onclick = () => showView('account');
+function enterApp(){ document.body.classList.add('in-app'); $('bnav').hidden = false; showView((location.hash || '').slice(1)); }
+// The header pill mirrors the account panel's credit line.
+new MutationObserver(() => { $('credPill').textContent = $('acctCredit').textContent || 'Account'; })
+  .observe($('acctCredit'), {childList: true, characterData: true, subtree: true});
+// Collapsed options say what's switched on inside them, so nothing is set without showing.
+function moreSummary(){
+  const st = [...document.querySelectorAll('#cams [aria-pressed="true"], #looks [aria-pressed="true"], #chars [aria-pressed="true"]')]
+    .map(b => b.textContent.trim());
+  $('styleSum').textContent = st.length ? '· ' + st.join(', ') : '';
+  const so = $('song').value ? ($('song').selectedOptions[0] || {}).textContent : !$('audio').checked ? 'no model sound' : '';
+  $('soundSum').textContent = so ? '· ' + so : '';
+}
+new MutationObserver(moreSummary).observe($('moreStyle'), {subtree: true, childList: true, attributes: true, attributeFilter: ['aria-pressed']});
+$('audio').addEventListener('change', moreSummary); $('song').addEventListener('change', moreSummary);
 // ---------------- passkeys
 const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64u = str => { str = str.replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '=';
