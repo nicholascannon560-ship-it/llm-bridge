@@ -1,1 +1,1 @@
-$(cat /tmp/video_app.py)
+PLACEHOLDER_WILL_BE_REPLACED
