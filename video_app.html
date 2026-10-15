@@ -1530,26 +1530,36 @@ async function loadPicModels(){
   } catch(e){ /* Auto still works */ }
 }
 $('mpCancel').onclick = () => { $('makePic').hidden = true; };
+function keepEditingLink(why, id, thumb){
+  const a = document.createElement('button'); a.type = 'button'; a.className = 'btn ghost small'; a.style.marginLeft = '8px';
+  a.textContent = 'Keep editing this';
+  a.onclick = () => { state.mp.forEach(p => { if (p.role === 'edit' || p.role === 'shape') p.role = 'ref'; });
+    state.mp = state.mp.filter(p => p.role === 'ref'); mpAdd(id, thumb, 'edit'); openMaker(); $('mpPrompt').focus(); };
+  why.appendChild(a);
+}
 $('mpGo').onclick = async () => {
+  if (!checkMp()) return;
   const b = $('mpGo'); b.disabled = true; b.textContent = 'Making…'; showErr($('mpErr'), '');
   try {
-    const from = $('mpFrom').checked && state.pics.length ? state.pics[0].id : null;
-    const refs = $('mpRefs').checked ? state.pics.filter(p => p.id !== from).map(p => p.id) : [];
+    const shape = state.mp.find(p => p.role === 'shape');
+    const edit = state.mp.find(p => p.role === 'edit');
+    const refs = state.mp.filter(p => p.role === 'ref').map(p => p.id);
     const why = $('mpWhy');
-    if ($('mpShape').checked && state.pics.length){
-      const s = await api('/video/shapes/fill', {method:'POST', body: JSON.stringify({image: state.pics[0].id,
+    if (shape){
+      const s = await api('/video/shapes/fill', {method:'POST', body: JSON.stringify({image: shape.id,
         prompt: $('mpPrompt').value, model: $('mpModel').value, tier: $('mpCheap').checked ? 'budget' : 'best'})});
+      state.pics.forEach(p => { if (p.role === 'first') p.role = 'ref'; });
       state.pics.push({id: s.image_id, role: 'first', thumb: s.url, w: 0, h: 0});
-      state.pics.forEach((p, i) => { if (i < state.pics.length - 1 && p.role === 'first') p.role = 'ref'; });
       why.hidden = false; why.textContent = `Filled the cutout shape with ${s.made_with} (${s.mask_how || 'mask reused'}). `
         + `Cost ${money(s.cost)}. Video shape set to ${s.aspect} to match. The mask is saved in Pictures; ask Claude to loop the video with it for an exact edge.`;
+      keepEditingLink(why, s.image_id, s.url);
       if (s.aspect){ state.aspect = s.aspect; render(); }  // video shape must match the mask's shape
       $('makePic').hidden = true; $('mpPrompt').value = ''; renderPics(); loadAccount();
       b.disabled = false; b.textContent = 'Make it';
       return;
     }
     const out = await api('/video/images/generate', {method:'POST', body: JSON.stringify({prompt: $('mpPrompt').value,
-      aspect: state.aspect, from_image: from, ref_images: refs, transparent: $('mpClear').checked,
+      aspect: state.aspect, from_image: edit ? edit.id : null, ref_images: refs, transparent: $('mpClear').checked,
       model: $('mpModel').value, tier: $('mpCheap').checked ? 'budget' : 'best'})});
     why.hidden = false; why.textContent = `Made with ${out.name}${out.resolution ? ' at ' + out.resolution : ''}: `
       + `${out.reason} Cost ${money(out.cost)}.`;
@@ -1559,6 +1569,7 @@ $('mpGo').onclick = async () => {
     } else {
       const role = state.pics.some(p => p.role === 'first') ? 'ref' : 'first';
       state.pics.push({id: out.id, role, thumb: out.url, w: 0, h: 0});
+      keepEditingLink(why, out.id, out.url);
     }
     $('makePic').hidden = true; $('mpPrompt').value = ''; renderPics(); loadAccount();
   } catch(e){ showErr($('mpErr'), e.message); }
