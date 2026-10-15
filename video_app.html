@@ -1470,8 +1470,56 @@ function pollEdits(){
 }
 
 // ---------------- picture maker
-$('makePicBtn').onclick = () => { $('makePic').hidden = !$('makePic').hidden; $('mpFromRow').hidden = !state.pics.length;
-  $('mpRefsRow').hidden = !state.pics.length; $('mpShapeRow').hidden = !state.pics.length; showErr($('mpErr'), ''); loadPicModels(); };
+// Template pictures live in their own list (state.mp), separate from the video's Start/End/Reference pictures.
+state.mp = [];
+const MP_ROLES = {edit: 'Edit', ref: 'Reference', shape: 'Shape'};
+function openMaker(){ $('makePic').hidden = false; showErr($('mpErr'), ''); renderMp(); loadPicModels(); }
+$('makePicBtn').onclick = () => { if ($('makePic').hidden) openMaker(); else $('makePic').hidden = true; };
+function mpAdd(id, thumb, role){
+  if (!role) role = state.mp.some(p => p.role === 'edit' || p.role === 'shape') ? 'ref' : 'edit';
+  state.mp.push({id, thumb, role});
+}
+function renderMp(){
+  const box = $('mpPics'); box.innerHTML = '';
+  $('mpPicHint').hidden = !state.mp.length;
+  $('mpBring').hidden = !state.pics.some(p => !state.mp.some(m => m.id === p.id));
+  state.mp.forEach((p, i) => {
+    const d = document.createElement('div'); d.className = 'pic';
+    d.innerHTML = `<img alt="" src="${p.thumb}"><div class="ctl">
+      <select aria-label="How to use this template picture">${Object.entries(MP_ROLES).map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
+      <button type="button" aria-label="Remove template picture">✕</button></div>`;
+    const sel = d.querySelector('select'); sel.value = p.role;
+    sel.onchange = () => { p.role = sel.value; renderMp(); };
+    d.querySelector('button').onclick = () => { state.mp.splice(i, 1); renderMp(); };
+    box.appendChild(d);
+  });
+  checkMp();
+}
+function checkMp(){
+  const n = r => state.mp.filter(p => p.role === r).length;
+  let msg = '';
+  if (n('edit') > 1) msg = 'Only one Edit picture.';
+  else if (n('shape') > 1) msg = 'Only one Shape picture.';
+  else if (n('shape') && n('edit')) msg = 'Pick Edit or Shape, not both.';
+  else if (n('ref') > 8) msg = 'Use at most 8 Reference pictures.';
+  else if (n('shape') && n('ref')) msg = 'Reference pictures are ignored when filling a shape.';
+  showErr($('mpPicErr'), msg);
+  return !/^Only|^Pick|^Use at most/.test(msg);
+}
+$('mpAdd').onclick = () => $('mpFile').click();
+$('mpFile').onchange = async () => {
+  const files = [...$('mpFile').files]; $('mpFile').value = '';
+  const b = $('mpAdd'); b.disabled = true; b.textContent = 'Uploading…';
+  for (const f of files){
+    try { const sm = await shrink(f);
+      const out = await api('/video/images', {method:'POST', body: JSON.stringify({data: sm.data})});
+      mpAdd(out.id, sm.data);
+    } catch(e){ showErr($('mpPicErr'), e.message); }
+  }
+  b.disabled = false; b.textContent = 'Add a template picture'; renderMp();
+};
+$('mpBring').onclick = () => {
+  state.pics.forEach(p => { if (!state.mp.some(m => m.id === p.id)) mpAdd(p.id, p.thumb); }); renderMp(); };
 async function loadPicModels(){
   if (state.picModels) return;
   try {
