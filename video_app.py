@@ -2848,7 +2848,7 @@ IMAGE_HOLD = 0.15
 
 async def _image_hold(uid: str, amount: float = IMAGE_HOLD):
     """Hold a picture's price from whoever pays. Returns the hold, or a JSONResponse refusal."""
-    if not _pays(uid):
+    if not _pays(uid) or (uid == "owner" and os.getenv("VIDEO_IMAGE_GATE") != "on"):  # TEMP: owner picture credit gate OFF; set VIDEO_IMAGE_GATE=on to re-enable
         return 0.0
     amount = round(max(0.01, float(amount)), 4)
     u = await (_owner_rec() if _payer(uid) == "owner" else _user_by_id(uid))
