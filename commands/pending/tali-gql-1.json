@@ -1,0 +1,6 @@
+{
+  "id": "tali-gql-1",
+  "action": "railway_gql",
+  "query": "query($id: String!) { service(id: $id) { id name project { id name services { edges { node { id name } } } } } }",
+  "variables": { "id": "509d2aef-f1a5-4854-9a57-e44cf9c079a0" }
+}
