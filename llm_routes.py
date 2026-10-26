@@ -145,7 +145,7 @@ async def chat(req: ChatRequestModel, x_bridge_key: str = Header(None, alias="X-
             finish_reason=resp.finish_reason,
         )
     except Exception as e:
-        raise HTTPException(502, f"LLM provider error: {e}")
+        raise HTTPException(502, f"LLM provider error: {type(e).__name__}: {e}")
 
 
 @llm_router.post("/chat/stream")
