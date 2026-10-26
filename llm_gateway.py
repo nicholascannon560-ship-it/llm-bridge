@@ -611,6 +611,17 @@ class AnthropicProvider(LLMProvider):
         if system_msg:
             payload["system"] = system_msg
 
+        # Claude thinking. reasoning_effort used to be dropped for Anthropic
+        # entirely (only Moonshot/OpenRouter read it), so "high" silently meant
+        # no thinking at all. Applied to plain chat only: the tool path rebuilds
+        # assistant turns from text + tool_calls and does not replay thinking
+        # blocks, which Anthropic requires once thinking is on in a tool loop.
+        effort = (req.reasoning_effort or "").strip().lower()
+        if effort and effort != "off" and not use_tools:
+            payload["thinking"] = {"type": "adaptive"}
+            payload["output_config"] = {"effort": effort}
+            payload.pop("temperature", None)
+
         # Opt into prompt caching (no-op if the prefix is too short to cache).
         self._inject_cache_control(payload)
         return payload
