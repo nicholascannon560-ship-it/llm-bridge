@@ -55,6 +55,12 @@ COST_TABLE = {
     "anthropic": {
         # Opus 5: $5.00 / $25.00 per Mtok, cached input $0.50/Mtok
         "claude-opus-5": {"input": 0.50, "output": 2.50, "cached_input": 0.05},
+        # Opus 5.5: $4 / $20 per Mtok, cache read $0.20/Mtok (same as tali's llm.ts PRICES)
+        "claude-opus-5-5": {"input": 0.40, "output": 2.00, "cached_input": 0.02},
+        # Sonnet 5.5: $2 / $10 per Mtok, cache read $0.20/Mtok (same as tali's llm.ts PRICES)
+        "claude-sonnet-5-5": {"input": 0.20, "output": 1.00, "cached_input": 0.02},
+        # Fable 5.1: $10 / $50 per Mtok, cache read $0.25/Mtok (published rate, Sep 2026)
+        "claude-fable-5-1": {"input": 1.00, "output": 5.00, "cached_input": 0.025},
         # Sonnet 5: $3.00 / $15.00 per Mtok
         "claude-sonnet-5": {"input": 0.30, "output": 1.50, "cached_input": 0.03},
         # Haiku 4.5: $1.00 / $5.00 per Mtok.
