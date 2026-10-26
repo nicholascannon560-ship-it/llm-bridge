@@ -627,6 +627,34 @@ class AnthropicProvider(LLMProvider):
         return payload
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
+        # Runs over the streaming endpoint and assembles the result. The old
+        # blocking POST (now _chat_blocking, unused) had a hardcoded 120s httpx
+        # timeout: any long answer (big max_tokens, thinking on) died with an
+        # EMPTY ReadTimeout message, surfacing as "LLM provider error: " with
+        # nothing after it. Streaming bounds the gap between chunks
+        # (STREAM_TIMEOUT_SEC), not the total length, and reports the same
+        # usage/cost because chat_stream_events sends the identical payload.
+        start = time.time()
+        done = None
+        async for ev in self.chat_stream_events(req):
+            if ev.get("type") == "done":
+                done = ev
+        if done is None:
+            raise RuntimeError("anthropic stream ended without a done event")
+        return ChatResponse(
+            provider="anthropic",
+            model=done["model"],
+            content=done["content"],
+            usage=done["usage"],
+            cost_cents=done["cost_cents"],
+            latency_ms=(time.time() - start) * 1000,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            tool_calls=done["tool_calls"],
+            finish_reason=done["finish_reason"],
+        )
+
+    async def _chat_blocking(self, req: ChatRequest) -> ChatResponse:
+        """Previous single-POST path (120s cap). Unused; kept for reference."""
         start = time.time()
 
         payload = self._build_payload(req)
