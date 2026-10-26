@@ -148,6 +148,7 @@ service variable if you want it to persist.
 - Diff-update protocol → `change-log/MAP_UPDATE.md`
 
 ## Pending Map Updates
+- 2026-10-25 | Anthropic chat() via stream (120s cap gone); reasoning_effort -> thinking; 5.5/Fable rates | files: llm_gateway.py, llm_routes.py
 - 2026-10-11 | Video Studio 2.14.0: free public demo /video/demo (1 clip/IP/day, DEMO_VIDEO_DAILY_USD cap, prompt screen) | files: video_demo.py, video_server.py, video_app.py
 - 2026-10-07 | Video Studio 2.0: video_server.py runs /video alone as Railway service video-studio (VIDEO_S3_PREFIX=studio/, VIDEO_ACCOUNTS=1, Stripe membership + credit). Bridge /video stays owner-only (prefix video/) | files: video_app.py, video_app.html, video_server.py
 - 2026-10-07 | /video 1.2.0: POST /video/jobs/{id}/edit makes a NEW job: edit = video-to-video (clip sent as input_references video_url via PUBLIC /video/src/{token}), remake = GLM-merged prompt + first frame | files: video_app.py, video_app.html
